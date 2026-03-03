@@ -3,6 +3,7 @@
 import re
 import shutil
 import subprocess
+from datetime import UTC, datetime
 from pathlib import Path
 
 import httpx
@@ -76,7 +77,7 @@ def _validate_yaml_text(content: str) -> None:
         raise HTTPException(status_code=400, detail=f"Invalid YAML: {exc}") from exc
 
 
-def _get_saved_paths(repo_path: Path) -> list[str]:
+def _get_modified_paths(repo_path: Path) -> list[str]:
     result = subprocess.run(
         ["git", "-C", str(repo_path), "status", "--porcelain"],
         capture_output=True,
@@ -85,7 +86,7 @@ def _get_saved_paths(repo_path: Path) -> list[str]:
     if result.returncode != 0:
         raise HTTPException(status_code=500, detail="Failed to read git status")
 
-    saved_paths: set[str] = set()
+    modified_paths: set[str] = set()
     for line in result.stdout.splitlines():
         if len(line) < 4:
             continue
@@ -96,8 +97,8 @@ def _get_saved_paths(repo_path: Path) -> list[str]:
         else:
             candidate = path_part.strip()
         if candidate:
-            saved_paths.add(candidate)
-    return sorted(saved_paths)
+            modified_paths.add(candidate)
+    return sorted(modified_paths)
 
 
 class CloneRequest(BaseModel):
@@ -108,6 +109,48 @@ class CloneRequest(BaseModel):
 class UpdateFileRequest(BaseModel):
     path: str
     content: str
+
+
+class CreatePrRequest(BaseModel):
+    title: str
+    message: str
+
+
+def _run_git(repo_path: Path, args: list[str], *, check: bool = True) -> subprocess.CompletedProcess:
+    result = subprocess.run(
+        ["git", "-C", str(repo_path), *args],
+        capture_output=True,
+        text=True,
+    )
+    if check and result.returncode != 0:
+        detail = (result.stderr or result.stdout or "git command failed").strip()
+        raise HTTPException(status_code=500, detail=detail)
+    return result
+
+
+def _slugify_branch_name(value: str) -> str:
+    slug = re.sub(r"[^a-z0-9]+", "-", value.lower()).strip("-")
+    if not slug:
+        slug = "changes"
+    stamp = datetime.now(UTC).strftime("%Y%m%d%H%M%S")
+    return f"racksmith/{slug[:40]}-{stamp}"
+
+
+def _detect_base_branch(repo_path: Path) -> str:
+    remote_head = _run_git(
+        repo_path,
+        ["symbolic-ref", "--short", "refs/remotes/origin/HEAD"],
+        check=False,
+    )
+    if remote_head.returncode == 0:
+        value = remote_head.stdout.strip()
+        if value.startswith("origin/"):
+            return value.removeprefix("origin/")
+
+    current = _run_git(repo_path, ["branch", "--show-current"], check=False)
+    if current.returncode == 0 and current.stdout.strip():
+        return current.stdout.strip()
+    return "main"
 
 
 @router.get("")
@@ -229,12 +272,12 @@ async def get_file_statuses(
     repo: str,
     session=Depends(get_current_session),
 ):
-    """Return server-side saved paths based on git status."""
+    """Return server-side modified paths based on git status."""
     repo_path = _resolve_repo_path(owner, repo)
     if not repo_path.exists() or not repo_path.is_dir():
         raise HTTPException(status_code=404, detail="Repo not cloned")
 
-    return {"saved_paths": _get_saved_paths(repo_path)}
+    return {"modified_paths": _get_modified_paths(repo_path)}
 
 
 @router.put("/{owner}/{repo}/file")
@@ -265,3 +308,70 @@ async def update_file(
         raise HTTPException(status_code=500, detail="Failed to write file") from exc
 
     return {"status": "updated"}
+
+
+@router.post("/{owner}/{repo}/pull-request")
+async def create_pull_request(
+    owner: str,
+    repo: str,
+    body: CreatePrRequest,
+    session=Depends(get_current_session),
+):
+    """Create branch, commit all modified files, push, and open a GitHub PR."""
+    title = body.title.strip()
+    message = body.message.strip()
+    if not title:
+        raise HTTPException(status_code=400, detail="PR name is required")
+
+    repo_path = _resolve_repo_path(owner, repo)
+    if not repo_path.exists() or not repo_path.is_dir():
+        raise HTTPException(status_code=404, detail="Repo not cloned")
+
+    modified_paths = _get_modified_paths(repo_path)
+    if not modified_paths:
+        raise HTTPException(status_code=400, detail="No modified files to include in PR")
+
+    base_branch = _detect_base_branch(repo_path)
+    branch_name = _slugify_branch_name(title)
+    remote_url = f"https://x-access-token:{session.access_token}@github.com/{owner}/{repo}.git"
+
+    _run_git(repo_path, ["remote", "set-url", "origin", remote_url])
+    _run_git(repo_path, ["checkout", "-b", branch_name])
+    _run_git(repo_path, ["add", "-A"])
+    _run_git(
+        repo_path,
+        [
+            "-c",
+            "user.name=Racksmith",
+            "-c",
+            "user.email=racksmith@local",
+            "commit",
+            "-m",
+            title,
+        ],
+    )
+    _run_git(repo_path, ["push", "-u", "origin", branch_name])
+
+    async with httpx.AsyncClient() as client:
+        pr_resp = await client.post(
+            f"https://api.github.com/repos/{owner}/{repo}/pulls",
+            headers={"Authorization": f"Bearer {session.access_token}"},
+            json={
+                "title": title,
+                "head": branch_name,
+                "base": base_branch,
+                "body": message,
+            },
+        )
+
+    if pr_resp.status_code not in (200, 201):
+        detail = pr_resp.json().get("message", "Failed to create pull request")
+        raise HTTPException(status_code=502, detail=detail)
+
+    pr_payload = pr_resp.json()
+    return {
+        "url": pr_payload.get("html_url"),
+        "number": pr_payload.get("number"),
+        "branch": branch_name,
+        "base": base_branch,
+    }

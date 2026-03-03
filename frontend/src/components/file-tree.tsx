@@ -8,7 +8,7 @@ export type TreeEntry = {
   children?: TreeEntry[];
 };
 
-export type FileStatus = "default" | "saved";
+export type FileStatus = "default" | "modified";
 
 type FileTreeProps = {
   entries: TreeEntry[];
@@ -33,17 +33,17 @@ function TreeItem({
 }) {
   const fullPath = basePath ? `${basePath}/${entry.name}` : entry.name;
   const [open, setOpen] = useState(false);
-  const hasSavedFiles = (() => {
-    const hasSavedInEntry = (node: TreeEntry, currentPath: string): boolean => {
+  const hasModifiedFiles = (() => {
+    const hasModifiedInEntry = (node: TreeEntry, currentPath: string): boolean => {
       if (node.type === "file") {
-        return (fileStatuses?.[currentPath] ?? "default") === "saved";
+        return (fileStatuses?.[currentPath] ?? "default") === "modified";
       }
       if (!node.children || node.children.length === 0) return false;
       return node.children.some((child) =>
-        hasSavedInEntry(child, `${currentPath}/${child.name}`)
+        hasModifiedInEntry(child, `${currentPath}/${child.name}`)
       );
     };
-    return hasSavedInEntry(entry, fullPath);
+    return hasModifiedInEntry(entry, fullPath);
   })();
 
   if (entry.type === "dir") {
@@ -70,11 +70,11 @@ function TreeItem({
             <Folder className="size-4 shrink-0 text-amber-500/80" />
           )}
           <span className="truncate">{entry.name}</span>
-          {hasSavedFiles && (
+          {hasModifiedFiles && (
             <span
               className="ml-auto inline-flex size-2 rounded-full bg-amber-400/90"
-              title="Contains saved edits"
-              aria-label="Contains saved edits"
+              title="Contains modified files"
+              aria-label="Contains modified files"
             />
           )}
         </button>
@@ -112,14 +112,14 @@ function TreeItem({
       <span className="size-3.5 shrink-0" />
       <File className="size-4 shrink-0 text-zinc-500" />
       <span className="truncate flex-1 min-w-0">{entry.name}</span>
-      {status === "saved" && (
+      {status === "modified" && (
         <span
           className={cn(
             "inline-flex h-4 min-w-4 items-center justify-center rounded text-[10px] font-medium px-1",
             "text-amber-300"
           )}
-          title="Saved edit"
-          aria-label="Saved edit"
+          title="Modified file"
+          aria-label="Modified file"
         >
           M
         </span>
