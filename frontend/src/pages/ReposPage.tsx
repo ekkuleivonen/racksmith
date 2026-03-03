@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader } from "@/components/ui/card";
@@ -17,17 +17,25 @@ type Repo = {
   private: boolean;
 };
 
+type ClonedRepo = { owner: string; repo: string };
+
 export function ReposPage() {
+  const navigate = useNavigate();
   const { user, logout } = useAuth();
   const [repos, setRepos] = useState<Repo[]>([]);
+  const [cloned, setCloned] = useState<ClonedRepo[]>([]);
   const [filter, setFilter] = useState("");
   const [loading, setLoading] = useState(true);
   const [cloning, setCloning] = useState<string | null>(null);
 
   const loadRepos = useCallback(async () => {
     try {
-      const data = await apiGet<{ repos: Repo[] }>("/repos");
-      setRepos(data.repos);
+      const [reposData, clonedData] = await Promise.all([
+        apiGet<{ repos: Repo[] }>("/repos"),
+        apiGet<{ cloned: ClonedRepo[] }>("/repos/cloned"),
+      ]);
+      setRepos(reposData.repos);
+      setCloned(clonedData.cloned);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed to load repos");
     } finally {
@@ -39,6 +47,9 @@ export function ReposPage() {
     loadRepos();
   }, [loadRepos]);
 
+  const isCloned = (owner: string, repo: string) =>
+    cloned.some((c) => c.owner === owner && c.repo === repo);
+
   const handleClone = async (owner: string, repo: string) => {
     setCloning(`${owner}/${repo}`);
     try {
@@ -47,6 +58,8 @@ export function ReposPage() {
         repo,
       });
       toast.success(`Cloned ${owner}/${repo}`);
+      setCloned((prev) => [...prev.filter((c) => !(c.owner === owner && c.repo === repo)), { owner, repo }]);
+      navigate(`/repos/${owner}/${repo}`);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Clone failed");
     } finally {
@@ -108,13 +121,25 @@ export function ReposPage() {
                           </Badge>
                         )}
                       </div>
-                      <Button
-                        size="sm"
-                        onClick={() => handleClone(r.owner, r.name)}
-                        disabled={cloning !== null}
-                      >
-                        {cloning === `${r.owner}/${r.name}` ? "Cloning..." : "Clone"}
-                      </Button>
+                      <div className="flex gap-2 shrink-0">
+                        {isCloned(r.owner, r.name) ? (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => navigate(`/repos/${r.owner}/${r.name}`)}
+                          >
+                            Open
+                          </Button>
+                        ) : (
+                          <Button
+                            size="sm"
+                            onClick={() => handleClone(r.owner, r.name)}
+                            disabled={cloning !== null}
+                          >
+                            {cloning === `${r.owner}/${r.name}` ? "Cloning..." : "Clone"}
+                          </Button>
+                        )}
+                      </div>
                     </div>
                   </CardHeader>
                 </Card>

@@ -5,6 +5,7 @@ import { Toaster } from "@/components/ui/sonner";
 import { AuthProvider } from "@/context/auth-context";
 import { ProtectedRoute } from "@/components/protected-route";
 import { HomePage } from "@/pages/HomePage";
+import { RepoPage } from "@/pages/RepoPage";
 import { ReposPage } from "@/pages/ReposPage";
 
 class ErrorBoundary extends Component<
@@ -73,7 +74,7 @@ function AppRoutes() {
         className="absolute inset-0 opacity-[0.035] pointer-events-none z-0"
         style={{ filter: "url(#noise)" }}
       />
-      <div className="flex-1 min-w-0 flex flex-col relative z-10">
+      <div className="flex-1 min-w-0 w-full flex flex-col relative z-10">
         <ErrorBoundary>
           <Routes>
             <Route path="/" element={<HomePage />} />
@@ -82,6 +83,14 @@ function AppRoutes() {
               element={
                 <ProtectedRoute>
                   <ReposPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/repos/:owner/:repo"
+              element={
+                <ProtectedRoute>
+                  <RepoPage />
                 </ProtectedRoute>
               }
             />
