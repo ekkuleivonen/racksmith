@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import Editor from "@monaco-editor/react";
 import { toast } from "sonner";
 import {
   AlertDialog,
@@ -10,6 +9,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
+import { getEditorForFile } from "@/components/editors/get-editor-for-file";
 import { FileTree, type FileStatus, type TreeEntry } from "@/components/file-tree";
 import { Input } from "@/components/ui/input";
 import {
@@ -20,14 +20,6 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/context/auth-context";
 import { apiGet, apiPost, apiPut } from "@/lib/api";
-
-const YAML_EXTENSIONS = [".yaml", ".yml"];
-
-function isYamlPath(path: string | null): boolean {
-  if (!path) return false;
-  const lower = path.toLowerCase();
-  return YAML_EXTENSIONS.some((ext) => lower.endsWith(ext));
-}
 
 export function RepoPage() {
   const { owner, repo } = useParams<{ owner: string; repo: string }>();
@@ -97,9 +89,8 @@ export function RepoPage() {
     [owner, repo]
   );
 
-  const selectedIsYaml = isYamlPath(selectedPath);
-  const isDirty =
-    selectedIsYaml && loadedContent !== null && editorValue !== loadedContent;
+  const isDirty = loadedContent !== null && editorValue !== loadedContent;
+  const ActiveEditor = useMemo(() => getEditorForFile(selectedPath), [selectedPath]);
   const modifiedCount = Object.keys(modifiedPaths).length;
   const fileStatuses = useMemo<Record<string, FileStatus>>(() => {
     const statuses: Record<string, FileStatus> = {};
@@ -121,7 +112,7 @@ export function RepoPage() {
   );
 
   const saveFile = useCallback(async () => {
-    if (!owner || !repo || !selectedPath || !selectedIsYaml || !isDirty) return;
+    if (!owner || !repo || !selectedPath || !isDirty) return;
     setIsSaving(true);
     try {
       await apiPut<{ status: string }>(`/repos/${owner}/${repo}/file`, {
@@ -142,7 +133,6 @@ export function RepoPage() {
     loadFileStatuses,
     owner,
     repo,
-    selectedIsYaml,
     selectedPath,
   ]);
 
@@ -208,7 +198,7 @@ export function RepoPage() {
           >
             Create PR
           </Button>
-          {selectedIsYaml && selectedPath && (
+          {selectedPath && (
             <Button
               variant="secondary"
               size="sm"
@@ -332,34 +322,16 @@ export function RepoPage() {
             <div className="space-y-2">
               <div className="flex items-center justify-between gap-3">
                 <p className="text-xs text-zinc-500">{selectedPath}</p>
-                {selectedIsYaml && (
-                  <p className="text-xs text-zinc-500">
-                    {isDirty ? "Unsaved changes" : "All changes saved"}
-                  </p>
-                )}
+                <p className="text-xs text-zinc-500">
+                  {isDirty ? "Unsaved changes" : "All changes saved"}
+                </p>
               </div>
-              {selectedIsYaml ? (
-                <div className="overflow-hidden rounded border border-zinc-800">
-                  <Editor
-                    height="calc(100vh - 13rem)"
-                    defaultLanguage="yaml"
-                    language="yaml"
-                    value={editorValue}
-                    onChange={handleEditorChange}
-                    theme="vs-dark"
-                    options={{
-                      minimap: { enabled: false },
-                      fontSize: 13,
-                      wordWrap: "on",
-                      automaticLayout: true,
-                    }}
-                  />
-                </div>
-              ) : (
-                <pre className="text-sm text-zinc-300 bg-zinc-900/50 border border-zinc-800 rounded p-4 overflow-auto font-mono whitespace-pre-wrap break-words">
-                  {loadedContent}
-                </pre>
-              )}
+              <div className="overflow-hidden rounded border border-zinc-800">
+                <ActiveEditor
+                  value={editorValue}
+                  onChange={(value) => handleEditorChange(value)}
+                />
+              </div>
             </div>
           ) : (
             <p className="text-zinc-500 text-sm">
