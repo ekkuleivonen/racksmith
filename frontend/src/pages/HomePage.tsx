@@ -1,4 +1,18 @@
+import { Link } from "react-router-dom";
+import { Button } from "@/components/ui/button";
+import { useAuth } from "@/context/auth-context";
+
 export function HomePage() {
+  const { user, isLoading, isAuthenticated, login } = useAuth();
+
+  if (isLoading) {
+    return (
+      <div className="flex-1 flex items-center justify-center">
+        <p className="text-zinc-500 text-sm">Loading...</p>
+      </div>
+    );
+  }
+
   return (
     <div className="flex-1 flex items-center justify-center py-12 overflow-hidden relative">
       <div className="max-w-2xl w-full mx-4 space-y-12 relative z-10">
@@ -11,7 +25,18 @@ export function HomePage() {
           </p>
         </div>
 
-        <div className="grid grid-cols-2 gap-2">hello world</div>
+        <div className="flex flex-col items-center gap-6">
+          {isAuthenticated ? (
+            <>
+              <p className="text-zinc-400 text-sm">Signed in as {user?.login}</p>
+              <Link to="/repos">
+                <Button>Choose repository</Button>
+              </Link>
+            </>
+          ) : (
+            <Button onClick={login}>Login with GitHub</Button>
+          )}
+        </div>
       </div>
     </div>
   );

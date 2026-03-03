@@ -14,3 +14,22 @@ export async function handleVoidResponse(res: Response): Promise<void> {
     throw new Error(String(detail));
   }
 }
+
+const API_BASE = "/api";
+
+export async function apiGet<T>(path: string): Promise<T> {
+  const res = await fetch(`${API_BASE}${path}`, {
+    credentials: "include",
+  });
+  return handleResponse<T>(res);
+}
+
+export async function apiPost<T>(path: string, body?: unknown): Promise<T> {
+  const res = await fetch(`${API_BASE}${path}`, {
+    method: "POST",
+    headers: body ? { "Content-Type": "application/json" } : undefined,
+    body: body ? JSON.stringify(body) : undefined,
+    credentials: "include",
+  });
+  return handleResponse<T>(res);
+}

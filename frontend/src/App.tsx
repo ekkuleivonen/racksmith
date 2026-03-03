@@ -2,7 +2,10 @@ import { Component, type ErrorInfo, type ReactNode } from "react";
 import { BrowserRouter, Routes, Route, Link } from "react-router-dom";
 import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
+import { AuthProvider } from "@/context/auth-context";
+import { ProtectedRoute } from "@/components/protected-route";
 import { HomePage } from "@/pages/HomePage";
+import { ReposPage } from "@/pages/ReposPage";
 
 class ErrorBoundary extends Component<
   { children: ReactNode },
@@ -74,6 +77,14 @@ function AppRoutes() {
         <ErrorBoundary>
           <Routes>
             <Route path="/" element={<HomePage />} />
+            <Route
+              path="/repos"
+              element={
+                <ProtectedRoute>
+                  <ReposPage />
+                </ProtectedRoute>
+              }
+            />
           </Routes>
         </ErrorBoundary>
       </div>
@@ -84,9 +95,11 @@ function AppRoutes() {
 export function App() {
   return (
     <ThemeProvider defaultTheme="dark" storageKey="lake-admin-theme">
-      <BrowserRouter>
-        <AppRoutes />
-      </BrowserRouter>
+      <AuthProvider>
+        <BrowserRouter>
+          <AppRoutes />
+        </BrowserRouter>
+      </AuthProvider>
       <Toaster position="bottom-right" />
     </ThemeProvider>
   );

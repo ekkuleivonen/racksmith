@@ -3,6 +3,21 @@ from _utils.environ import env
 # =============================================================================
 # GitHub
 # =============================================================================
+GITHUB_CLIENT_ID: str = env.str("GITHUB_CLIENT_ID", required=True)
+GITHUB_CLIENT_SECRET: str = env.str("GITHUB_CLIENT_SECRET", required=True)
+GITHUB_OAUTH_SCOPES: str = env.str("GITHUB_OAUTH_SCOPES", default="repo read:user")
+
+# =============================================================================
+# App
+# =============================================================================
+APP_URL: str = env.str("APP_URL", default="http://localhost:5173")
+REPOS_WORKSPACE: str = env.str("REPOS_WORKSPACE", default="./workspace")
+
+# =============================================================================
+# Session
+# =============================================================================
+SESSION_COOKIE_NAME: str = env.str("SESSION_COOKIE_NAME", default="racksmith_session")
+SESSION_MAX_AGE: int = env.int("SESSION_MAX_AGE", default=86400)  # 24h
 
 
 # =============================================================================
