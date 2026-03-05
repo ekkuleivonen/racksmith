@@ -12,10 +12,12 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 import settings
 from _utils.logging import configure_logging, get_logger
 from auth.router import router as auth_router
+from onboarding.router import router as racks_router
 from repos.router import router as repos_router
 
 
@@ -39,8 +41,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+static_dir = Path(__file__).resolve().parent / "_static"
+if static_dir.exists():
+    app.mount("/static", StaticFiles(directory=static_dir), name="static")
+
 app.include_router(auth_router, prefix="/api/auth", tags=["auth"])
 app.include_router(repos_router, prefix="/api/repos", tags=["repos"])
+app.include_router(racks_router, prefix="/api/racks", tags=["racks"])
 
 logger = get_logger(__name__)
 

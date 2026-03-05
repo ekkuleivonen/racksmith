@@ -281,7 +281,7 @@ export function RepoPage() {
       <ResizablePanelGroup
         orientation="horizontal"
         className="flex-1 min-h-0 w-full min-w-0"
-        autoSaveId="repo-sidebar-v3"
+        autoSave="repo-sidebar-v3"
       >
         <ResizablePanel
           defaultSize="22%"

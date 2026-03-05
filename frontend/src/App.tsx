@@ -5,8 +5,12 @@ import { Toaster } from "@/components/ui/sonner";
 import { AuthProvider } from "@/context/auth-context";
 import { ProtectedRoute } from "@/components/protected-route";
 import { HomePage } from "@/pages/HomePage";
+import { RackDetailPage } from "@/pages/RackDetailPage";
+import { RackOnboardingPage } from "@/pages/RackOnboardingPage";
+import { RacksListPage } from "@/pages/RacksListPage";
 import { RepoPage } from "@/pages/RepoPage";
 import { ReposPage } from "@/pages/ReposPage";
+import { SketchPage } from "@/pages/SketchPage";
 
 class ErrorBoundary extends Component<
   { children: ReactNode },
@@ -78,6 +82,31 @@ function AppRoutes() {
         <ErrorBoundary>
           <Routes>
             <Route path="/" element={<HomePage />} />
+            <Route path="/sketch" element={<SketchPage />} />
+            <Route
+              path="/racks"
+              element={
+                <ProtectedRoute>
+                  <RacksListPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/racks/new"
+              element={
+                <ProtectedRoute>
+                  <RackOnboardingPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/racks/:rackId"
+              element={
+                <ProtectedRoute>
+                  <RackDetailPage />
+                </ProtectedRoute>
+              }
+            />
             <Route
               path="/repos"
               element={

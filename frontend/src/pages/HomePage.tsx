@@ -29,8 +29,8 @@ export function HomePage() {
           {isAuthenticated ? (
             <>
               <p className="text-zinc-400 text-sm">Signed in as {user?.login}</p>
-              <Link to="/repos">
-                <Button>Choose repository</Button>
+              <Link to="/racks">
+                <Button>Open racks</Button>
               </Link>
             </>
           ) : (
