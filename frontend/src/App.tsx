@@ -7,6 +7,9 @@ import { Toaster } from "@/components/ui/sonner";
 import { AuthProvider } from "@/context/auth-context";
 import { CodePage } from "@/pages/CodePage";
 import { HomePage } from "@/pages/HomePage";
+import { PlaybookCreatePage } from "@/pages/PlaybookCreatePage";
+import { PlaybookDetailPage } from "@/pages/PlaybookDetailPage";
+import { PlaybooksPage } from "@/pages/PlaybooksPage";
 import { RackPage } from "@/pages/RackDetailPage";
 import { RackItemPage } from "@/pages/RackItemPage";
 import { RackOnboardingPage } from "@/pages/RackOnboardingPage";
@@ -112,6 +115,36 @@ function AppRoutes() {
                 <ProtectedRoute>
                   <AppShell title="Code">
                     <CodePage />
+                  </AppShell>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/playbooks"
+              element={
+                <ProtectedRoute>
+                  <AppShell title="Playbooks">
+                    <PlaybooksPage />
+                  </AppShell>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/playbooks/create"
+              element={
+                <ProtectedRoute>
+                  <AppShell title="Playbooks">
+                    <PlaybookCreatePage />
+                  </AppShell>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/playbooks/:playbookId"
+              element={
+                <ProtectedRoute>
+                  <AppShell title="Playbooks">
+                    <PlaybookDetailPage />
                   </AppShell>
                 </ProtectedRoute>
               }

@@ -11,6 +11,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from github.router import auth_router
+from playbooks.router import router as playbooks_router
 from racks.router import router as racks_router
 from setup.router import router as setup_router
 from ssh.router import router as ssh_router
@@ -47,6 +48,7 @@ if static_dir.exists():
 app.include_router(auth_router, prefix="/api/auth", tags=["auth"])
 app.include_router(setup_router, prefix="/api/setup", tags=["setup"])
 app.include_router(racks_router, prefix="/api/racks", tags=["racks"])
+app.include_router(playbooks_router, prefix="/api/playbooks", tags=["playbooks"])
 app.include_router(code_router, prefix="/api/code", tags=["code"])
 app.include_router(ssh_router, prefix="/api/ssh", tags=["ssh"])
 

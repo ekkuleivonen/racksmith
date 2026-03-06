@@ -10,6 +10,7 @@ from pathlib import Path
 
 import yaml
 
+import settings
 from racks.misc import (
     cols_for_width,
     validate_host,
@@ -81,7 +82,12 @@ class RackManager:
             "ansible_host": item.host,
             "ansible_user": item.ssh_user,
             "ansible_port": item.ssh_port,
+            "ansible_python_interpreter": "auto_silent",
         }
+        if settings.SSH_DISABLE_HOST_KEY_CHECK:
+            host_vars["ansible_ssh_common_args"] = (
+                "-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
+            )
         if item.os:
             host_vars["os"] = item.os
         if item.tags:

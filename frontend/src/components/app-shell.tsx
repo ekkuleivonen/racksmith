@@ -1,4 +1,4 @@
-import { type ReactNode, useEffect, useMemo, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
 import { NavLink, Navigate, useLocation, useNavigate } from "react-router-dom";
 import { Plus } from "lucide-react";
 import { toast } from "sonner";
@@ -25,6 +25,7 @@ import {
   type RackItem,
   type RackSummary,
 } from "@/lib/racks";
+import { listPlaybooks, type PlaybookSummary } from "@/lib/playbooks";
 import { fetchPingStatuses, type PingStatus } from "@/lib/ssh";
 import { useAuth } from "@/context/auth-context";
 
@@ -45,10 +46,11 @@ function itemStatusKey(rackId: string, itemId: string) {
 }
 
 async function loadSidebarData() {
-  const [nextStatus, nextRacks, nextLocalRepos] = await Promise.all([
+  const [nextStatus, nextRacks, nextLocalRepos, nextPlaybooksResult] = await Promise.all([
     getSetupStatus(),
     listRacks().catch(() => []),
     listLocalRepos().catch(() => []),
+    listPlaybooks().catch(() => ({ playbooks: [], role_templates: [] })),
   ]);
 
   const nextRackEntries = await Promise.all(
@@ -58,7 +60,12 @@ async function loadSidebarData() {
     }),
   );
 
-  return { nextStatus, nextRackEntries, nextLocalRepos };
+  return {
+    nextStatus,
+    nextRackEntries,
+    nextLocalRepos,
+    nextPlaybooks: nextPlaybooksResult.playbooks,
+  };
 }
 
 export function AppShell({ children }: AppShellProps) {
@@ -67,6 +74,7 @@ export function AppShell({ children }: AppShellProps) {
   const navigate = useNavigate();
   const [status, setStatus] = useState<SetupStatus | null>(null);
   const [rackEntries, setRackEntries] = useState<RackNavEntry[]>([]);
+  const [playbooks, setPlaybooks] = useState<PlaybookSummary[]>([]);
   const [localRepos, setLocalRepos] = useState<LocalRepo[]>([]);
   const [loading, setLoading] = useState(true);
   const [switchingRepo, setSwitchingRepo] = useState(false);
@@ -79,6 +87,7 @@ export function AppShell({ children }: AppShellProps) {
       rackEntries[0] ? `/rack/view/${rackEntries[0].rack.id}` : "/rack/create",
     [rackEntries],
   );
+  const playbooksHref = useMemo(() => "/playbooks", []);
 
   const pingTargets = useMemo(
     () =>
@@ -91,19 +100,30 @@ export function AppShell({ children }: AppShellProps) {
     [rackEntries],
   );
 
+  const refreshSidebar = useCallback(async () => {
+    const { nextStatus, nextRackEntries, nextLocalRepos, nextPlaybooks } =
+      await loadSidebarData();
+    setStatus(nextStatus);
+    setRackEntries(nextRackEntries);
+    setPlaybooks(nextPlaybooks);
+    setLocalRepos(nextLocalRepos);
+  }, []);
+
   useEffect(() => {
     let active = true;
     void loadSidebarData()
-      .then(({ nextStatus, nextRackEntries, nextLocalRepos }) => {
+      .then(({ nextStatus, nextRackEntries, nextLocalRepos, nextPlaybooks }) => {
         if (!active) return;
         setStatus(nextStatus);
         setRackEntries(nextRackEntries);
+        setPlaybooks(nextPlaybooks);
         setLocalRepos(nextLocalRepos);
       })
       .catch(() => {
         if (!active) return;
         setStatus(null);
         setRackEntries([]);
+        setPlaybooks([]);
         setLocalRepos([]);
       })
       .finally(() => {
@@ -113,6 +133,16 @@ export function AppShell({ children }: AppShellProps) {
       active = false;
     };
   }, [location.pathname]);
+
+  useEffect(() => {
+    const handleRefresh = () => {
+      void refreshSidebar();
+    };
+    window.addEventListener("racksmith:sidebar-refresh", handleRefresh);
+    return () => {
+      window.removeEventListener("racksmith:sidebar-refresh", handleRefresh);
+    };
+  }, [refreshSidebar]);
 
   useEffect(() => {
     if (!status?.repo_ready || pingTargets.length === 0) {
@@ -277,6 +307,55 @@ export function AppShell({ children }: AppShellProps) {
             </div>
           </div>
 
+          <div className="space-y-1">
+            <div className="flex items-center justify-between gap-2 px-3 py-1.5 border border-transparent">
+              <NavLink
+                to={playbooksHref}
+                className={({ isActive }) =>
+                  cn(
+                    "text-[11px] uppercase tracking-wide",
+                    isActive || location.pathname.startsWith("/playbooks")
+                      ? "text-zinc-100"
+                      : "text-zinc-400 hover:text-zinc-200",
+                  )
+                }
+              >
+                Playbooks
+              </NavLink>
+              <NavLink
+                to="/playbooks/create"
+                className="text-zinc-500 hover:text-zinc-100"
+                aria-label="Create playbook"
+              >
+                <Plus className="size-3" />
+              </NavLink>
+            </div>
+            <div className="space-y-1 pl-3">
+              {playbooks.length === 0 ? (
+                <p className="px-3 py-1 text-[10px] text-zinc-500">
+                  No playbooks yet
+                </p>
+              ) : (
+                playbooks.map((playbook) => (
+                  <NavLink
+                    key={playbook.id}
+                    to={`/playbooks/${playbook.id}`}
+                    className={({ isActive }) =>
+                      cn(
+                        "flex items-center rounded-none px-3 py-1.5 text-[11px] border border-transparent",
+                        isActive
+                          ? "bg-zinc-800 text-zinc-100 border-zinc-700"
+                          : "text-zinc-300 hover:text-zinc-100 hover:bg-zinc-900",
+                      )
+                    }
+                  >
+                    <span className="truncate">{playbook.play_name}</span>
+                  </NavLink>
+                ))
+              )}
+            </div>
+          </div>
+
           <NavLink
             to="/code"
             className={({ isActive }) =>
@@ -313,10 +392,11 @@ export function AppShell({ children }: AppShellProps) {
                 setSwitchingRepo(true);
                 try {
                   await activateLocalRepo(owner, repo);
-                  const { nextStatus, nextRackEntries, nextLocalRepos } =
+                  const { nextStatus, nextRackEntries, nextLocalRepos, nextPlaybooks } =
                     await loadSidebarData();
                   setStatus(nextStatus);
                   setRackEntries(nextRackEntries);
+                  setPlaybooks(nextPlaybooks);
                   setLocalRepos(nextLocalRepos);
                   navigate(
                     nextStatus.rack_ready && nextRackEntries[0]
