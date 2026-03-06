@@ -1,7 +1,17 @@
 import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
 import { NavLink, Navigate, useLocation, useNavigate } from "react-router-dom";
-import { Plus } from "lucide-react";
+import { Copy, KeyRound, Plus } from "lucide-react";
 import { toast } from "sonner";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -26,7 +36,7 @@ import {
   type RackSummary,
 } from "@/lib/racks";
 import { listPlaybooks, type PlaybookSummary } from "@/lib/playbooks";
-import { fetchPingStatuses, type PingStatus } from "@/lib/ssh";
+import { fetchMachinePublicKey, fetchPingStatuses, type PingStatus } from "@/lib/ssh";
 import { useAuth } from "@/context/auth-context";
 
 type AppShellProps = {
@@ -78,6 +88,9 @@ export function AppShell({ children }: AppShellProps) {
   const [localRepos, setLocalRepos] = useState<LocalRepo[]>([]);
   const [loading, setLoading] = useState(true);
   const [switchingRepo, setSwitchingRepo] = useState(false);
+  const [publicKeyOpen, setPublicKeyOpen] = useState(false);
+  const [publicKey, setPublicKey] = useState("");
+  const [loadingPublicKey, setLoadingPublicKey] = useState(false);
   const [pingStatuses, setPingStatuses] = useState<Record<string, PingStatus>>(
     {},
   );
@@ -183,6 +196,36 @@ export function AppShell({ children }: AppShellProps) {
       if (timer !== null) window.clearTimeout(timer);
     };
   }, [pingTargets, status?.repo_ready, status?.repo?.full_name]);
+
+  const openPublicKeyDialog = useCallback(async () => {
+    setPublicKeyOpen(true);
+    if (publicKey || loadingPublicKey) {
+      return;
+    }
+    setLoadingPublicKey(true);
+    try {
+      const result = await fetchMachinePublicKey();
+      setPublicKey(result.public_key);
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Failed to load public key",
+      );
+    } finally {
+      setLoadingPublicKey(false);
+    }
+  }, [loadingPublicKey, publicKey]);
+
+  const copyPublicKey = useCallback(async () => {
+    if (!publicKey) {
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(publicKey);
+      toast.success("Public key copied");
+    } catch {
+      toast.error("Failed to copy public key");
+    }
+  }, [publicKey]);
 
   if (loading) {
     return (
@@ -372,7 +415,6 @@ export function AppShell({ children }: AppShellProps) {
         </nav>
 
         <div className="mt-auto space-y-3">
-         
           <div className="flex items-center gap-2">
             <Select
               disabled={switchingRepo}
@@ -434,6 +476,18 @@ export function AppShell({ children }: AppShellProps) {
             </Select>
             <Button
               variant="outline"
+              size="icon"
+              className="size-7 shrink-0"
+              onClick={() => {
+                void openPublicKeyDialog();
+              }}
+              aria-label="Show Racksmith public key"
+              title="Show Racksmith public key"
+            >
+              <KeyRound className="size-3" />
+            </Button>
+            <Button
+              variant="outline"
               size="sm"
               className={
                 "shrink-0 h-7 px-2 text-[10px]"
@@ -447,6 +501,42 @@ export function AppShell({ children }: AppShellProps) {
       </aside>
 
       <main className="flex-1 min-w-0 overflow-hidden">{children}</main>
+
+      <AlertDialog open={publicKeyOpen} onOpenChange={setPublicKeyOpen}>
+        <AlertDialogContent size="md">
+          <AlertDialogHeader className="items-start text-left">
+            <AlertDialogTitle>Racksmith public key</AlertDialogTitle>
+            <AlertDialogDescription className="text-left">
+              Add this key to the target host&apos;s `authorized_keys` so Racksmith can SSH in without a password.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="space-y-2">
+            <textarea
+              readOnly
+              value={loadingPublicKey ? "Loading public key..." : publicKey}
+              className="min-h-28 w-full rounded-none border border-zinc-800 bg-zinc-950 px-3 py-2 font-mono text-[11px] text-zinc-200 outline-none resize-none"
+            />
+            {!loadingPublicKey && !publicKey ? (
+              <p className="text-[11px] text-zinc-500">
+                No local public SSH key was found on this Racksmith machine.
+              </p>
+            ) : null}
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Close</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(event) => {
+                event.preventDefault();
+                void copyPublicKey();
+              }}
+              disabled={!publicKey || loadingPublicKey}
+            >
+              <Copy className="size-3" />
+              Copy
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

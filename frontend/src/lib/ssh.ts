@@ -31,6 +31,10 @@ export async function fetchPingStatuses(targets: PingStatusTarget[]) {
   return apiPost<{ statuses: PingStatusEntry[] }>("/ssh/ping-status", { targets });
 }
 
+export async function fetchMachinePublicKey() {
+  return apiGet<{ public_key: string }>("/ssh/public-key");
+}
+
 export function sshTerminalUrl(rackId: string, itemId: string) {
   const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
   return `${protocol}//${window.location.host}/api/ssh/racks/${rackId}/items/${itemId}/terminal`;

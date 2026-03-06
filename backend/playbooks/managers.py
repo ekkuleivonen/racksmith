@@ -14,6 +14,7 @@ from typing import Any
 import yaml
 import settings
 from github.misc import user_storage_id
+from playbooks.role_templates import BUILTIN_ROLE_PREFIX, ROLE_TEMPLATE_SPECS
 from racks.managers import rack_manager
 from setup.managers import setup_manager
 
@@ -27,13 +28,12 @@ from playbooks.schemas import (
     PlaybookTargetSelection,
     PlaybookUpsertRequest,
     RoleTemplate,
-    RoleTemplateField,
 )
 
 PLAYBOOKS_DIR = Path("ansible_scripts/playbooks")
 ROLES_DIR = PLAYBOOKS_DIR / "roles"
+LEGACY_ROLES_DIR = Path("ansible_scripts/roles")
 INVENTORY_DIR = Path("ansible_scripts/inventory")
-BUILTIN_ROLE_PREFIX = "_racksmith_"
 RESERVED_DESCRIPTION_KEY = "racksmith_description"
 PLAYBOOK_ID_RE = re.compile(r"^[a-zA-Z0-9._-]+$")
 
@@ -44,229 +44,6 @@ def _now_iso() -> str:
 
 def _new_id() -> str:
     return uuid.uuid4().hex[:12]
-
-
-@dataclass(slots=True)
-class _RoleTemplateSpec:
-    template: RoleTemplate
-    role_name: str
-    files: dict[str, str]
-
-
-ROLE_TEMPLATE_SPECS: dict[str, _RoleTemplateSpec] = {
-    "get_info": _RoleTemplateSpec(
-        template=RoleTemplate(
-            id="get_info",
-            name="Get info",
-            description="Gather facts and print a short system summary.",
-            fields=[],
-        ),
-        role_name=f"{BUILTIN_ROLE_PREFIX}get_info",
-        files={
-            "tasks/main.yml": """---
-- name: Gather setup facts
-  ansible.builtin.setup:
-
-- name: Print host summary
-  ansible.builtin.debug:
-    msg:
-      - "Host: {{ inventory_hostname }}"
-      - "OS: {{ ansible_facts['distribution'] }} {{ ansible_facts['distribution_version'] }}"
-      - "Kernel: {{ ansible_facts['kernel'] }}"
-      - "Arch: {{ ansible_facts['architecture'] }}"
-""",
-        },
-    ),
-    "ping": _RoleTemplateSpec(
-        template=RoleTemplate(
-            id="ping",
-            name="Ping",
-            description="Verify that Ansible can connect to the selected hosts.",
-            fields=[],
-        ),
-        role_name=f"{BUILTIN_ROLE_PREFIX}ping",
-        files={
-            "tasks/main.yml": """---
-- name: Ping target
-  ansible.builtin.ping:
-""",
-        },
-    ),
-    "uptime": _RoleTemplateSpec(
-        template=RoleTemplate(
-            id="uptime",
-            name="Uptime",
-            description="Run the uptime command and print the result.",
-            fields=[],
-        ),
-        role_name=f"{BUILTIN_ROLE_PREFIX}uptime",
-        files={
-            "tasks/main.yml": """---
-- name: Collect uptime
-  ansible.builtin.command: uptime
-  register: racksmith_uptime_result
-  changed_when: false
-
-- name: Print uptime
-  ansible.builtin.debug:
-    var: racksmith_uptime_result.stdout
-""",
-        },
-    ),
-    "disk_usage": _RoleTemplateSpec(
-        template=RoleTemplate(
-            id="disk_usage",
-            name="Disk usage",
-            description="Show root filesystem usage for selected hosts.",
-            fields=[],
-        ),
-        role_name=f"{BUILTIN_ROLE_PREFIX}disk_usage",
-        files={
-            "tasks/main.yml": """---
-- name: Collect root filesystem usage
-  ansible.builtin.command: df -h /
-  register: racksmith_disk_usage_result
-  changed_when: false
-
-- name: Print root filesystem usage
-  ansible.builtin.debug:
-    var: racksmith_disk_usage_result.stdout_lines
-""",
-        },
-    ),
-    "memory_usage": _RoleTemplateSpec(
-        template=RoleTemplate(
-            id="memory_usage",
-            name="Memory usage",
-            description="Show memory usage with a human-readable summary.",
-            fields=[],
-        ),
-        role_name=f"{BUILTIN_ROLE_PREFIX}memory_usage",
-        files={
-            "tasks/main.yml": """---
-- name: Collect memory usage
-  ansible.builtin.command: free -h
-  register: racksmith_memory_usage_result
-  changed_when: false
-
-- name: Print memory usage
-  ansible.builtin.debug:
-    var: racksmith_memory_usage_result.stdout_lines
-""",
-        },
-    ),
-    "service_status": _RoleTemplateSpec(
-        template=RoleTemplate(
-            id="service_status",
-            name="Service status",
-            description="Inspect the active state of a systemd service.",
-            fields=[
-                RoleTemplateField(
-                    key="service_name",
-                    label="Service name",
-                    placeholder="ssh",
-                    default="ssh",
-                )
-            ],
-        ),
-        role_name=f"{BUILTIN_ROLE_PREFIX}service_status",
-        files={
-            "tasks/main.yml": """---
-- name: Gather service facts
-  ansible.builtin.service_facts:
-
-- name: Print requested service status
-  ansible.builtin.debug:
-    msg:
-      - "Service: {{ service_name }}"
-      - "State: {{ ansible_facts.services[service_name ~ '.service'].state if (service_name ~ '.service') in ansible_facts.services else 'not found' }}"
-      - "Status: {{ ansible_facts.services[service_name ~ '.service'].status if (service_name ~ '.service') in ansible_facts.services else 'not found' }}"
-""",
-        },
-    ),
-    "system_upgrade": _RoleTemplateSpec(
-        template=RoleTemplate(
-            id="system_upgrade",
-            name="System upgrade",
-            description="Upgrade packages on common Linux distributions. Requires become.",
-            fields=[],
-        ),
-        role_name=f"{BUILTIN_ROLE_PREFIX}system_upgrade",
-        files={
-            "tasks/main.yml": """---
-- name: Gather setup facts
-  ansible.builtin.setup:
-
-- name: Upgrade Debian packages
-  ansible.builtin.apt:
-    update_cache: true
-    upgrade: dist
-  when: ansible_facts['pkg_mgr'] == 'apt'
-
-- name: Upgrade DNF packages
-  ansible.builtin.dnf:
-    name: '*'
-    state: latest
-    update_cache: true
-  when: ansible_facts['pkg_mgr'] == 'dnf'
-
-- name: Upgrade YUM packages
-  ansible.builtin.yum:
-    name: '*'
-    state: latest
-    update_cache: true
-  when: ansible_facts['pkg_mgr'] == 'yum'
-
-- name: Report unsupported package manager
-  ansible.builtin.debug:
-    msg: "Package manager {{ ansible_facts['pkg_mgr'] }} is not yet handled by this role."
-  when: ansible_facts['pkg_mgr'] not in ['apt', 'dnf', 'yum']
-""",
-        },
-    ),
-    "reboot_if_required": _RoleTemplateSpec(
-        template=RoleTemplate(
-            id="reboot_if_required",
-            name="Reboot if required",
-            description="Reboot Debian or RedHat hosts only when the system reports it is needed. Requires become.",
-            fields=[],
-        ),
-        role_name=f"{BUILTIN_ROLE_PREFIX}reboot_if_required",
-        files={
-            "tasks/main.yml": """---
-- name: Gather setup facts
-  ansible.builtin.setup:
-
-- name: Check Debian reboot-required flag
-  ansible.builtin.stat:
-    path: /var/run/reboot-required
-  register: racksmith_reboot_required_debian
-  when: ansible_facts['os_family'] == 'Debian'
-
-- name: Check RedHat reboot requirement
-  ansible.builtin.command: needs-restarting -r
-  register: racksmith_reboot_required_redhat
-  changed_when: false
-  failed_when: false
-  when: ansible_facts['os_family'] == 'RedHat'
-
-- name: Set reboot-required fact
-  ansible.builtin.set_fact:
-    racksmith_reboot_required: "{{ (racksmith_reboot_required_debian.stat.exists if ansible_facts['os_family'] == 'Debian' else false) or (racksmith_reboot_required_redhat.rc == 1 if ansible_facts['os_family'] == 'RedHat' else false) }}"
-
-- name: Reboot when required
-  ansible.builtin.reboot:
-    msg: Racksmith rebooting host after role requested reboot
-    reboot_timeout: 900
-  when: racksmith_reboot_required
-
-- name: Print reboot decision
-  ansible.builtin.debug:
-    msg: "Reboot required: {{ racksmith_reboot_required }}"
-""",
-        },
-    ),
-}
 
 
 @dataclass(slots=True)
@@ -295,6 +72,9 @@ class PlaybookManager:
 
     def _roles_dir(self, repo_path: Path) -> Path:
         return repo_path / ROLES_DIR
+
+    def _legacy_roles_dir(self, repo_path: Path) -> Path:
+        return repo_path / LEGACY_ROLES_DIR
 
     def _inventory_dir(self, repo_path: Path) -> Path:
         return repo_path / INVENTORY_DIR
@@ -336,6 +116,23 @@ class PlaybookManager:
                 file_path.parent.mkdir(parents=True, exist_ok=True)
                 file_path.write_text(content, encoding="utf-8")
 
+        # Clean up stale generated roles from the old ansible_scripts/roles location
+        # while leaving any user-managed roles untouched.
+        legacy_roles_dir = self._legacy_roles_dir(repo_path)
+        if legacy_roles_dir.is_dir():
+            for child in legacy_roles_dir.iterdir():
+                if child.is_dir() and child.name.startswith(BUILTIN_ROLE_PREFIX):
+                    for nested in sorted(child.rglob("*"), reverse=True):
+                        if nested.is_file():
+                            nested.unlink(missing_ok=True)
+                        elif nested.is_dir():
+                            nested.rmdir()
+                    child.rmdir()
+            try:
+                next(legacy_roles_dir.iterdir())
+            except StopIteration:
+                legacy_roles_dir.rmdir()
+
     def role_templates(self) -> list[RoleTemplate]:
         return [spec.template for spec in ROLE_TEMPLATE_SPECS.values()]
 
@@ -345,8 +142,17 @@ class PlaybookManager:
             spec = ROLE_TEMPLATE_SPECS.get(role.template_id)
             if spec is None:
                 raise ValueError(f"Unknown role template: {role.template_id}")
-            if role.vars:
-                roles.append({"role": spec.role_name, "vars": role.vars})
+            default_vars = {
+                field.key: field.default
+                for field in spec.template.fields
+                if field.default is not None
+            }
+            merged_vars = {
+                **default_vars,
+                **role.vars,
+            }
+            if merged_vars:
+                roles.append({"role": spec.role_name, "vars": merged_vars})
             else:
                 roles.append(spec.role_name)
 

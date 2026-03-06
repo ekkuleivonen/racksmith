@@ -14,7 +14,7 @@ from _utils.redis import Redis
 from github.misc import user_storage_id
 from racks.managers import rack_manager
 from racks.schemas import RackItem
-from ssh.misc import _connect_kwargs
+from ssh.misc import _connect_kwargs, machine_public_key
 from ssh.schemas import CommandHistoryEntry, PingStatusEntry, PingStatusTarget
 
 _HISTORY_PREFIX = "racksmith:ssh_history"
@@ -27,6 +27,9 @@ def _now_iso() -> str:
 
 
 class SSHManager:
+    def public_key(self, _session) -> str:
+        return machine_public_key()
+
     def _history_key(self, user_id: str, rack_id: str, item_id: str) -> str:
         return f"{_HISTORY_PREFIX}:{user_id}:{rack_id}:{item_id}"
 

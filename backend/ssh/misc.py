@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from pathlib import Path
 
 import asyncssh
 
@@ -89,6 +90,23 @@ def _extract_live_host(conn: asyncssh.SSHClientConnection, fallback: str) -> str
         if value:
             return value
     return fallback
+
+
+def machine_public_key() -> str:
+    ssh_dir = Path.home() / ".ssh"
+    candidates = [
+        ssh_dir / "id_ed25519.pub",
+        ssh_dir / "id_ecdsa.pub",
+        ssh_dir / "id_rsa.pub",
+    ]
+    for path in candidates:
+        if path.is_file():
+            value = path.read_text(encoding="utf-8").strip()
+            if value:
+                return value
+    raise FileNotFoundError(
+        "No public SSH key found in ~/.ssh (looked for id_ed25519.pub, id_ecdsa.pub, id_rsa.pub)"
+    )
 
 
 async def probe_ssh_target(host: str, username: str, port: int) -> SSHProbeResult:

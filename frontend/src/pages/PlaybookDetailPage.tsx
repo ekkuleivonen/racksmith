@@ -18,6 +18,7 @@ import {
   createPlaybookRun,
   deletePlaybook,
   getPlaybook,
+  listPlaybookRuns,
   resolvePlaybookTargets,
   type RoleTemplate,
   updatePlaybook,
@@ -147,9 +148,10 @@ export function PlaybookDetailPage() {
     if (!playbookId) return;
     setLoading(true);
     try {
-      const [playbookResult, rackSummaries] = await Promise.all([
+      const [playbookResult, rackSummaries, runsResult] = await Promise.all([
         getPlaybook(playbookId),
         listRacks(),
+        listPlaybookRuns(playbookId),
       ]);
       setDraft({
         play_name: playbookResult.playbook.play_name,
@@ -169,6 +171,11 @@ export function PlaybookDetailPage() {
         }),
       );
       setRackGroups(groups);
+      setCurrentRun(
+        runsResult.runs.find(
+          (run) => run.status === "queued" || run.status === "running",
+        ) ?? null,
+      );
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to load playbook");
     } finally {
@@ -266,59 +273,11 @@ export function PlaybookDetailPage() {
           </div>
         </section>
 
-        <Tabs defaultValue="editor">
+        <Tabs defaultValue="run">
           <TabsList variant="line">
-            <TabsTrigger value="editor">Editor</TabsTrigger>
             <TabsTrigger value="run">Run</TabsTrigger>
+            <TabsTrigger value="editor">Editor</TabsTrigger>
           </TabsList>
-
-          <TabsContent value="editor">
-            <PlaybookEditorForm
-              draft={draft}
-              roleTemplates={roleTemplates}
-              submitLabel={saving ? "Saving..." : "Save playbook"}
-              submitting={saving}
-              inlineTextFields
-              compact
-              onChange={setDraft}
-              onSubmit={async () => {
-                setSaving(true);
-                try {
-                  const result = await updatePlaybook(playbookId, draft);
-                  setDraft({
-                    play_name: result.playbook.play_name,
-                    description: result.playbook.description,
-                    become: result.playbook.become,
-                    roles: result.playbook.role_entries,
-                  });
-                  setRoleTemplates(result.playbook.role_templates);
-                  window.dispatchEvent(new Event("racksmith:sidebar-refresh"));
-                  if (result.playbook.id !== playbookId) {
-                    navigate(`/playbooks/${result.playbook.id}`, { replace: true });
-                  }
-                  toast.success("Playbook saved");
-                } catch (error) {
-                  toast.error(error instanceof Error ? error.message : "Failed to save playbook");
-                } finally {
-                  setSaving(false);
-                }
-              }}
-              onDelete={async () => {
-                if (!window.confirm("Delete this playbook?")) return;
-                setSaving(true);
-                try {
-                  await deletePlaybook(playbookId);
-                  window.dispatchEvent(new Event("racksmith:sidebar-refresh"));
-                  toast.success("Playbook deleted");
-                  navigate("/playbooks", { replace: true });
-                } catch (error) {
-                  toast.error(error instanceof Error ? error.message : "Failed to delete playbook");
-                } finally {
-                  setSaving(false);
-                }
-              }}
-            />
-          </TabsContent>
 
           <TabsContent value="run">
             <div className="space-y-4">
@@ -425,6 +384,54 @@ export function PlaybookDetailPage() {
 
               <PlaybookRunOutput run={currentRun} onRunUpdate={handleRunUpdate} />
             </div>
+          </TabsContent>
+
+          <TabsContent value="editor">
+            <PlaybookEditorForm
+              draft={draft}
+              roleTemplates={roleTemplates}
+              submitLabel={saving ? "Saving..." : "Save playbook"}
+              submitting={saving}
+              inlineTextFields
+              compact
+              onChange={setDraft}
+              onSubmit={async () => {
+                setSaving(true);
+                try {
+                  const result = await updatePlaybook(playbookId, draft);
+                  setDraft({
+                    play_name: result.playbook.play_name,
+                    description: result.playbook.description,
+                    become: result.playbook.become,
+                    roles: result.playbook.role_entries,
+                  });
+                  setRoleTemplates(result.playbook.role_templates);
+                  window.dispatchEvent(new Event("racksmith:sidebar-refresh"));
+                  if (result.playbook.id !== playbookId) {
+                    navigate(`/playbooks/${result.playbook.id}`, { replace: true });
+                  }
+                  toast.success("Playbook saved");
+                } catch (error) {
+                  toast.error(error instanceof Error ? error.message : "Failed to save playbook");
+                } finally {
+                  setSaving(false);
+                }
+              }}
+              onDelete={async () => {
+                if (!window.confirm("Delete this playbook?")) return;
+                setSaving(true);
+                try {
+                  await deletePlaybook(playbookId);
+                  window.dispatchEvent(new Event("racksmith:sidebar-refresh"));
+                  toast.success("Playbook deleted");
+                  navigate("/playbooks", { replace: true });
+                } catch (error) {
+                  toast.error(error instanceof Error ? error.message : "Failed to delete playbook");
+                } finally {
+                  setSaving(false);
+                }
+              }}
+            />
           </TabsContent>
         </Tabs>
       </div>

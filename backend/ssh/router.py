@@ -61,6 +61,18 @@ async def ping_statuses(
     return {"statuses": [entry.model_dump() for entry in statuses]}
 
 
+@router.get("/public-key")
+async def get_public_key(
+    session_id: str | None = Cookie(default=None, alias=settings.SESSION_COOKIE_NAME),
+):
+    session = _require_session(session_id)
+    try:
+        public_key = ssh_manager.public_key(session)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return {"public_key": public_key}
+
+
 @router.websocket("/racks/{rack_id}/items/{item_id}/terminal")
 async def terminal_socket(
     websocket: WebSocket,

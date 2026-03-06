@@ -96,6 +96,11 @@ export async function createPlaybookRun(playbookId: string, targets: PlaybookTar
   return apiPost<{ run: PlaybookRun }>(`/playbooks/${playbookId}/runs`, { targets });
 }
 
+export async function listPlaybookRuns(playbookId?: string) {
+  const suffix = playbookId ? `?playbook_id=${encodeURIComponent(playbookId)}` : "";
+  return apiGet<{ runs: PlaybookRun[] }>(`/playbooks/runs${suffix}`);
+}
+
 export async function getPlaybookRun(runId: string) {
   return apiGet<{ run: PlaybookRun }>(`/playbooks/runs/${runId}`);
 }
