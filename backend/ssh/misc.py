@@ -15,7 +15,6 @@ class SSHProbeResult:
     name: str
     mac_address: str = ""
     os: str = ""
-    hardware_type: str = "server"
     tags: list[str] = field(default_factory=list)
 
 
@@ -42,48 +41,35 @@ def _parse_os_release(raw: str) -> dict[str, str]:
     return result
 
 
-def _detect_os_name(os_release: dict[str, str], uname: str) -> str:
-    distro_id = (os_release.get("ID") or "").lower()
-    version = (os_release.get("VERSION_ID") or "").lower()
-    pretty = (os_release.get("PRETTY_NAME") or "").lower()
-
-    if distro_id == "ubuntu" and version.startswith("24"):
-        return "ubuntu-24"
-    if distro_id == "ubuntu" and version.startswith("22"):
-        return "ubuntu-22"
-    if distro_id == "debian" and version.startswith("12"):
-        return "debian-12"
-    if distro_id == "debian" and version.startswith("11"):
-        return "debian-11"
-    if distro_id == "rocky" and version.startswith("9"):
-        return "rocky-9"
-    if distro_id in {"rhel", "redhat", "red hat enterprise linux"} and version.startswith("9"):
-        return "rhel-9"
-    if distro_id == "opnsense" or "opnsense" in pretty:
-        return "opnsense"
-    if distro_id == "truenas" or "truenas" in pretty:
-        return "truenas"
-    if distro_id == "raspbian" or "raspberry" in pretty:
-        return "pi-os-64-lite"
-    if distro_id == "proxmox" or "proxmox" in pretty:
-        return "proxmox"
-
-    uname_lower = uname.lower()
-    if "opnsense" in uname_lower:
-        return "opnsense"
-    if "truenas" in uname_lower:
-        return "truenas"
-    if "linux" in uname_lower:
-        return "ubuntu-24" if distro_id == "ubuntu" else ""
+def _extract_hostnamectl_os(raw: str) -> str:
+    for line in raw.splitlines():
+        if ":" not in line:
+            continue
+        key, value = line.split(":", 1)
+        if key.strip().lower() == "operating system":
+            return value.strip()
     return ""
 
 
-def _detect_hardware_type(os_name: str) -> str:
-    if os_name == "opnsense":
-        return "router"
-    if os_name == "truenas":
-        return "nas"
-    return "server"
+def _detect_os_name(os_release: dict[str, str], hostnamectl_os: str, uname: str) -> str:
+    if hostnamectl_os:
+        return hostnamectl_os
+
+    pretty = (os_release.get("PRETTY_NAME") or "").strip()
+    if pretty:
+        return pretty
+
+    name = (os_release.get("NAME") or "").strip()
+    version = (os_release.get("VERSION_ID") or "").strip()
+    if name and version:
+        return f"{name} {version}"
+    if name:
+        return name
+
+    uname = uname.strip()
+    if any(marker in uname.lower() for marker in ("opnsense", "truenas")):
+        return uname
+    return ""
 
 
 def _extract_mac(raw: str) -> str:
@@ -118,6 +104,7 @@ async def probe_ssh_target(host: str, username: str, port: int) -> SSHProbeResul
             "hostnamectl --static 2>/dev/null || hostname 2>/dev/null || uname -n",
             check=False,
         )
+        hostnamectl_result = await conn.run("hostnamectl 2>/dev/null", check=False)
         os_release_result = await conn.run("cat /etc/os-release 2>/dev/null", check=False)
         uname_result = await conn.run("uname -srm 2>/dev/null || uname -a", check=False)
         mac_result = await conn.run(
@@ -133,17 +120,16 @@ async def probe_ssh_target(host: str, username: str, port: int) -> SSHProbeResul
         await conn.wait_closed()
 
     hostname = hostname_result.stdout.strip() or host
+    hostnamectl_os = _extract_hostnamectl_os(hostnamectl_result.stdout)
     os_release = _parse_os_release(os_release_result.stdout)
     uname = uname_result.stdout.strip()
     mac_address = _extract_mac(mac_result.stdout)
-    os_name = _detect_os_name(os_release, uname)
-    hardware_type = _detect_hardware_type(os_name)
+    os_name = _detect_os_name(os_release, hostnamectl_os, uname)
 
     return SSHProbeResult(
         host=live_host,
         name=hostname or live_host,
         mac_address=mac_address,
         os=os_name,
-        hardware_type=hardware_type,
         tags=[],
     )

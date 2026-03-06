@@ -1,12 +1,18 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { Power } from "lucide-react";
+import { Power, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { SshTerminal } from "@/components/ssh-terminal";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import { getRack, isReachableRackItem, type RackDetail, type RackItem } from "@/lib/racks";
+import {
+  getRack,
+  isReachableRackItem,
+  refreshRackItem,
+  type RackDetail,
+  type RackItem,
+} from "@/lib/racks";
 import { fetchPingStatuses, rebootRackItem, type PingStatus } from "@/lib/ssh";
 import { cn } from "@/lib/utils";
 
@@ -17,6 +23,7 @@ export function RackItemPage() {
   const [items, setItems] = useState<RackItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [rebooting, setRebooting] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [pingStatus, setPingStatus] = useState<PingStatus>("unknown");
 
   const selectedItem = useMemo(
@@ -170,6 +177,30 @@ export function RackItemPage() {
                 size="icon"
                 variant="outline"
                 className="h-8 w-8"
+                disabled={refreshing || !isReachableRackItem(selectedItem)}
+                aria-label="Rediscover item"
+                title="Rediscover item"
+                onClick={async () => {
+                  setRefreshing(true);
+                  try {
+                    await refreshRackItem(rack.id, selectedItem.id);
+                    await loadRack();
+                    toast.success("Item rediscovered");
+                  } catch (error) {
+                    toast.error(
+                      error instanceof Error ? error.message : "Failed to rediscover item"
+                    );
+                  } finally {
+                    setRefreshing(false);
+                  }
+                }}
+              >
+                <RefreshCw className={cn("size-3.5", refreshing && "animate-spin")} />
+              </Button>
+              <Button
+                size="icon"
+                variant="outline"
+                className="h-8 w-8"
                 aria-label="Reboot device"
                 disabled={rebooting || !isReachableRackItem(selectedItem)}
                 onClick={async () => {
@@ -191,11 +222,8 @@ export function RackItemPage() {
             </div>
           </div>
 
-          {(selectedItem.hardware_type || selectedItem.os || selectedItem.tags.length > 0) && (
+          {(selectedItem.os || selectedItem.tags.length > 0) && (
             <div className="flex flex-wrap gap-1">
-              {selectedItem.hardware_type && (
-                <Badge variant="secondary">{selectedItem.hardware_type}</Badge>
-              )}
               {selectedItem.os && <Badge variant="outline">{selectedItem.os}</Badge>}
               {selectedItem.tags.map((tag) => (
                 <Badge key={tag} variant="outline">
@@ -211,6 +239,7 @@ export function RackItemPage() {
             <p>Host: {selectedItem.host || "Not set"}</p>
             <p>User: {selectedItem.ssh_user || "Not set"}</p>
             <p>Port: {selectedItem.ssh_port}</p>
+            <p>OS: {selectedItem.os || "Not discovered"}</p>
             <p>MAC: {selectedItem.mac_address || "Not discovered"}</p>
           </div>
         </section>

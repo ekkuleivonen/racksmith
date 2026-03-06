@@ -1,10 +1,14 @@
+import { useEffect, useState } from "react";
+import { X } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import type { RackItem } from "@/lib/racks";
 
 type ItemLike = Pick<
   RackItem,
-  "managed" | "name" | "hardware_type" | "host" | "os" | "ssh_user" | "ssh_port" | "tags"
+  "managed" | "name" | "host" | "os" | "ssh_user" | "ssh_port" | "tags"
 >;
 
 interface ItemHardwareFieldsProps {
@@ -12,7 +16,33 @@ interface ItemHardwareFieldsProps {
   onChange: (patch: Partial<ItemLike>) => void;
 }
 
+function normalizeLabel(value: string): string {
+  return value.trim();
+}
+
+function addLabel(existing: string[], value: string): string[] {
+  const next = normalizeLabel(value);
+  if (!next || existing.includes(next)) {
+    return existing;
+  }
+  return [...existing, next];
+}
+
 export function ItemHardwareFields({ item, onChange }: ItemHardwareFieldsProps) {
+  const [labelInput, setLabelInput] = useState("");
+
+  useEffect(() => {
+    setLabelInput("");
+  }, [item.tags]);
+
+  const commitLabel = () => {
+    const nextTags = addLabel(item.tags, labelInput);
+    if (nextTags !== item.tags) {
+      onChange({ tags: nextTags });
+    }
+    setLabelInput("");
+  };
+
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between gap-3">
@@ -41,6 +71,51 @@ export function ItemHardwareFields({ item, onChange }: ItemHardwareFieldsProps) 
         onChange={(e) => onChange({ name: e.target.value })}
         placeholder={item.managed ? "Optional display name" : "Patch panel"}
       />
+      <div className="space-y-1">
+        <p className="text-[11px] text-zinc-500 font-medium uppercase tracking-wider">
+          Labels
+        </p>
+        {item.tags.length > 0 ? (
+          <div className="flex flex-wrap gap-1">
+            {item.tags.map((tag) => (
+              <div key={tag} className="flex items-center gap-1">
+                <Badge variant="outline">{tag}</Badge>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="h-4 w-4 text-zinc-400 hover:text-zinc-100"
+                  onClick={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    onChange({ tags: item.tags.filter((existingTag) => existingTag !== tag) });
+                  }}
+                >
+                  <X className="h-3 w-3" />
+                </Button>
+              </div>
+            ))}
+          </div>
+        ) : null}
+        <Input
+          className="h-8 text-xs"
+          value={labelInput}
+          onChange={(e) => setLabelInput(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              commitLabel();
+            }
+            if (e.key === "Backspace" && !labelInput && item.tags.length > 0) {
+              onChange({ tags: item.tags.slice(0, -1) });
+            }
+          }}
+          placeholder="Type a label and press Enter"
+        />
+        <p className="text-[11px] text-zinc-500">
+          Press Enter to add a label. Racksmith stores these as host metadata in Ansible.
+        </p>
+      </div>
       {item.managed ? (
         <>
           <p className="text-[11px] text-zinc-500 font-medium uppercase tracking-wider">

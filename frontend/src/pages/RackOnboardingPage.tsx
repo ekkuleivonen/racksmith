@@ -83,7 +83,6 @@ function makePendingItem(zone: ZoneSelection): RackItem {
     host: "",
     name: "",
     mac_address: "",
-    hardware_type: "",
     os: "",
     ssh_user: "",
     ssh_port: 22,
@@ -327,20 +326,12 @@ export function RackBuilder({
               </p>
               <Separator />
               <ItemHardwareFields item={pending} onChange={onPendingChange} />
-              {(pending.hardware_type || pending.os || pending.mac_address || pending.tags.length > 0) && (
+              {(pending.os || pending.mac_address) && (
                 <>
                   <Separator />
                   <div className="space-y-2">
                     <div className="flex flex-wrap gap-1">
-                      {pending.hardware_type && (
-                        <Badge variant="secondary">{pending.hardware_type}</Badge>
-                      )}
                       {pending.os && <Badge variant="outline">{pending.os}</Badge>}
-                      {pending.tags.map((tag) => (
-                        <Badge key={tag} variant="outline">
-                          {tag}
-                        </Badge>
-                      ))}
                     </div>
                     <div className="space-y-1 text-xs text-zinc-400">
                       <p>Host: {pending.host || "Not set"}</p>
@@ -378,17 +369,9 @@ export function RackBuilder({
                       }`}
                 </p>
               </div>
-              {(selectedItem.hardware_type || selectedItem.os || selectedItem.tags.length > 0) && (
+              {selectedItem.os && (
                 <div className="flex flex-wrap gap-1">
-                  {selectedItem.hardware_type && (
-                    <Badge variant="secondary">{selectedItem.hardware_type}</Badge>
-                  )}
                   {selectedItem.os && <Badge variant="outline">{selectedItem.os}</Badge>}
-                  {selectedItem.tags.map((tag) => (
-                    <Badge key={tag} variant="outline">
-                      {tag}
-                    </Badge>
-                  ))}
                 </div>
               )}
               <Separator />
@@ -399,8 +382,7 @@ export function RackBuilder({
                 <p>Port: {selectedItem.ssh_port}</p>
                 <p>MAC: {selectedItem.mac_address || "Not discovered"}</p>
               </div>
-              <div className="flex gap-2">
-                {selectedItemActionSlot}
+              <div className="flex flex-wrap items-center gap-2">
                 {showSaveSelected ? (
                   <Button size="sm" disabled={saving} onClick={() => void onSaveSelected()}>
                     Save item
@@ -414,6 +396,11 @@ export function RackBuilder({
                 >
                   {deleteSelectedLabel}
                 </Button>
+                {selectedItemActionSlot ? (
+                  <div className="ml-auto flex items-center gap-2">
+                    {selectedItemActionSlot}
+                  </div>
+                ) : null}
               </div>
             </>
           )}

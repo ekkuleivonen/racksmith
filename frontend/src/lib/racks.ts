@@ -30,7 +30,6 @@ export type RackItem = {
   host: string;
   name: string;
   mac_address: string;
-  hardware_type: string;
   os: string;
   ssh_user: string;
   ssh_port: number;
@@ -123,7 +122,6 @@ export async function previewRackItem(payload: RackItem & { rack_units: number; 
     position_col_start: payload.position_col_start,
     position_col_count: payload.position_col_count,
     host: payload.host,
-    hardware_type: payload.hardware_type,
     os: payload.os,
     ssh_user: payload.ssh_user,
     ssh_port: payload.ssh_port,
@@ -133,6 +131,10 @@ export async function previewRackItem(payload: RackItem & { rack_units: number; 
 
 export async function updateRackItem(rackId: string, itemId: string, payload: Partial<RackItem>) {
   return apiPatch<{ item: RackItem }>(`/racks/${rackId}/items/${itemId}`, payload);
+}
+
+export async function refreshRackItem(rackId: string, itemId: string) {
+  return apiPost<{ item: RackItem }>(`/racks/${rackId}/items/${itemId}/refresh`);
 }
 
 export async function deleteRackItem(rackId: string, itemId: string) {

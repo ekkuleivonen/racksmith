@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
+import { ExternalLink, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { RackBuilder } from "@/pages/RackOnboardingPage";
 import { Badge } from "@/components/ui/badge";
@@ -11,7 +12,9 @@ import {
   deleteRack,
   deleteRackItem,
   getRack,
+  isReachableRackItem,
   listRacks,
+  refreshRackItem,
   updateRack,
   updateRackItem,
   type RackDetail,
@@ -36,7 +39,6 @@ function makePendingItem(zone: ZoneSelection): RackItem {
     host: "",
     name: "",
     mac_address: "",
-    hardware_type: "",
     os: "",
     ssh_user: "",
     ssh_port: 22,
@@ -54,7 +56,6 @@ function toRackItemInput(item: RackItem) {
     position_col_start: item.position_col_start,
     position_col_count: item.position_col_count,
     host: item.host,
-    hardware_type: item.hardware_type,
     os: item.os,
     ssh_user: item.ssh_user,
     ssh_port: item.ssh_port,
@@ -105,12 +106,21 @@ export function RackPage() {
     setRackUnitsDraft(data.rack.rack_units);
     setRackColsDraft(data.rack.rack_cols);
     setItems(data.items);
-    setSelectedItemId(
-      highlightedItemId &&
+    setSelectedItemId((previousSelectedItemId) => {
+      if (
+        previousSelectedItemId &&
+        data.items.some((item) => item.id === previousSelectedItemId)
+      ) {
+        return previousSelectedItemId;
+      }
+      if (
+        highlightedItemId &&
         data.items.some((item) => item.id === highlightedItemId)
-        ? highlightedItemId
-        : null,
-    );
+      ) {
+        return highlightedItemId;
+      }
+      return null;
+    });
   }, [highlightedItemId, rackId]);
 
   useEffect(() => {
@@ -131,6 +141,26 @@ export function RackPage() {
       active = false;
     };
   }, [loadRack]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const currentItemId = params.get("itemId");
+    if (selectedItemId) {
+      if (currentItemId === selectedItemId) return;
+      params.set("itemId", selectedItemId);
+    } else {
+      if (!currentItemId) return;
+      params.delete("itemId");
+    }
+    const nextSearch = params.toString();
+    navigate(
+      {
+        pathname: location.pathname,
+        search: nextSearch ? `?${nextSearch}` : "",
+      },
+      { replace: true },
+    );
+  }, [location.pathname, location.search, navigate, selectedItemId]);
 
   useEffect(() => {
     setPending(null);
@@ -579,14 +609,43 @@ export function RackPage() {
             }
             selectedItemActionSlot={
               selectedItem?.managed ? (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  disabled={saving}
-                  onClick={() => navigate(`/rack/${rack.id}/item/${selectedItem.id}`)}
-                >
-                  Manage item
-                </Button>
+                <>
+                  <Button
+                    size="icon"
+                    variant="outline"
+                    className="h-8 w-8"
+                    disabled={saving || !isReachableRackItem(selectedItem)}
+                    aria-label="Rediscover item"
+                    title="Rediscover item"
+                    onClick={async () => {
+                      setSaving(true);
+                      try {
+                        await refreshRackItem(rack.id, selectedItem.id);
+                        await loadRack();
+                        toast.success("Item rediscovered");
+                      } catch (error) {
+                        toast.error(
+                          error instanceof Error ? error.message : "Failed to rediscover item",
+                        );
+                      } finally {
+                        setSaving(false);
+                      }
+                    }}
+                  >
+                    <RefreshCw className="size-3.5" />
+                  </Button>
+                  <Button
+                    size="icon"
+                    variant="outline"
+                    className="h-8 w-8"
+                    disabled={saving}
+                    aria-label="Open item page"
+                    title="Open item page"
+                    onClick={() => navigate(`/rack/${rack.id}/item/${selectedItem.id}`)}
+                  >
+                    <ExternalLink className="size-3.5" />
+                  </Button>
+                </>
               ) : null
             }
             onSaveSelected={async () => {

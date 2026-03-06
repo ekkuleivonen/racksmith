@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 import asyncio
+import re
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
+
+import yaml
 
 from racks.misc import (
     cols_for_width,
@@ -28,6 +31,8 @@ from ssh.misc import probe_ssh_target
 
 LEGACY_RACK_FILE = Path(".racksmith/rack.json")
 RACKS_DIR = Path(".racksmith/racks")
+ANSIBLE_INVENTORY_DIR = Path("ansible_scripts/inventory")
+RACK_FILE_EXTENSIONS = (".yml", ".yaml", ".json")
 
 
 def _now_iso() -> str:
@@ -45,11 +50,81 @@ class RackManager:
         for item in rack.items:
             item.placement = "parked"
 
+    def _ansible_inventory_dir(self, repo_path: Path) -> Path:
+        return repo_path / ANSIBLE_INVENTORY_DIR
+
+    def _inventory_file(self, repo_path: Path, rack_id: str) -> Path:
+        return self._ansible_inventory_dir(repo_path) / f"rack_{rack_id}.yml"
+
+    def _inventory_safe_name(self, value: str, *, fallback: str) -> str:
+        cleaned = re.sub(r"[^a-z0-9]+", "_", value.strip().lower())
+        cleaned = cleaned.strip("_")
+        return cleaned or fallback
+
+    def _inventory_host_key(self, item: RackItem) -> str:
+        base_name = item.name or item.id
+        return self._inventory_safe_name(base_name, fallback=f"item_{item.id}")
+
+    def _inventory_unique_host_key(
+        self, item: RackItem, existing_hosts: dict[str, dict]
+    ) -> str:
+        host_key = self._inventory_host_key(item)
+        if host_key not in existing_hosts:
+            return host_key
+        return f"{host_key}_{item.id}"
+
+    def _inventory_labels(self, item: RackItem) -> list[str]:
+        return item.tags
+
+    def _inventory_host_vars(self, item: RackItem) -> dict[str, object]:
+        host_vars: dict[str, object] = {
+            "ansible_host": item.host,
+            "ansible_user": item.ssh_user,
+            "ansible_port": item.ssh_port,
+        }
+        if item.os:
+            host_vars["os"] = item.os
+        if item.tags:
+            host_vars["labels"] = self._inventory_labels(item)
+        return host_vars
+
+    def _inventory_group_name(self, prefix: str, value: str, *, fallback: str) -> str:
+        return f"{prefix}_{self._inventory_safe_name(value, fallback=fallback)}"
+
+    def _inventory_group_members(self, rack: Rack) -> tuple[dict[str, dict], dict[str, dict]]:
+        hosts: dict[str, dict] = {}
+        groups: dict[str, dict] = {
+            self._inventory_group_name("rack", rack.name, fallback=rack.id): {"hosts": {}}
+        }
+        rack_group = next(iter(groups))
+
+        for item in rack.items:
+            if not item.managed or not item.host or not item.ssh_user:
+                continue
+
+            host_key = self._inventory_unique_host_key(item, hosts)
+            hosts[host_key] = self._inventory_host_vars(item)
+            groups[rack_group]["hosts"][host_key] = {}
+
+        return hosts, groups
+
+    def _sync_ansible_inventory(self, repo_path: Path, rack: Rack) -> None:
+        hosts, groups = self._inventory_group_members(rack)
+        inventory = {"all": {"hosts": hosts, "children": groups}}
+        inventory_file = self._inventory_file(repo_path, rack.id)
+        inventory_file.parent.mkdir(parents=True, exist_ok=True)
+        inventory_file.write_text(
+            yaml.safe_dump(inventory, sort_keys=False), encoding="utf-8"
+        )
+
+    def _delete_ansible_inventory(self, repo_path: Path, rack_id: str) -> None:
+        self._inventory_file(repo_path, rack_id).unlink(missing_ok=True)
+
     def _rack_dir(self, repo_path: Path) -> Path:
         return repo_path / RACKS_DIR
 
     def _rack_file(self, repo_path: Path, rack_id: str) -> Path:
-        return self._rack_dir(repo_path) / f"{rack_id}.json"
+        return self._rack_dir(repo_path) / f"{rack_id}.yml"
 
     def _legacy_rack_file(self, repo_path: Path) -> Path:
         return repo_path / LEGACY_RACK_FILE
@@ -75,7 +150,8 @@ class RackManager:
         rack_files: list[Path] = []
         rack_dir = self._rack_dir(repo_path)
         if rack_dir.is_dir():
-            rack_files.extend(sorted(rack_dir.glob("*.json")))
+            for extension in RACK_FILE_EXTENSIONS:
+                rack_files.extend(sorted(rack_dir.glob(f"*{extension}")))
         legacy_file = self._legacy_rack_file(repo_path)
         if legacy_file.is_file():
             rack_files.append(legacy_file)
@@ -84,10 +160,11 @@ class RackManager:
     def _iter_rack_records(self, repo_path: Path) -> list[tuple[Path, Rack]]:
         records: list[tuple[Path, Rack]] = []
         for rack_file in self._iter_rack_files(repo_path):
+            payload = yaml.safe_load(rack_file.read_text(encoding="utf-8"))
             records.append(
                 (
                     rack_file,
-                    Rack.model_validate_json(rack_file.read_text(encoding="utf-8")),
+                    Rack.model_validate(payload),
                 )
             )
         return records
@@ -95,7 +172,8 @@ class RackManager:
     def _save_to_repo(self, repo_path: Path, rack: Rack) -> None:
         rack_file = self._rack_file(repo_path, rack.id)
         rack_file.parent.mkdir(parents=True, exist_ok=True)
-        rack_file.write_text(rack.model_dump_json(indent=2) + "\n", encoding="utf-8")
+        rack_file.write_text(yaml.safe_dump(rack.model_dump(), sort_keys=False), encoding="utf-8")
+        self._sync_ansible_inventory(repo_path, rack)
 
     def _load_for_session(self, session, rack_id: str) -> tuple[Path, Path, Rack]:
         repo_path = setup_manager.active_repo_path(session)
@@ -182,8 +260,9 @@ class RackManager:
         return rack
 
     def delete_rack(self, session, rack_id: str) -> None:
-        _, rack_file, _ = self._load_for_session(session, rack_id)
+        repo_path, rack_file, _ = self._load_for_session(session, rack_id)
         rack_file.unlink(missing_ok=True)
+        self._delete_ansible_inventory(repo_path, rack_id)
 
     def _save_loaded_rack(self, repo_path: Path, rack_file: Path, rack: Rack) -> None:
         # Migrate legacy rack storage into the multi-rack directory on next write.
@@ -191,8 +270,14 @@ class RackManager:
             self._save_to_repo(repo_path, rack)
             rack_file.unlink(missing_ok=True)
             return
-        rack_file.parent.mkdir(parents=True, exist_ok=True)
-        rack_file.write_text(rack.model_dump_json(indent=2) + "\n", encoding="utf-8")
+        target_file = self._rack_file(repo_path, rack.id)
+        target_file.parent.mkdir(parents=True, exist_ok=True)
+        target_file.write_text(
+            yaml.safe_dump(rack.model_dump(), sort_keys=False), encoding="utf-8"
+        )
+        if rack_file != target_file:
+            rack_file.unlink(missing_ok=True)
+        self._sync_ansible_inventory(repo_path, rack)
 
     async def _build_item(
         self,
@@ -201,6 +286,8 @@ class RackManager:
         rack_cols: int,
         data: RackItemInput,
         existing: RackItem | None = None,
+        *,
+        force_probe: bool = False,
     ) -> RackItem:
         host = validate_host(data.host)
         ssh_user = data.ssh_user.strip()
@@ -216,9 +303,8 @@ class RackManager:
             fields["ssh_port"] = 22
             fields["mac_address"] = ""
             fields["os"] = ""
-            fields["tags"] = []
+            fields["tags"] = data.tags
             fields["name"] = data.name.strip() or (existing.name if existing else "")
-            fields["hardware_type"] = data.hardware_type or (existing.hardware_type if existing else "")
             return RackItem.model_validate(fields)
 
         if data.placement == "rack":
@@ -236,17 +322,15 @@ class RackManager:
         if data.placement == "parked":
             fields["name"] = data.name.strip() or (existing.name if existing else "")
             fields["mac_address"] = existing.mac_address if existing else ""
-            fields["hardware_type"] = existing.hardware_type if existing else data.hardware_type
-            fields["os"] = existing.os if existing else data.os
-            fields["tags"] = existing.tags if existing else data.tags
+            fields["os"] = data.os or (existing.os if existing else "")
+            fields["tags"] = data.tags
             return RackItem.model_validate(fields)
 
         if not host and not ssh_user:
             fields["name"] = data.name.strip() or (existing.name if existing else "")
             fields["mac_address"] = existing.mac_address if existing else ""
-            fields["hardware_type"] = existing.hardware_type if existing else ""
-            fields["os"] = existing.os if existing else ""
-            fields["tags"] = existing.tags if existing else []
+            fields["os"] = data.os or (existing.os if existing else "")
+            fields["tags"] = data.tags
             return RackItem.model_validate(fields)
 
         if not host:
@@ -255,26 +339,27 @@ class RackManager:
             raise ValueError("SSH user is required when host is set")
 
         if (
-            existing
+            not force_probe
+            and existing
             and existing.host == host
             and existing.ssh_user == ssh_user
             and existing.ssh_port == data.ssh_port
+            and existing.os
+            and existing.mac_address
         ):
             fields["host"] = existing.host
-            fields["name"] = existing.name
+            fields["name"] = data.name.strip() or existing.name
             fields["mac_address"] = existing.mac_address
-            fields["hardware_type"] = existing.hardware_type
-            fields["os"] = existing.os
-            fields["tags"] = existing.tags
+            fields["os"] = data.os or existing.os
+            fields["tags"] = data.tags
             return RackItem.model_validate(fields)
 
         probe = await probe_ssh_target(host, ssh_user, data.ssh_port)
         fields["host"] = probe.host
         fields["name"] = data.name.strip() or probe.name
         fields["mac_address"] = probe.mac_address
-        fields["hardware_type"] = probe.hardware_type
         fields["os"] = probe.os
-        fields["tags"] = probe.tags
+        fields["tags"] = data.tags or probe.tags
         return RackItem.model_validate(fields)
 
     async def add_item(self, session, rack_id: str, data: RackItemInput) -> RackItem:
@@ -307,6 +392,26 @@ class RackManager:
                 rack.updated_at = _now_iso()
                 self._save_loaded_rack(repo_path, rack_file, rack)
                 return updated
+        raise KeyError(f"Item {item_id} not found")
+
+    async def rediscover_item(self, session, rack_id: str, item_id: str) -> RackItem:
+        repo_path, rack_file, rack = self._load_for_session(session, rack_id)
+        for idx, item in enumerate(rack.items):
+            if item.id != item_id:
+                continue
+            data = RackItemInput.model_validate(item.model_dump(exclude={"id", "mac_address"}))
+            refreshed = await self._build_item(
+                item_id,
+                rack.rack_units,
+                rack.rack_cols,
+                data,
+                existing=item,
+                force_probe=True,
+            )
+            rack.items[idx] = refreshed
+            rack.updated_at = _now_iso()
+            self._save_loaded_rack(repo_path, rack_file, rack)
+            return refreshed
         raise KeyError(f"Item {item_id} not found")
 
     def remove_item(self, session, rack_id: str, item_id: str) -> None:

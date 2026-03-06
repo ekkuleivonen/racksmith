@@ -5,7 +5,6 @@ from __future__ import annotations
 from typing import Literal
 
 from pydantic import BaseModel, Field
-from racks.misc import HardwareType, OperatingSystem
 
 
 RackPlacement = Literal["rack", "parked"]
@@ -25,8 +24,7 @@ class RackItemInput(BaseModel):
     position_col_start: int = Field(ge=0)
     position_col_count: int = Field(ge=1)
     host: str = ""
-    hardware_type: HardwareType = ""
-    os: OperatingSystem = ""
+    os: str = ""
     ssh_user: str = ""
     ssh_port: int = 22
     tags: list[str] = Field(default_factory=list)

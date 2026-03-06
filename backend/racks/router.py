@@ -97,6 +97,21 @@ async def update_item(
     return {"item": item}
 
 
+@router.post("/{rack_id}/items/{item_id}/refresh")
+async def refresh_item(
+    rack_id: str,
+    item_id: str,
+    session=Depends(auth_manager.get_current_session),
+):
+    try:
+        item = await rack_manager.rediscover_item(session, rack_id, item_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"item": item}
+
+
 @router.delete("/{rack_id}/items/{item_id}", status_code=204)
 async def remove_item(
     rack_id: str, item_id: str, session=Depends(auth_manager.get_current_session)

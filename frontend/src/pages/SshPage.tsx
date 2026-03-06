@@ -150,9 +150,6 @@ export function SshPage() {
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-1">
-                  {selectedEntry.item.hardware_type && (
-                    <Badge variant="secondary">{selectedEntry.item.hardware_type}</Badge>
-                  )}
                   {selectedEntry.item.os && <Badge variant="outline">{selectedEntry.item.os}</Badge>}
                 </div>
               </div>
