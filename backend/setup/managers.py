@@ -1,0 +1,208 @@
+"""Per-user setup and active repo management."""
+
+from __future__ import annotations
+
+import asyncio
+import re
+from pathlib import Path
+
+import httpx
+
+from github.misc import (
+    ActiveRepoBinding,
+    clone_or_fetch,
+    read_active_repo,
+    resolve_active_repo_path,
+    run_git,
+    user_login,
+    user_repo_dir,
+    user_storage_id,
+    user_workspace_path,
+    write_active_repo,
+)
+
+GITHUB_REMOTE_RE = re.compile(
+    r"github\.com[:/](?P<owner>[^/]+)/(?P<repo>[^/]+?)(?:\.git)?$"
+)
+
+
+class SetupManager:
+    def user_id_from_session(self, session) -> str:
+        return user_storage_id(session.user)
+
+    def current_repo(self, session) -> ActiveRepoBinding | None:
+        return read_active_repo(self.user_id_from_session(session))
+
+    def active_repo_path(self, session) -> Path:
+        return resolve_active_repo_path(self.user_id_from_session(session))
+
+    async def list_repos(self, access_token: str) -> list[dict]:
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(
+                "https://api.github.com/user/repos",
+                params={"per_page": 100, "type": "all", "sort": "updated"},
+                headers={"Authorization": f"Bearer {access_token}"},
+            )
+            if resp.status_code != 200:
+                raise RuntimeError("Failed to fetch repos from GitHub")
+
+            repos = [
+                {
+                    "id": repo["id"],
+                    "name": repo["name"],
+                    "full_name": repo["full_name"],
+                    "owner": repo["owner"]["login"],
+                    "private": bool(repo.get("private", False)),
+                }
+                for repo in resp.json()
+            ]
+
+            semaphore = asyncio.Semaphore(8)
+
+            async def is_importable(repo: dict) -> bool:
+                async with semaphore:
+                    return await self._repo_has_racksmith_dir(
+                        client, access_token, repo["owner"], repo["name"]
+                    )
+
+            allowed = await asyncio.gather(*(is_importable(repo) for repo in repos))
+        return [
+            repo
+            for repo, include in zip(repos, allowed, strict=True)
+            if include
+        ]
+
+    async def _repo_has_racksmith_dir(
+        self,
+        client: httpx.AsyncClient,
+        access_token: str,
+        owner: str,
+        repo: str,
+    ) -> bool:
+        resp = await client.get(
+            f"https://api.github.com/repos/{owner}/{repo}/contents/.racksmith",
+            headers={"Authorization": f"Bearer {access_token}"},
+        )
+        if resp.status_code == 404:
+            return False
+        if resp.status_code != 200:
+            raise RuntimeError(f"Failed to inspect {owner}/{repo}")
+        payload = resp.json()
+        return isinstance(payload, list) or payload.get("type") == "dir"
+
+    async def ensure_repo_is_importable(
+        self, access_token: str, owner: str, repo: str
+    ) -> None:
+        async with httpx.AsyncClient() as client:
+            allowed = await self._repo_has_racksmith_dir(
+                client, access_token, owner, repo
+            )
+        if not allowed:
+            raise ValueError("Repo must already contain a .racksmith directory to import")
+
+    async def create_repo(
+        self, access_token: str, name: str, *, private: bool = True
+    ) -> dict:
+        async with httpx.AsyncClient() as client:
+            resp = await client.post(
+                "https://api.github.com/user/repos",
+                headers={"Authorization": f"Bearer {access_token}"},
+                json={"name": name, "private": private, "auto_init": True},
+            )
+        if resp.status_code not in (200, 201):
+            raise RuntimeError("Failed to create repository on GitHub")
+        repo = resp.json()
+        return {
+            "id": repo["id"],
+            "name": repo["name"],
+            "full_name": repo["full_name"],
+            "owner": repo["owner"]["login"],
+            "private": bool(repo.get("private", False)),
+        }
+
+    def activate_repo(self, session, *, owner: str, repo: str) -> dict:
+        user_id = self.user_id_from_session(session)
+        clone_or_fetch(owner, repo, session.access_token, user_id=user_id)
+        binding = write_active_repo(
+            ActiveRepoBinding(user_id=user_id, owner=owner, repo=repo)
+        )
+        return self.serialize_binding(binding)
+
+    def activate_local_repo(self, session, *, owner: str, repo: str) -> dict:
+        user_id = self.user_id_from_session(session)
+        repo_path = user_repo_dir(user_id, owner, repo)
+        if not repo_path.is_dir():
+            raise FileNotFoundError("Local repo is missing on disk")
+        binding = write_active_repo(
+            ActiveRepoBinding(user_id=user_id, owner=owner, repo=repo)
+        )
+        return self.serialize_binding(binding)
+
+    def serialize_binding(self, binding: ActiveRepoBinding) -> dict:
+        repo_path = user_repo_dir(binding.user_id, binding.owner, binding.repo)
+        return {
+            "owner": binding.owner,
+            "repo": binding.repo,
+            "full_name": binding.full_name,
+            "path": str(repo_path),
+        }
+
+    def _binding_from_repo_path(
+        self, user_id: str, repo_path: Path
+    ) -> ActiveRepoBinding | None:
+        if not repo_path.is_dir() or repo_path.name.startswith("."):
+            return None
+        remote = run_git(repo_path, ["remote", "get-url", "origin"], check=False)
+        if remote.returncode != 0:
+            return None
+        match = GITHUB_REMOTE_RE.search(remote.stdout.strip())
+        if not match:
+            return None
+        return ActiveRepoBinding(
+            user_id=user_id,
+            owner=match.group("owner"),
+            repo=match.group("repo"),
+        )
+
+    def list_local_repos(self, session) -> list[dict]:
+        user_id = self.user_id_from_session(session)
+        active = self.current_repo(session)
+        workspace = user_workspace_path(user_id)
+        if not workspace.is_dir():
+            return []
+
+        repos: list[dict] = []
+        for entry in sorted(workspace.iterdir(), key=lambda path: path.name.lower()):
+            binding = self._binding_from_repo_path(user_id, entry)
+            if not binding:
+                continue
+            repo = self.serialize_binding(binding)
+            repo["active"] = (
+                active is not None
+                and active.owner == binding.owner
+                and active.repo == binding.repo
+            )
+            repos.append(repo)
+        return repos
+
+    def status(self, session, *, rack_ready: bool) -> dict:
+        binding = self.current_repo(session)
+        if binding:
+            repo_path = user_repo_dir(binding.user_id, binding.owner, binding.repo)
+            if not repo_path.is_dir():
+                binding = None
+        repo = self.serialize_binding(binding) if binding else None
+        return {
+            "user": {
+                "id": self.user_id_from_session(session),
+                "login": user_login(session.user),
+                "name": session.user.get("name"),
+                "avatar_url": session.user.get("avatar_url"),
+            },
+            "repo_ready": binding is not None,
+            "rack_ready": rack_ready,
+            "repo": repo,
+        }
+
+
+setup_manager = SetupManager()

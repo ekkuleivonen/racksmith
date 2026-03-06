@@ -7,7 +7,7 @@ import re
 import secrets
 import subprocess
 import time
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -19,7 +19,7 @@ from ruamel.yaml.error import YAMLError
 import settings
 from _utils.redis import Redis
 
-REPO_NAME_RE = re.compile(r"^[a-zA-Z0-9_-]+$")
+REPO_NAME_RE = re.compile(r"^[a-zA-Z0-9._-]+$")
 YAML_EXTENSIONS = {".yaml", ".yml"}
 RACK_TOPIC = "racksmith-rack"
 RACK_FILE = ".racksmith/rack.json"
@@ -37,6 +37,21 @@ class SessionData:
     access_token: str
     user: dict[str, Any]
     created_at: float
+
+
+@dataclass
+class ActiveRepoBinding:
+    user_id: str
+    owner: str
+    repo: str
+
+    @property
+    def full_name(self) -> str:
+        return f"{self.owner}/{self.repo}"
+
+    @property
+    def local_dir_name(self) -> str:
+        return f"{self.owner}_{self.repo}"
 
 
 def _session_key(session_id: str) -> str:
@@ -81,6 +96,17 @@ def delete_session(session_id: str | None) -> None:
         Redis.delete(_session_key(session_id))
 
 
+def user_storage_id(user: dict[str, Any]) -> str:
+    value = user.get("id")
+    if value in (None, ""):
+        raise ValueError("Missing GitHub user id")
+    return str(value)
+
+
+def user_login(user: dict[str, Any]) -> str:
+    return str(user.get("login") or "").strip()
+
+
 def get_current_user(
     request: Request,
     session_id: str | None = Cookie(default=None, alias=settings.SESSION_COOKIE_NAME),
@@ -112,8 +138,30 @@ def workspace_path() -> Path:
     return Path(settings.REPOS_WORKSPACE)
 
 
+def user_workspace_path(user_id: str) -> Path:
+    root = workspace_path().resolve()
+    path = (root / user_id).resolve()
+    if not str(path).startswith(str(root)):
+        raise ValueError("Invalid user workspace")
+    return path
+
+
+def user_binding_path(user_id: str) -> Path:
+    return user_workspace_path(user_id) / ".racksmith-user.json"
+
+
 def repo_dir(owner: str, repo_name: str) -> Path:
     ws = workspace_path()
+    target = (ws / f"{owner}_{repo_name}").resolve()
+    if not str(target).startswith(str(ws.resolve())):
+        raise ValueError("Invalid repo path")
+    return target
+
+
+def user_repo_dir(user_id: str, owner: str, repo_name: str) -> Path:
+    if not REPO_NAME_RE.match(owner) or not REPO_NAME_RE.match(repo_name):
+        raise ValueError("Invalid owner or repo name")
+    ws = user_workspace_path(user_id)
     target = (ws / f"{owner}_{repo_name}").resolve()
     if not str(target).startswith(str(ws.resolve())):
         raise ValueError("Invalid repo path")
@@ -124,6 +172,41 @@ def resolve_repo_path(owner: str, repo: str) -> Path:
     if not REPO_NAME_RE.match(owner) or not REPO_NAME_RE.match(repo):
         raise ValueError("Invalid owner or repo name")
     return repo_dir(owner, repo)
+
+
+def write_active_repo(binding: ActiveRepoBinding) -> ActiveRepoBinding:
+    path = user_binding_path(binding.user_id)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(asdict(binding), indent=2) + "\n", encoding="utf-8")
+    return binding
+
+
+def read_active_repo(user_id: str) -> ActiveRepoBinding | None:
+    path = user_binding_path(user_id)
+    if not path.exists():
+        return None
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        binding = ActiveRepoBinding(
+            user_id=str(data["user_id"]),
+            owner=str(data["owner"]),
+            repo=str(data["repo"]),
+        )
+    except (OSError, ValueError, KeyError, TypeError, json.JSONDecodeError):
+        return None
+    if binding.user_id != user_id:
+        return None
+    return binding
+
+
+def resolve_active_repo_path(user_id: str) -> Path:
+    binding = read_active_repo(user_id)
+    if not binding:
+        raise FileNotFoundError("Active repo is not configured")
+    repo_path = user_repo_dir(binding.user_id, binding.owner, binding.repo)
+    if not repo_path.exists() or not repo_path.is_dir():
+        raise FileNotFoundError("Active repo is missing on disk")
+    return repo_path
 
 
 def safe_relative_path(repo_root: Path, path_str: str) -> Path:
@@ -159,10 +242,16 @@ def run_git(
     return result
 
 
-def clone_or_fetch(owner: str, repo_name: str, access_token: str) -> Path:
-    ws = workspace_path()
-    ws.mkdir(parents=True, exist_ok=True)
-    path = repo_dir(owner, repo_name)
+def clone_or_fetch(
+    owner: str, repo_name: str, access_token: str, *, user_id: str | None = None
+) -> Path:
+    if user_id:
+        path = user_repo_dir(user_id, owner, repo_name)
+        path.parent.mkdir(parents=True, exist_ok=True)
+    else:
+        ws = workspace_path()
+        ws.mkdir(parents=True, exist_ok=True)
+        path = repo_dir(owner, repo_name)
     remote_url = (
         f"https://x-access-token:{access_token}"
         f"@github.com/{owner}/{repo_name}.git"

@@ -1,16 +1,15 @@
 import { Component, type ErrorInfo, type ReactNode } from "react";
-import { BrowserRouter, Routes, Route, Link } from "react-router-dom";
+import { BrowserRouter, Navigate, Route, Routes, useParams } from "react-router-dom";
+import { AppShell } from "@/components/app-shell";
+import { ProtectedRoute } from "@/components/protected-route";
 import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
 import { AuthProvider } from "@/context/auth-context";
-import { ProtectedRoute } from "@/components/protected-route";
+import { CodePage } from "@/pages/CodePage";
 import { HomePage } from "@/pages/HomePage";
-import { RackDetailPage } from "@/pages/RackDetailPage";
+import { RackPage } from "@/pages/RackDetailPage";
+import { RackItemPage } from "@/pages/RackItemPage";
 import { RackOnboardingPage } from "@/pages/RackOnboardingPage";
-import { RacksListPage } from "@/pages/RacksListPage";
-import { RepoPage } from "@/pages/RepoPage";
-import { ReposPage } from "@/pages/ReposPage";
-import { SketchPage } from "@/pages/SketchPage";
 
 class ErrorBoundary extends Component<
   { children: ReactNode },
@@ -31,27 +30,10 @@ class ErrorBoundary extends Component<
       return (
         <div className="flex-1 flex items-center justify-center p-12">
           <div className="max-w-md space-y-4 text-center">
-            <h1 className="text-lg font-semibold text-zinc-100">
-              Something went wrong
-            </h1>
+            <h1 className="text-lg font-semibold text-zinc-100">Something went wrong</h1>
             <pre className="text-xs text-zinc-500 bg-zinc-900 border border-zinc-800 p-4 rounded text-left overflow-auto max-h-48">
               {this.state.error.message}
             </pre>
-            <div className="flex gap-2 justify-center">
-              <button
-                onClick={() => this.setState({ error: null })}
-                className="px-3 py-1.5 text-xs bg-zinc-800 text-zinc-300 border border-zinc-700 rounded hover:bg-zinc-700"
-              >
-                Try again
-              </button>
-              <Link
-                to="/"
-                onClick={() => this.setState({ error: null })}
-                className="px-3 py-1.5 text-xs bg-zinc-800 text-zinc-300 border border-zinc-700 rounded hover:bg-zinc-700"
-              >
-                Go home
-              </Link>
-            </div>
           </div>
         </div>
       );
@@ -82,52 +64,69 @@ function AppRoutes() {
         <ErrorBoundary>
           <Routes>
             <Route path="/" element={<HomePage />} />
-            <Route path="/sketch" element={<SketchPage />} />
             <Route
-              path="/racks"
+              path="/rack"
               element={
                 <ProtectedRoute>
-                  <RacksListPage />
+                  <Navigate to="/rack/create" replace />
                 </ProtectedRoute>
               }
             />
             <Route
-              path="/racks/new"
+              path="/rack/create"
               element={
                 <ProtectedRoute>
-                  <RackOnboardingPage />
+                  <AppShell title="Racks">
+                    <RackOnboardingPage />
+                  </AppShell>
                 </ProtectedRoute>
               }
             />
             <Route
-              path="/racks/:rackId"
+              path="/rack/view/:rackId"
               element={
                 <ProtectedRoute>
-                  <RackDetailPage />
+                  <AppShell title="Racks">
+                    <RackPage />
+                  </AppShell>
                 </ProtectedRoute>
               }
             />
             <Route
-              path="/repos"
+              path="/rack/edit/:rackId"
+              element={<NavigateLegacyEditRack />}
+            />
+            <Route
+              path="/rack/:rackId/item/:itemId"
               element={
                 <ProtectedRoute>
-                  <ReposPage />
+                  <AppShell title="Hardware">
+                    <RackItemPage />
+                  </AppShell>
                 </ProtectedRoute>
               }
             />
             <Route
-              path="/repos/:owner/:repo"
+              path="/code"
               element={
                 <ProtectedRoute>
-                  <RepoPage />
+                  <AppShell title="Code">
+                    <CodePage />
+                  </AppShell>
                 </ProtectedRoute>
               }
             />
+            <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </ErrorBoundary>
       </div>
     </div>
   );
+}
+
+function NavigateLegacyEditRack() {
+  const { rackId = "" } = useParams();
+  return <Navigate to={`/rack/view/${rackId}`} replace />;
 }
 
 export function App() {

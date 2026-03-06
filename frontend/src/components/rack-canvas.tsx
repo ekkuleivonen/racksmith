@@ -20,6 +20,7 @@ export function RackCanvas({
   cols,
   items,
   selectedItemId,
+  pendingItemId,
   onSelectItem,
   onSelectZone,
   onMoveItem,
@@ -30,6 +31,7 @@ export function RackCanvas({
   cols: number;
   items: RackItem[];
   selectedItemId?: string | null;
+  pendingItemId?: string | null;
   onSelectItem?: (itemId: string) => void;
   onSelectZone?: (zone: ZoneSelection) => void;
   onMoveItem?: (itemId: string, position: MovePosition) => void;
@@ -37,6 +39,7 @@ export function RackCanvas({
   selectionMode?: boolean;
 }) {
   const totalHeight = rackUnits * ROW_HEIGHT;
+  const placedItems = items.filter((item) => item.placement === "rack");
   const [dragStart, setDragStart] = useState<{ u: number; col: number } | null>(null);
   const [dragEnd, setDragEnd] = useState<{ u: number; col: number } | null>(null);
   const [draggedItem, setDraggedItem] = useState<{
@@ -115,7 +118,7 @@ export function RackCanvas({
 
   const isCellOccupied = useCallback(
     (u: number, col: number, excludeItemId?: string) =>
-      items.some(
+      placedItems.some(
         (item) => {
           if (excludeItemId && item.id === excludeItemId) return false;
           const bottomU = item.position_u_start;
@@ -128,7 +131,7 @@ export function RackCanvas({
           );
         }
       ),
-    [items]
+    [placedItems]
   );
 
   const handleItemDragStart = useCallback((e: React.DragEvent, item: RackItem) => {
@@ -402,7 +405,8 @@ export function RackCanvas({
               );
             })()}
 
-          {items.map((item) => {
+          {placedItems.map((item) => {
+            const isPending = pendingItemId === item.id;
             const isResizing = resizing?.item.id === item.id;
             const pos = isResizing && resizePreview ? resizePreview : item;
             const top =
@@ -410,14 +414,21 @@ export function RackCanvas({
             const height = pos.position_u_height * ROW_HEIGHT;
             const leftPct = (pos.position_col_start / cols) * 100;
             const widthPct = (pos.position_col_count / cols) * 100;
-            const canResize = !!onResizeItem && (height > RESIZE_HANDLE_MIN || widthPct > 4);
+            const canResize =
+              !isPending && !!onResizeItem && (height > RESIZE_HANDLE_MIN || widthPct > 4);
             return (
               <div
                 key={item.id}
                 className={cn(
                   "absolute rounded-none border text-left overflow-visible",
                   isResizing && "opacity-50",
-                  selectedItemId === item.id
+                  isPending
+                    ? "border-zinc-500/80 bg-zinc-500/15"
+                    : !item.managed && selectedItemId === item.id
+                    ? "border-zinc-400 bg-zinc-500/20"
+                    : !item.managed
+                    ? "border-zinc-600 bg-zinc-500/10 hover:bg-zinc-500/15"
+                    : selectedItemId === item.id
                     ? "border-emerald-400 bg-emerald-500/20"
                     : "border-sky-400/60 bg-sky-500/10 hover:bg-sky-500/20"
                 )}
@@ -453,10 +464,12 @@ export function RackCanvas({
                   </>
                 )}
                 <div
-                  draggable={!!onMoveItem}
+                  draggable={!isPending && !!onMoveItem}
                   className={cn(
                     "h-full px-2 py-1 overflow-hidden",
-                    onMoveItem && "cursor-grab active:cursor-grabbing"
+                    isPending
+                      ? "opacity-80 cursor-default"
+                      : onMoveItem && "cursor-grab active:cursor-grabbing"
                   )}
                   onDragStart={(e) => handleItemDragStart(e, item)}
                   onDragEnd={handleItemDragEnd}
@@ -475,7 +488,9 @@ export function RackCanvas({
                     onSelectItem?.(item.id);
                   }}
                 >
-                  <p className="text-[11px] text-zinc-100 truncate">{item.name || "Unnamed"}</p>
+                  <p className="text-[11px] text-zinc-100 truncate">
+                    {item.name || item.host || (isPending ? "Pending details" : "Unassigned")}
+                  </p>
                 </div>
               </div>
             );

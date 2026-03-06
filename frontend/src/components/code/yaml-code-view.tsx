@@ -1,17 +1,17 @@
-import Editor from "@monaco-editor/react";
-import type { CodeEditorProps } from "@/components/editors/editor-types";
+import MonacoCode from "@monaco-editor/react";
+import type { CodeViewProps } from "@/components/code/code-types";
 
-export function MdEditor({
+export function YamlCodeView({
   value,
   onChange,
   readOnly = false,
   height = "calc(100vh - 13rem)",
-}: CodeEditorProps) {
+}: CodeViewProps) {
   return (
-    <Editor
+    <MonacoCode
       height={height}
-      defaultLanguage="markdown"
-      language="markdown"
+      defaultLanguage="yaml"
+      language="yaml"
       value={value}
       onChange={(next) => onChange(next ?? "")}
       theme="vs-dark"

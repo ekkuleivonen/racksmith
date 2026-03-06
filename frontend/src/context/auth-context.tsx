@@ -6,7 +6,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { apiGet } from "@/lib/api";
+import { apiGet, apiPost } from "@/lib/api";
 
 export type User = {
   id: number;
@@ -51,7 +51,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const logout = useCallback(() => {
-    window.location.href = "/api/auth/logout";
+    void apiPost<{ status: string }>("/auth/logout").finally(() => {
+      setUser(null);
+      setIsLoading(false);
+    });
   }, []);
 
   const value: AuthContextValue = {

@@ -12,7 +12,6 @@ GITHUB_OAUTH_SCOPES: str = env.str("GITHUB_OAUTH_SCOPES", default="repo read:use
 # =============================================================================
 APP_URL: str = env.str("APP_URL", default="http://localhost:5173")
 REPOS_WORKSPACE: str = env.str("REPOS_WORKSPACE", default="./workspace")
-ONBOARDING_DB_PATH: str = env.str("ONBOARDING_DB_PATH", default="./data/onboarding.db")
 
 # =============================================================================
 # Redis (session store)
@@ -24,6 +23,11 @@ REDIS_URL: str = env.str("REDIS_URL", default="redis://localhost:6379")
 # =============================================================================
 SESSION_COOKIE_NAME: str = env.str("SESSION_COOKIE_NAME", default="racksmith_session")
 SESSION_MAX_AGE: int = env.int("SESSION_MAX_AGE", default=86400)  # 24h
+
+# =============================================================================
+# SSH
+# =============================================================================
+SSH_DISABLE_HOST_KEY_CHECK: bool = env.bool("SSH_DISABLE_HOST_KEY_CHECK", default=True)
 
 
 # =============================================================================

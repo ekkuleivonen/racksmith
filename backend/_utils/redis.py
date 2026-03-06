@@ -55,3 +55,28 @@ class Redis:
     def srem(cls, key: str, *members: str) -> int:
         """Remove members from a set. Returns number removed."""
         return cls._get_client().srem(key, *members)
+
+    @classmethod
+    def zadd(cls, key: str, mapping: dict[str, float]) -> int:
+        """Add members with scores to a sorted set."""
+        return cls._get_client().zadd(key, mapping)
+
+    @classmethod
+    def zrevrange(cls, key: str, start: int, stop: int) -> list[str]:
+        """Return sorted-set members in descending score order."""
+        return cls._get_client().zrevrange(key, start, stop)
+
+    @classmethod
+    def expire(cls, key: str, ttl_seconds: int) -> bool:
+        """Set a TTL on a key."""
+        return cls._get_client().expire(key, ttl_seconds)
+
+    @classmethod
+    def rpush(cls, key: str, *values: str) -> int:
+        """Append values to the tail of a list."""
+        return cls._get_client().rpush(key, *values)
+
+    @classmethod
+    def lrange(cls, key: str, start: int, stop: int) -> list[str]:
+        """Return a slice from a list."""
+        return cls._get_client().lrange(key, start, stop)
