@@ -59,6 +59,7 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - .:/workspace
+      - ${HOME}/.ssh:/root/.ssh:ro
     working_dir: /workspace
     entrypoint: ["/bin/sh", "-c"]
     command:
