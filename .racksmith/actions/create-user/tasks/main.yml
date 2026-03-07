@@ -1,0 +1,24 @@
+- name: Create or remove user
+  ansible.builtin.user:
+    name: '{{ username }}'
+    state: '{{ user_state }}'
+    shell: '{{ user_shell if user_state == ''present'' else omit }}'
+    create_home: true
+- name: Ensure sudo group membership on Debian family
+  ansible.builtin.user:
+    name: '{{ username }}'
+    groups: sudo
+    append: true
+  when:
+  - user_state == 'present'
+  - grant_sudo
+  - ansible_os_family == "Debian"
+- name: Ensure sudo group membership on RedHat family
+  ansible.builtin.user:
+    name: '{{ username }}'
+    groups: wheel
+    append: true
+  when:
+  - user_state == 'present'
+  - grant_sudo
+  - ansible_os_family == "RedHat"

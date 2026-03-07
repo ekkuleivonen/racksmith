@@ -1,0 +1,7 @@
+- name: Ensure directory is in desired state
+  ansible.builtin.file:
+    path: '{{ directory_path }}'
+    state: '{{ directory_state }}'
+    owner: '{{ owner if directory_state == ''directory'' else omit }}'
+    group: '{{ group if directory_state == ''directory'' else omit }}'
+    mode: '{{ mode if directory_state == ''directory'' else omit }}'

@@ -1,0 +1,40 @@
+slug: ensure-directory
+name: Ensure Directory
+description: Create or remove a directory with configurable ownership and permissions.
+executor: ansible
+source: user
+inputs:
+- key: directory_path
+  label: Directory path
+  type: string
+  placeholder: /opt/myapp
+  default: ''
+  required: true
+- key: directory_state
+  label: Directory state
+  type: select
+  options:
+  - directory
+  - absent
+  default: directory
+  required: true
+- key: owner
+  label: Owner
+  type: string
+  placeholder: root
+  default: root
+  required: false
+- key: group
+  label: Group
+  type: string
+  placeholder: root
+  default: root
+  required: false
+- key: mode
+  label: Mode
+  type: string
+  placeholder: '0755'
+  default: '0755'
+  required: false
+compatibility:
+  os_family: []

@@ -1,0 +1,14 @@
+slug: set-hostname
+name: Set Hostname
+description: Set the system hostname and ensure it is applied persistently.
+executor: ansible
+source: user
+inputs:
+- key: target_hostname
+  label: Hostname
+  type: string
+  placeholder: node-01
+  default: ''
+  required: true
+compatibility:
+  os_family: []

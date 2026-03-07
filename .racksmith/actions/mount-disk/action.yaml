@@ -1,0 +1,36 @@
+slug: mount-disk
+name: Format and Mount Disk
+description: Create a filesystem on a block device and mount it persistently.
+executor: ansible
+source: user
+inputs:
+- key: device_path
+  label: Device path
+  type: string
+  placeholder: /dev/sdb1
+  default: ''
+  required: true
+- key: filesystem_type
+  label: Filesystem type
+  type: select
+  options:
+  - ext4
+  - xfs
+  default: ext4
+  required: true
+- key: mount_point
+  label: Mount point
+  type: string
+  placeholder: /mnt/data
+  default: ''
+  required: true
+- key: mount_opts
+  label: Mount options
+  type: string
+  placeholder: defaults,noatime
+  default: defaults
+  required: false
+compatibility:
+  os_family:
+  - debian
+  - rhel

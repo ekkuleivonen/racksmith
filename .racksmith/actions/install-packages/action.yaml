@@ -1,0 +1,31 @@
+slug: install-packages
+name: Install Packages
+description: Install or remove one or more system packages using the host package
+  manager.
+executor: ansible
+source: user
+inputs:
+- key: package_names
+  label: Package names
+  type: string
+  placeholder: git,curl,htop
+  default: ''
+  required: true
+- key: package_state
+  label: Package state
+  type: select
+  options:
+  - present
+  - absent
+  - latest
+  default: present
+  required: true
+- key: update_cache
+  label: Update package cache first
+  type: boolean
+  default: true
+  required: false
+compatibility:
+  os_family:
+  - debian
+  - rhel

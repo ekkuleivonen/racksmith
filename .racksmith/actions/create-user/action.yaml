@@ -1,0 +1,33 @@
+slug: create-user
+name: Create User
+description: Create or remove a local user account and optionally grant sudo access.
+executor: ansible
+source: user
+inputs:
+- key: username
+  label: Username
+  type: string
+  placeholder: deploy
+  default: ''
+  required: true
+- key: user_state
+  label: User state
+  type: select
+  options:
+  - present
+  - absent
+  default: present
+  required: true
+- key: grant_sudo
+  label: Grant sudo access
+  type: boolean
+  default: false
+  required: false
+- key: user_shell
+  label: Login shell
+  type: string
+  placeholder: /bin/bash
+  default: /bin/bash
+  required: false
+compatibility:
+  os_family: []

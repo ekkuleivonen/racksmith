@@ -1,0 +1,16 @@
+- name: Ensure mount point exists
+  ansible.builtin.file:
+    path: '{{ mount_point }}'
+    state: directory
+    mode: '0755'
+- name: Create filesystem on device
+  community.general.filesystem:
+    dev: '{{ device_path }}'
+    fstype: '{{ filesystem_type }}'
+- name: Mount device and persist in fstab
+  ansible.posix.mount:
+    path: '{{ mount_point }}'
+    src: '{{ device_path }}'
+    fstype: '{{ filesystem_type }}'
+    opts: '{{ mount_opts }}'
+    state: mounted

@@ -1,0 +1,10 @@
+- name: Ensure SSH user exists in passwd database
+  ansible.builtin.getent:
+    database: passwd
+    key: '{{ ssh_user }}'
+- name: Add SSH public key to authorized_keys
+  ansible.posix.authorized_key:
+    user: '{{ ssh_user }}'
+    key: '{{ public_key }}'
+    state: '{{ key_state }}'
+    manage_dir: true

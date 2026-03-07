@@ -1,0 +1,16 @@
+- name: Normalize package list
+  ansible.builtin.set_fact:
+    normalized_packages: '{{ package_names.split('','') | map(''trim'') | reject(''equalto'',
+      '''') | list }}'
+- name: Install or remove packages on Debian family
+  ansible.builtin.apt:
+    name: '{{ normalized_packages }}'
+    state: '{{ package_state }}'
+    update_cache: '{{ update_cache }}'
+  when: ansible_os_family == "Debian"
+- name: Install or remove packages on RedHat family
+  ansible.builtin.dnf:
+    name: '{{ normalized_packages }}'
+    state: '{{ package_state }}'
+    update_cache: '{{ update_cache }}'
+  when: ansible_os_family == "RedHat"
