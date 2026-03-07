@@ -35,7 +35,16 @@ from stacks.schemas import (
 STACKS_DIR = Path(".racksmith/stacks")
 ACTIONS_DIR = Path(".racksmith/actions")
 INVENTORY_DIR = Path(".racksmith/inventory")
-BUILTIN_ACTIONS_SRC = Path(__file__).parent / "builtin_actions"
+
+# Canonical location: .racksmith/actions/ at the repo root (the library).
+# In dev: auto-detected three levels up from backend/stacks/managers.py.
+# In Docker: LIBRARY_DIR env var points to /app/.racksmith; actions live under it.
+_library_root = (
+    Path(settings.LIBRARY_DIR)
+    if settings.LIBRARY_DIR
+    else Path(__file__).parent.parent.parent / ".racksmith"
+)
+BUILTIN_ACTIONS_SRC = _library_root / "actions"
 
 
 def sync_builtin_actions(repo_path: Path) -> None:

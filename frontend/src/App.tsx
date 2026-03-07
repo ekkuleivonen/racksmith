@@ -23,6 +23,7 @@ import { RackOnboardingPage } from "@/pages/RackOnboardingPage";
 import { RacksPage } from "@/pages/RacksPage";
 import { NodesPage } from "@/pages/NodesPage";
 import { NodeCreatePage } from "@/pages/NodeCreatePage";
+import { ActionNewPage } from "@/pages/ActionNewPage";
 
 class ErrorBoundary extends Component<
   { children: ReactNode },
@@ -252,6 +253,16 @@ function AppRoutes() {
                 <ProtectedRoute>
                   <AppShell title="Commit changes">
                     <DiffCommitPage />
+                  </AppShell>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/actions/new"
+              element={
+                <ProtectedRoute>
+                  <AppShell title="New action">
+                    <ActionNewPage />
                   </AppShell>
                 </ProtectedRoute>
               }

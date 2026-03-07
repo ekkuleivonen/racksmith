@@ -8,14 +8,18 @@ services:
 
   app:
     build:
-      context: ./backend
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: backend/Dockerfile
     ports:
       - "8000:8000"
+    env_file:
+      - .env
     environment:
       REDIS_URL: redis://redis:6379
       DB_PATH: /app/data/racksmith.db
       REPOS_WORKSPACE: /app/workspace
+      LIBRARY_DIR: /app/.racksmith
+      APP_URL: http://localhost:3000
     volumes:
       - ./data:/app/data
       - ./workspace:/app/workspace
@@ -24,18 +28,44 @@ services:
 
   worker:
     build:
-      context: ./backend
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: backend/Dockerfile
     command: ["uv", "run", "python", "run_worker.py", "worker.settings.WorkerSettings"]
+    env_file:
+      - .env
     environment:
       REDIS_URL: redis://redis:6379
       DB_PATH: /app/data/racksmith.db
       REPOS_WORKSPACE: /app/workspace
+      LIBRARY_DIR: /app/.racksmith
     volumes:
       - ./data:/app/data
       - ./workspace:/app/workspace
     depends_on:
       - redis
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:80"
+    depends_on:
+      - app
+
+  auto-update:
+    image: docker:24
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - .:/workspace
+    working_dir: /workspace
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        apk add --no-cache git
+        chmod +x /workspace/scripts/auto-update.sh
+        exec /workspace/scripts/auto-update.sh
+    restart: unless-stopped
 
 volumes:
   redis_data:

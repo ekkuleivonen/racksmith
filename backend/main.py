@@ -6,6 +6,7 @@ from pathlib import Path
 import settings
 from _utils.logging import configure_logging, get_logger
 from dotenv import load_dotenv
+from actions.router import router as actions_router
 from code.router import router as code_router
 from fastapi import FastAPI
 from groups.router import router as groups_router
@@ -60,6 +61,7 @@ if static_dir.exists():
     app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
 app.include_router(auth_router, prefix="/api/auth", tags=["auth"])
+app.include_router(actions_router, prefix="/api/actions", tags=["actions"])
 app.include_router(repos_router, prefix="/api/repos", tags=["repos"])
 app.include_router(racks_router, prefix="/api/racks", tags=["racks"])
 app.include_router(nodes_router, prefix="/api/nodes", tags=["nodes"])
