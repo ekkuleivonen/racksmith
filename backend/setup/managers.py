@@ -11,6 +11,7 @@ import httpx
 from github.misc import (
     ActiveRepoBinding,
     clone_or_fetch,
+    ensure_racksmith_branch,
     read_active_repo,
     resolve_active_repo_path,
     run_git,
@@ -122,7 +123,10 @@ class SetupManager:
 
     def activate_repo(self, session, *, owner: str, repo: str) -> dict:
         user_id = self.user_id_from_session(session)
-        clone_or_fetch(owner, repo, session.access_token, user_id=user_id)
+        repo_path = clone_or_fetch(owner, repo, session.access_token, user_id=user_id)
+        if not repo_path.exists():
+            repo_path = user_repo_dir(user_id, owner, repo)
+        ensure_racksmith_branch(repo_path)
         binding = write_active_repo(
             ActiveRepoBinding(user_id=user_id, owner=owner, repo=repo)
         )
@@ -133,6 +137,7 @@ class SetupManager:
         repo_path = user_repo_dir(user_id, owner, repo)
         if not repo_path.is_dir():
             raise FileNotFoundError("Local repo is missing on disk")
+        ensure_racksmith_branch(repo_path)
         binding = write_active_repo(
             ActiveRepoBinding(user_id=user_id, owner=owner, repo=repo)
         )

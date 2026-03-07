@@ -197,3 +197,11 @@
 .dark .sketch-paper::before {
   opacity: 0.05;
 }
+
+.scrollbar-hide {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}

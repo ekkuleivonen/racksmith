@@ -1,5 +1,5 @@
 import { useNavigate } from "react-router-dom";
-import { KeyRound } from "lucide-react";
+import { GitBranch, KeyRound, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/select";
 import { useSetupStore } from "@/stores/setup";
 import { useRackStore } from "@/stores/racks";
+import { useCodeStore } from "@/stores/code";
 
 export const MANAGE_REPOS_VALUE = "__manage_repos__";
 
@@ -26,6 +27,11 @@ export function SidebarFooter({ onLogout }: SidebarFooterProps) {
   const localRepos = useSetupStore((s) => s.localRepos);
   const switchingRepo = useSetupStore((s) => s.switchingRepo);
   const switchRepo = useSetupStore((s) => s.switchRepo);
+  const modifiedPaths = useCodeStore((s) => s.modifiedPaths);
+  const untrackedPaths = useCodeStore((s) => s.untrackedPaths);
+
+  const changeCount =
+    Object.keys(modifiedPaths).length + Object.keys(untrackedPaths).length;
 
   const handleRepoChange = async (value: string) => {
     if (!value || switchingRepo) return;
@@ -73,6 +79,24 @@ export function SidebarFooter({ onLogout }: SidebarFooterProps) {
             </SelectItem>
           </SelectContent>
         </Select>
+        <div className="relative shrink-0 overflow-visible">
+          <Button
+            variant="outline"
+            size="icon"
+            className="size-7"
+            disabled={changeCount === 0}
+            onClick={() => navigate("/diff/review")}
+            aria-label="Review changes"
+            title="Review changes"
+          >
+            <GitBranch className="size-3" />
+          </Button>
+          {changeCount > 0 && (
+            <span className="absolute -top-0.5 -right-0.5 min-w-[12px] h-3 px-0.5 flex items-center justify-center rounded-full bg-yellow-500 text-[9px] font-medium text-zinc-900 pointer-events-none">
+              {changeCount > 99 ? "99+" : changeCount}
+            </span>
+          )}
+        </div>
         <Button
           variant="outline"
           size="icon"
@@ -85,11 +109,13 @@ export function SidebarFooter({ onLogout }: SidebarFooterProps) {
         </Button>
         <Button
           variant="outline"
-          size="sm"
-          className="shrink-0 h-7 px-2 text-[10px]"
+          size="icon"
+          className="size-7 shrink-0"
           onClick={onLogout}
+          aria-label="Logout"
+          title="Logout"
         >
-          Logout
+          <LogOut className="size-3" />
         </Button>
       </div>
     </div>

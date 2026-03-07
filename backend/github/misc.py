@@ -12,6 +12,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+import httpx
 from fastapi import Cookie, HTTPException, Request
 from ruamel.yaml import YAML
 from ruamel.yaml.error import YAMLError
@@ -23,6 +24,7 @@ REPO_NAME_RE = re.compile(r"^[a-zA-Z0-9._-]+$")
 YAML_EXTENSIONS = {".yaml", ".yml"}
 RACK_TOPIC = "racksmith-rack"
 RACK_FILE = ".racksmith/rack.json"
+RACKSMITH_BRANCH = "racksmith"
 
 
 # ---------------------------------------------------------------------------
@@ -299,7 +301,7 @@ def get_untracked_paths(repo_path: Path) -> list[str]:
 def get_file_statuses(repo_path: Path) -> dict[str, list[str]]:
     """Return modified and untracked paths from git status --porcelain."""
     result = subprocess.run(
-        ["git", "-C", str(repo_path), "status", "--porcelain"],
+        ["git", "-C", str(repo_path), "status", "--porcelain", "--untracked-files=all"],
         capture_output=True,
         text=True,
     )
@@ -319,11 +321,145 @@ def get_file_statuses(repo_path: Path) -> dict[str, list[str]]:
             candidate = part.strip()
         if not candidate:
             continue
+        # Normalize path (git may output ./path for root-level files)
+        normalized = candidate.removeprefix("./")
         if status == "??":
-            untracked.add(candidate)
+            untracked.add(normalized)
         else:
-            modified.add(candidate)
+            modified.add(normalized)
     return {"modified": sorted(modified), "untracked": sorted(untracked)}
+
+
+def ensure_racksmith_branch(repo_path: Path) -> None:
+    """Ensure we're on the racksmith branch, creating it from main if needed."""
+    current = run_git(repo_path, ["branch", "--show-current"], check=False)
+    if current.returncode == 0 and current.stdout.strip() == RACKSMITH_BRANCH:
+        return
+    run_git(repo_path, ["fetch", "origin"], check=False)
+    has_local = (
+        run_git(repo_path, ["rev-parse", "--verify", RACKSMITH_BRANCH], check=False)
+        .returncode
+        == 0
+    )
+    has_remote = (
+        run_git(
+            repo_path,
+            ["rev-parse", "--verify", f"origin/{RACKSMITH_BRANCH}"],
+            check=False,
+        ).returncode
+        == 0
+    )
+    if has_local:
+        run_git(repo_path, ["checkout", RACKSMITH_BRANCH])
+    elif has_remote:
+        run_git(repo_path, ["checkout", "-b", RACKSMITH_BRANCH, f"origin/{RACKSMITH_BRANCH}"])
+    else:
+        base = detect_base_branch(repo_path)
+        run_git(repo_path, ["checkout", "-b", RACKSMITH_BRANCH, f"origin/{base}"])
+
+
+def _is_binary(path: Path) -> bool:
+    try:
+        data = path.read_bytes()
+        return b"\x00" in data[:8192]
+    except OSError:
+        return True
+
+
+def _format_untracked_diff(path: Path) -> str:
+    """Format untracked file content as diff (all additions)."""
+    try:
+        text = path.read_text(encoding="utf-8")
+    except (UnicodeDecodeError, OSError):
+        return "(binary file)"
+    lines = text.splitlines()
+    if not lines:
+        return f"--- /dev/null\n+++ {path.name}\n"
+    header = f"--- /dev/null\n+++ {path.name}\n@@ -0,0 +1,{len(lines)} @@\n"
+    return header + "\n".join("+" + line for line in lines)
+
+
+def get_file_diffs(repo_path: Path) -> list[dict]:
+    """Return list of {path, status, diff} for modified and untracked files."""
+    statuses = get_file_statuses(repo_path)
+    result: list[dict] = []
+    for path in statuses["modified"]:
+        full_path = repo_path / path
+        if not full_path.exists():
+            diff_result = run_git(repo_path, ["diff", "--no-color", "--", path], check=False)
+            result.append({"path": path, "status": "deleted", "diff": diff_result.stdout or ""})
+            continue
+        if _is_binary(full_path):
+            result.append({"path": path, "status": "modified", "diff": "(binary file)"})
+            continue
+        diff_result = run_git(repo_path, ["diff", "--no-color", path], check=False)
+        result.append({"path": path, "status": "modified", "diff": diff_result.stdout or ""})
+    for path in statuses["untracked"]:
+        full_path = repo_path / path
+        if not full_path.exists() or not full_path.is_file():
+            continue
+        if _is_binary(full_path):
+            result.append({"path": path, "status": "untracked", "diff": "(binary file)"})
+            continue
+        result.append({"path": path, "status": "untracked", "diff": _format_untracked_diff(full_path)})
+    return result
+
+
+def commit_and_push(
+    repo_path: Path,
+    message: str,
+    access_token: str,
+    owner: str,
+    repo: str,
+) -> str | None:
+    """Stage all changes, commit, push to racksmith branch, create PR, return PR URL."""
+    remote_url = (
+        f"https://x-access-token:{access_token}"
+        f"@github.com/{owner}/{repo}.git"
+    )
+    run_git(repo_path, ["remote", "set-url", "origin", remote_url], check=False)
+    run_git(repo_path, ["add", "-A"])
+    msg = message.strip()
+    if not msg:
+        raise ValueError("Commit message cannot be empty")
+    run_git(repo_path, ["commit", "-m", msg])
+    run_git(repo_path, ["push", "origin", RACKSMITH_BRANCH])
+
+    base = detect_base_branch(repo_path)
+    return create_racksmith_pr(owner, repo, access_token, base)
+
+
+def create_racksmith_pr(
+    owner: str, repo: str, access_token: str, base: str
+) -> str | None:
+    """Create or get racksmith->base PR. Returns html_url or None on failure."""
+    headers = {
+        "Authorization": f"Bearer {access_token}",
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+    }
+    with httpx.Client() as client:
+        resp = client.post(
+            f"https://api.github.com/repos/{owner}/{repo}/pulls",
+            headers=headers,
+            json={
+                "title": f"Merge racksmith into {base}",
+                "head": RACKSMITH_BRANCH,
+                "base": base,
+            },
+        )
+        if resp.status_code == 201:
+            return resp.json().get("html_url")
+        if resp.status_code == 422:
+            # PR may already exist
+            list_resp = client.get(
+                f"https://api.github.com/repos/{owner}/{repo}/pulls",
+                headers=headers,
+                params={"head": f"{owner}:{RACKSMITH_BRANCH}", "base": base, "state": "open"},
+            )
+            if list_resp.status_code == 200 and list_resp.json():
+                return list_resp.json()[0].get("html_url")
+        return None
 
 
 def slugify_branch_name(value: str) -> str:

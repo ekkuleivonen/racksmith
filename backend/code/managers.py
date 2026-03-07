@@ -5,6 +5,9 @@ from __future__ import annotations
 import shutil
 
 from github.misc import (
+    commit_and_push as git_commit_and_push,
+    ensure_racksmith_branch,
+    get_file_diffs as get_git_file_diffs,
     get_file_statuses as get_git_file_statuses,
     is_yaml_path,
     safe_relative_path,
@@ -76,24 +79,37 @@ class CodeManager:
             raise ValueError("Not a directory")
         shutil.rmtree(folder_path)
 
-    def create_folder(self, session, path: str) -> None:
+    def move_entry(self, session, src: str, dest: str) -> None:
         repo_path = setup_manager.active_repo_path(session)
-        folder_path = safe_relative_path(repo_path, path)
-        if folder_path.exists():
-            raise ValueError("Already exists")
-        folder_path.mkdir(parents=True, exist_ok=True)
-
-    def delete_folder(self, session, path: str) -> None:
-        repo_path = setup_manager.active_repo_path(session)
-        folder_path = safe_relative_path(repo_path, path)
-        if not folder_path.exists():
-            raise FileNotFoundError("Folder not found")
-        if not folder_path.is_dir():
-            raise ValueError("Not a directory")
-        shutil.rmtree(folder_path)
+        src_path = safe_relative_path(repo_path, src)
+        dest_path = safe_relative_path(repo_path, dest)
+        if not src_path.exists():
+            raise FileNotFoundError("Source not found")
+        if dest_path.exists():
+            raise ValueError("Destination already exists")
+        dest_path.parent.mkdir(parents=True, exist_ok=True)
+        shutil.move(str(src_path), str(dest_path))
 
     def get_file_statuses(self, session) -> dict[str, list[str]]:
         return get_git_file_statuses(setup_manager.active_repo_path(session))
+
+    def get_diffs(self, session) -> list[dict]:
+        repo_path = setup_manager.active_repo_path(session)
+        ensure_racksmith_branch(repo_path)
+        return get_git_file_diffs(repo_path)
+
+    def commit_and_push(self, session, message: str) -> str | None:
+        binding = setup_manager.current_repo(session)
+        if not binding:
+            raise FileNotFoundError("Active repo is not configured")
+        repo_path = setup_manager.active_repo_path(session)
+        return git_commit_and_push(
+            repo_path,
+            message,
+            session.access_token,
+            binding.owner,
+            binding.repo,
+        )
 
 
 code_manager = CodeManager()

@@ -6,6 +6,8 @@ import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
 import { AuthProvider } from "@/context/auth-context";
 import { CodePage } from "@/pages/CodePage";
+import { DiffCommitPage } from "@/pages/DiffCommitPage";
+import { DiffReviewPage } from "@/pages/DiffReviewPage";
 import { HomePage } from "@/pages/HomePage";
 import { PlaybookCreatePage } from "@/pages/PlaybookCreatePage";
 import { PlaybookDetailPage } from "@/pages/PlaybookDetailPage";
@@ -155,6 +157,26 @@ function AppRoutes() {
                 <ProtectedRoute>
                   <AppShell title="Playbooks">
                     <PlaybookDetailPage />
+                  </AppShell>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/diff/review"
+              element={
+                <ProtectedRoute>
+                  <AppShell title="Review changes">
+                    <DiffReviewPage />
+                  </AppShell>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/diff/commit"
+              element={
+                <ProtectedRoute>
+                  <AppShell title="Commit changes">
+                    <DiffCommitPage />
                   </AppShell>
                 </ProtectedRoute>
               }

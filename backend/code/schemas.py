@@ -14,5 +14,10 @@ class CreateFolderRequest(BaseModel):
     path: str
 
 
-class CreateFolderRequest(BaseModel):
-    path: str
+class MoveEntryRequest(BaseModel):
+    src: str
+    dest: str
+
+
+class CommitRequest(BaseModel):
+    message: str

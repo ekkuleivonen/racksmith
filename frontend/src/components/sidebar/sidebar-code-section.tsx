@@ -10,7 +10,7 @@ import {
 } from "@/components/code/file-tree";
 import { useSetupStore } from "@/stores/setup";
 import { useCodeStore } from "@/stores/code";
-import { apiDelete, apiPost } from "@/lib/api";
+import { apiDelete, apiPatch, apiPost } from "@/lib/api";
 
 function parseSelectedPathFromPathname(pathname: string): string | null {
   const match = pathname.match(/^\/code\/[^/]+\/[^/]+\/(.+)$/);
@@ -143,6 +143,28 @@ export function SidebarCodeSection() {
     [repo, loadTree, refreshStatuses],
   );
 
+  const handleMove = useCallback(
+    async (src: string, destDir: string) => {
+      if (!repo) return;
+      const basename = src.split("/").pop()!;
+      const dest = destDir ? `${destDir}/${basename}` : basename;
+      if (dest === src) return;
+      try {
+        await apiPatch("/code/move", { src, dest });
+        await Promise.all([loadTree(), refreshStatuses()]);
+        if (selectedPath === src) {
+          navigate(`/code/${repo.owner}/${repo.repo}/${dest}`);
+        }
+        toast.success("Moved");
+      } catch (error) {
+        toast.error(
+          error instanceof Error ? error.message : "Failed to move",
+        );
+      }
+    },
+    [repo, selectedPath, loadTree, refreshStatuses, navigate],
+  );
+
   return (
     <div className="space-y-1">
       <div className="flex items-center justify-between gap-2 px-3 py-1.5 border border-transparent">
@@ -202,6 +224,7 @@ export function SidebarCodeSection() {
             onCancelInput={() => setPendingInput(null)}
             onCreateInDir={handleCreateInDir}
             onDeleteDir={handleDeleteDir}
+            onMove={handleMove}
           />
         )}
       </div>
