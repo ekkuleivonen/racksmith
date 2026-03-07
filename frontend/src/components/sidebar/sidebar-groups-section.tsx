@@ -1,5 +1,5 @@
 import { useLocation, NavLink } from "react-router-dom";
-import { Plus } from "lucide-react";
+import { Folder, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useGroupsStore } from "@/stores/groups";
 
@@ -15,13 +15,14 @@ export function SidebarGroupsSection() {
           to="/groups"
           className={({ isActive }) =>
             cn(
-              "text-[11px] uppercase tracking-wide",
+              "flex items-center gap-1.5 text-[11px] uppercase tracking-wide",
               isActive || pathname.startsWith("/groups")
                 ? "text-zinc-100"
                 : "text-zinc-400 hover:text-zinc-200",
             )
           }
         >
+          <Folder className="size-3 shrink-0" />
           Groups
         </NavLink>
         <NavLink

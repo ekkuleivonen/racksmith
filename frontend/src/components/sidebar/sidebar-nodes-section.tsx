@@ -1,5 +1,5 @@
 import { useLocation, NavLink } from "react-router-dom";
-import { Plus } from "lucide-react";
+import { Plus, Server } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useNodesStore } from "@/stores/nodes";
 import { usePingStore } from "@/stores/ping";
@@ -19,13 +19,14 @@ export function SidebarNodesSection() {
           to="/nodes"
           className={({ isActive }) =>
             cn(
-              "text-[11px] uppercase tracking-wide",
+              "flex items-center gap-1.5 text-[11px] uppercase tracking-wide",
               isActive || pathname.startsWith("/nodes")
                 ? "text-zinc-100"
                 : "text-zinc-400 hover:text-zinc-200",
             )
           }
         >
+          <Server className="size-3 shrink-0" />
           Unassigned Nodes
         </NavLink>
         <NavLink

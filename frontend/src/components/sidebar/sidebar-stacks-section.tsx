@@ -1,5 +1,5 @@
 import { useLocation, NavLink } from "react-router-dom";
-import { Plus } from "lucide-react";
+import { Layers, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useStackStore } from "@/stores/stacks";
 
@@ -16,13 +16,14 @@ export function SidebarStacksSection() {
           to="/stacks"
           className={({ isActive }) =>
             cn(
-              "text-[11px] uppercase tracking-wide",
+              "flex items-center gap-1.5 text-[11px] uppercase tracking-wide",
               isActive || pathname.startsWith("/stacks")
                 ? "text-zinc-100"
                 : "text-zinc-400 hover:text-zinc-200",
             )
           }
         >
+          <Layers className="size-3 shrink-0" />
           Stacks
         </NavLink>
         <NavLink

@@ -1,5 +1,5 @@
 import { NavLink } from "react-router-dom";
-import { Plus } from "lucide-react";
+import { Plus, Zap } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export function SidebarActionsSection() {
@@ -10,13 +10,14 @@ export function SidebarActionsSection() {
           to="/actions/new"
           className={({ isActive }) =>
             cn(
-              "text-[11px] uppercase tracking-wide",
+              "flex items-center gap-1.5 text-[11px] uppercase tracking-wide",
               isActive
                 ? "text-zinc-100"
                 : "text-zinc-400 hover:text-zinc-200",
             )
           }
         >
+          <Zap className="size-3 shrink-0" />
           Actions
         </NavLink>
         <NavLink

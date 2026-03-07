@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocation, NavLink, useNavigate } from "react-router-dom";
-import { FilePlus, FolderPlus } from "lucide-react";
+import { Code2, FilePlus, FolderPlus } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import {
@@ -172,13 +172,14 @@ export function SidebarCodeSection() {
           to={codeHref}
           className={({ isActive }) =>
             cn(
-              "text-[11px] uppercase tracking-wide",
+              "flex items-center gap-1.5 text-[11px] uppercase tracking-wide",
               isActive || pathname.startsWith("/code")
                 ? "text-zinc-100"
                 : "text-zinc-400 hover:text-zinc-200",
             )
           }
         >
+          <Code2 className="size-3 shrink-0" />
           Code
         </NavLink>
         {repo && (
