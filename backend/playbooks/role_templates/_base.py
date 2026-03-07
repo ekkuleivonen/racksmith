@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from playbooks.schemas import RoleTemplate, RoleTemplateField
+from playbooks.schemas import RoleTemplate
 
 BUILTIN_ROLE_PREFIX = "_racksmith_"
 

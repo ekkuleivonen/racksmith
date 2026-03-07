@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { getCodeViewForFile } from "@/components/code/get-code-view-for-file";
-import { FileTree, type FileStatus, type TreeEntry } from "@/components/file-tree";
+import { FileTree, type FileStatus, type TreeEntry } from "@/components/code/file-tree";
 import {
   ResizableHandle,
   ResizablePanel,

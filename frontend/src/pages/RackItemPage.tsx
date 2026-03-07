@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Power, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
-import { SshTerminal } from "@/components/ssh-terminal";
+import { SshTerminal } from "@/components/ssh/ssh-terminal";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";

@@ -1,8 +1,8 @@
 import { useCallback, useMemo, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { ItemHardwareFields } from "@/components/item-hardware-fields";
-import { RackCanvas } from "@/components/rack-canvas";
+import { ItemHardwareFields } from "@/components/racks/item-hardware-fields";
+import { RackCanvas } from "@/components/racks/rack-canvas";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";

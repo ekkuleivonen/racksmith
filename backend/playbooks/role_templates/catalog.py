@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from playbooks.role_templates._base import BUILTIN_ROLE_PREFIX, RoleTemplateSpec
 from playbooks.role_templates import (
     disk_usage,
     get_info,
@@ -13,6 +12,7 @@ from playbooks.role_templates import (
     system_upgrade,
     uptime,
 )
+from playbooks.role_templates._base import RoleTemplateSpec
 
 ROLE_TEMPLATE_SPECS: dict[str, RoleTemplateSpec] = {
     "get_info": get_info.SPEC,

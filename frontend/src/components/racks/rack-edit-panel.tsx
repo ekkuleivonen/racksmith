@@ -1,4 +1,4 @@
-import { ItemHardwareFields } from "@/components/item-hardware-fields";
+import { ItemHardwareFields } from "./item-hardware-fields";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import type { RackItem } from "@/lib/racks";
