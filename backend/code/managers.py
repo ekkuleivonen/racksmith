@@ -14,15 +14,15 @@ from github.misc import (
     validate_yaml_text,
     walk_tree,
 )
-from setup.managers import setup_manager
+from repos.managers import repos_manager
 
 
 class CodeManager:
     def get_tree(self, session) -> list[dict]:
-        return walk_tree(setup_manager.active_repo_path(session))
+        return walk_tree(repos_manager.active_repo_path(session))
 
     def get_file(self, session, path: str) -> str:
-        repo_path = setup_manager.active_repo_path(session)
+        repo_path = repos_manager.active_repo_path(session)
         file_path = safe_relative_path(repo_path, path)
         if not file_path.exists() or not file_path.is_file():
             raise FileNotFoundError("File not found")
@@ -32,7 +32,7 @@ class CodeManager:
             raise ValueError("Binary file") from exc
 
     def update_file(self, session, path: str, content: str) -> None:
-        repo_path = setup_manager.active_repo_path(session)
+        repo_path = repos_manager.active_repo_path(session)
         file_path = safe_relative_path(repo_path, path)
         if not file_path.exists() or not file_path.is_file():
             raise FileNotFoundError("File not found")
@@ -43,7 +43,7 @@ class CodeManager:
         file_path.write_text(content, encoding="utf-8")
 
     def create_file(self, session, path: str, content: str) -> None:
-        repo_path = setup_manager.active_repo_path(session)
+        repo_path = repos_manager.active_repo_path(session)
         file_path = safe_relative_path(repo_path, path)
         if file_path.exists():
             raise ValueError("File already exists")
@@ -55,7 +55,7 @@ class CodeManager:
         file_path.write_text(content, encoding="utf-8")
 
     def delete_file(self, session, path: str) -> None:
-        repo_path = setup_manager.active_repo_path(session)
+        repo_path = repos_manager.active_repo_path(session)
         file_path = safe_relative_path(repo_path, path)
         if not file_path.exists():
             raise FileNotFoundError("File not found")
@@ -64,14 +64,14 @@ class CodeManager:
         file_path.unlink(missing_ok=True)
 
     def create_folder(self, session, path: str) -> None:
-        repo_path = setup_manager.active_repo_path(session)
+        repo_path = repos_manager.active_repo_path(session)
         folder_path = safe_relative_path(repo_path, path)
         if folder_path.exists():
             raise ValueError("Already exists")
         folder_path.mkdir(parents=True, exist_ok=True)
 
     def delete_folder(self, session, path: str) -> None:
-        repo_path = setup_manager.active_repo_path(session)
+        repo_path = repos_manager.active_repo_path(session)
         folder_path = safe_relative_path(repo_path, path)
         if not folder_path.exists():
             raise FileNotFoundError("Folder not found")
@@ -80,7 +80,7 @@ class CodeManager:
         shutil.rmtree(folder_path)
 
     def move_entry(self, session, src: str, dest: str) -> None:
-        repo_path = setup_manager.active_repo_path(session)
+        repo_path = repos_manager.active_repo_path(session)
         src_path = safe_relative_path(repo_path, src)
         dest_path = safe_relative_path(repo_path, dest)
         if not src_path.exists():
@@ -91,18 +91,18 @@ class CodeManager:
         shutil.move(str(src_path), str(dest_path))
 
     def get_file_statuses(self, session) -> dict[str, list[str]]:
-        return get_git_file_statuses(setup_manager.active_repo_path(session))
+        return get_git_file_statuses(repos_manager.active_repo_path(session))
 
     def get_diffs(self, session) -> list[dict]:
-        repo_path = setup_manager.active_repo_path(session)
+        repo_path = repos_manager.active_repo_path(session)
         ensure_racksmith_branch(repo_path)
         return get_git_file_diffs(repo_path)
 
     def commit_and_push(self, session, message: str) -> str | None:
-        binding = setup_manager.current_repo(session)
+        binding = repos_manager.current_repo(session)
         if not binding:
             raise FileNotFoundError("Active repo is not configured")
-        repo_path = setup_manager.active_repo_path(session)
+        repo_path = repos_manager.active_repo_path(session)
         return git_commit_and_push(
             repo_path,
             message,

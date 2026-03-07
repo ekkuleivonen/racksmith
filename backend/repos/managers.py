@@ -1,4 +1,4 @@
-"""Per-user setup and active repo management."""
+"""Per-user repo management: clone, activate, list, create, drop."""
 
 from __future__ import annotations
 
@@ -22,14 +22,14 @@ from github.misc import (
     user_workspace_path,
     write_active_repo,
 )
-from setup.migration import migrate_legacy_structure
+from repos.migration import migrate_legacy_structure
 
 GITHUB_REMOTE_RE = re.compile(
     r"github\.com[:/](?P<owner>[^/]+)/(?P<repo>[^/]+?)(?:\.git)?$"
 )
 
 
-class SetupManager:
+class ReposManager:
     def user_id_from_session(self, session) -> str:
         return user_storage_id(session.user)
 
@@ -181,4 +181,4 @@ class SetupManager:
         }
 
 
-setup_manager = SetupManager()
+repos_manager = ReposManager()

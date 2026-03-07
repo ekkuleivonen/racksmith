@@ -11,7 +11,7 @@ import yaml
 from nodes.managers import node_manager
 from racks.misc import cols_for_width, validate_width
 from racks.schemas import Rack, RackCreate, RackLayout, RackSummary, RackUpdate
-from setup.managers import setup_manager
+from repos.managers import repos_manager
 
 RACKS_DIR = Path(".racksmith/racks")
 RACK_FILE_EXTENSIONS = (".yml", ".yaml")
@@ -65,7 +65,7 @@ class RackManager:
 
     def list_racks(self, session) -> list[RackSummary]:
         try:
-            repo_path = setup_manager.active_repo_path(session)
+            repo_path = repos_manager.active_repo_path(session)
         except FileNotFoundError:
             return []
         summaries: list[RackSummary] = []
@@ -89,7 +89,7 @@ class RackManager:
         return sorted(summaries, key=lambda r: (r.name.lower(), r.created_at, r.slug))
 
     def get_rack(self, session, slug: str) -> Rack:
-        repo_path = setup_manager.active_repo_path(session)
+        repo_path = repos_manager.active_repo_path(session)
         path = self._rack_file(repo_path, slug)
         if not path.is_file():
             raise KeyError(f"Rack {slug} not found")
@@ -107,7 +107,7 @@ class RackManager:
         return RackLayout(**rack.model_dump(), nodes=nodes_in_rack)
 
     def create_rack(self, session, data: RackCreate) -> Rack:
-        repo_path = setup_manager.active_repo_path(session)
+        repo_path = repos_manager.active_repo_path(session)
         validate_width(data.rack_width_inches)
         rack_cols = cols_for_width(data.rack_width_inches, data.rack_cols)
         if rack_cols < 1 or rack_cols > 48:
@@ -133,7 +133,7 @@ class RackManager:
         return rack
 
     def update_rack(self, session, slug: str, data: RackUpdate) -> Rack:
-        repo_path = setup_manager.active_repo_path(session)
+        repo_path = repos_manager.active_repo_path(session)
         rack = self.get_rack(session, slug)
         if data.name:
             rack.name = data.name.strip()
@@ -152,7 +152,7 @@ class RackManager:
         return rack
 
     def delete_rack(self, session, slug: str) -> None:
-        repo_path = setup_manager.active_repo_path(session)
+        repo_path = repos_manager.active_repo_path(session)
         path = self._rack_file(repo_path, slug)
         if not path.is_file():
             raise KeyError(f"Rack {slug} not found")
@@ -163,7 +163,7 @@ class RackManager:
 
     def has_any_rack_for_session(self, session) -> bool:
         try:
-            repo_path = setup_manager.active_repo_path(session)
+            repo_path = repos_manager.active_repo_path(session)
         except FileNotFoundError:
             return False
         return any(True for _ in self._iter_rack_files(repo_path))

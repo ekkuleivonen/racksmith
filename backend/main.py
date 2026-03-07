@@ -16,7 +16,7 @@ from fastapi.staticfiles import StaticFiles
 from github.router import auth_router
 from playbooks.router import router as playbooks_router
 from racks.router import router as racks_router
-from setup.router import router as setup_router
+from repos.router import router as repos_router
 from ssh.router import router as ssh_router
 
 # Load .env from project root (parent of backend/) when present
@@ -60,7 +60,7 @@ if static_dir.exists():
     app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
 app.include_router(auth_router, prefix="/api/auth", tags=["auth"])
-app.include_router(setup_router, prefix="/api/setup", tags=["setup"])
+app.include_router(repos_router, prefix="/api/repos", tags=["repos"])
 app.include_router(racks_router, prefix="/api/racks", tags=["racks"])
 app.include_router(nodes_router, prefix="/api/nodes", tags=["nodes"])
 app.include_router(groups_router, prefix="/api/groups", tags=["groups"])

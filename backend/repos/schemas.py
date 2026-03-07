@@ -1,4 +1,4 @@
-"""Setup API schemas."""
+"""Repos API schemas."""
 
 from __future__ import annotations
 

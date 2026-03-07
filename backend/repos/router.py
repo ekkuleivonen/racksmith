@@ -1,4 +1,4 @@
-"""Setup endpoints for first-run repo provisioning."""
+"""Repos API: list, activate, create, drop, status."""
 
 from __future__ import annotations
 
@@ -6,8 +6,8 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from github.managers import auth_manager
 from nodes.managers import node_manager
-from setup.managers import setup_manager
-from setup.schemas import RepoActivationRequest, RepoCreateRequest, RepoSelectionRequest
+from repos.managers import repos_manager
+from repos.schemas import RepoActivationRequest, RepoCreateRequest, RepoSelectionRequest
 
 router = APIRouter()
 
@@ -15,7 +15,7 @@ router = APIRouter()
 @router.get("/status")
 async def get_status(session=Depends(auth_manager.get_current_session)):
     nodes = node_manager.list_nodes(session)
-    return setup_manager.status(
+    return repos_manager.status(
         session, nodes_ready=len(nodes) > 0
     )
 
@@ -23,7 +23,7 @@ async def get_status(session=Depends(auth_manager.get_current_session)):
 @router.get("/repos")
 async def list_repos(session=Depends(auth_manager.get_current_session)):
     try:
-        repos = await setup_manager.list_repos(session.access_token)
+        repos = await repos_manager.list_repos(session.access_token)
     except RuntimeError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     return {"repos": repos}
@@ -31,7 +31,7 @@ async def list_repos(session=Depends(auth_manager.get_current_session)):
 
 @router.get("/local-repos")
 async def list_local_repos(session=Depends(auth_manager.get_current_session)):
-    return {"repos": setup_manager.list_local_repos(session)}
+    return {"repos": repos_manager.list_local_repos(session)}
 
 
 @router.post("/repos/select")
@@ -39,7 +39,7 @@ async def select_repo(
     body: RepoSelectionRequest, session=Depends(auth_manager.get_current_session)
 ):
     try:
-        repo = setup_manager.activate_repo(session, owner=body.owner, repo=body.repo)
+        repo = repos_manager.activate_repo(session, owner=body.owner, repo=body.repo)
     except RuntimeError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     return {"repo": repo}
@@ -50,7 +50,7 @@ async def activate_local_repo(
     body: RepoActivationRequest, session=Depends(auth_manager.get_current_session)
 ):
     try:
-        repo = setup_manager.activate_local_repo(
+        repo = repos_manager.activate_local_repo(
             session, owner=body.owner, repo=body.repo
         )
     except FileNotFoundError as exc:
@@ -63,7 +63,7 @@ async def drop_local_repo(
     owner: str, repo: str, session=Depends(auth_manager.get_current_session)
 ):
     try:
-        setup_manager.drop_repo(session, owner=owner, repo=repo)
+        repos_manager.drop_repo(session, owner=owner, repo=repo)
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
@@ -73,10 +73,10 @@ async def create_repo(
     body: RepoCreateRequest, session=Depends(auth_manager.get_current_session)
 ):
     try:
-        created = await setup_manager.create_repo(
+        created = await repos_manager.create_repo(
             session.access_token, body.name.strip(), private=body.private
         )
-        repo = setup_manager.activate_repo(
+        repo = repos_manager.activate_repo(
             session, owner=created["owner"], repo=created["name"]
         )
     except RuntimeError as exc:
@@ -86,7 +86,7 @@ async def create_repo(
 
 @router.get("/repo")
 async def get_active_repo(session=Depends(auth_manager.get_current_session)):
-    binding = setup_manager.current_repo(session)
+    binding = repos_manager.current_repo(session)
     if not binding:
         raise HTTPException(status_code=404, detail="Active repo is not configured")
-    return {"repo": setup_manager.serialize_binding(binding)}
+    return {"repo": repos_manager.serialize_binding(binding)}

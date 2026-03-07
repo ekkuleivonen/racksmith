@@ -7,7 +7,7 @@ from pathlib import Path
 import yaml
 from pydantic import ValidationError
 
-from config_schema.registry import SCHEMA_REGISTRY
+from schema.registry import SCHEMA_REGISTRY
 
 
 def validate_repo(racksmith_dir: Path) -> list[dict]:

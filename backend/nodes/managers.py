@@ -11,7 +11,7 @@ import yaml
 
 import settings
 from nodes.schemas import Node, NodeInput, NodeSummary
-from setup.managers import setup_manager
+from repos.managers import repos_manager
 from ssh.misc import probe_ssh_target
 
 NODES_DIR = Path(".racksmith/nodes")
@@ -158,7 +158,7 @@ class NodeManager:
 
     def list_nodes(self, session) -> list[Node]:
         try:
-            repo_path = setup_manager.active_repo_path(session)
+            repo_path = repos_manager.active_repo_path(session)
         except FileNotFoundError:
             return []
         nodes: list[Node] = []
@@ -172,7 +172,7 @@ class NodeManager:
         return sorted(nodes, key=lambda n: (n.name.lower(), n.slug))
 
     def get_node(self, session, slug: str) -> Node:
-        repo_path = setup_manager.active_repo_path(session)
+        repo_path = repos_manager.active_repo_path(session)
         path = self._node_file(repo_path, slug)
         if not path.is_file():
             raise KeyError(f"Node {slug} not found")
@@ -188,7 +188,7 @@ class NodeManager:
         return candidate
 
     def create_node(self, session, data: NodeInput) -> Node:
-        repo_path = setup_manager.active_repo_path(session)
+        repo_path = repos_manager.active_repo_path(session)
         base_slug = _slugify(data.name) or "node"
         slug = self._next_slug(repo_path, base_slug)
 
@@ -215,7 +215,7 @@ class NodeManager:
         return node
 
     def update_node(self, session, slug: str, data: NodeInput) -> Node:
-        repo_path = setup_manager.active_repo_path(session)
+        repo_path = repos_manager.active_repo_path(session)
         existing = self.get_node(session, slug)
         name = data.name.strip() if data.name and data.name.strip() else existing.name
         host = data.host.strip() if data.host and data.host.strip() else existing.host
@@ -240,7 +240,7 @@ class NodeManager:
         return node
 
     def delete_node(self, session, slug: str) -> None:
-        repo_path = setup_manager.active_repo_path(session)
+        repo_path = repos_manager.active_repo_path(session)
         path = self._node_file(repo_path, slug)
         if not path.is_file():
             raise KeyError(f"Node {slug} not found")
@@ -267,7 +267,7 @@ class NodeManager:
             placement=node.placement,
             mac_address=probe.mac_address,
         )
-        repo_path = setup_manager.active_repo_path(session)
+        repo_path = repos_manager.active_repo_path(session)
         self._node_file(repo_path, slug).write_text(
             yaml.safe_dump(_node_to_yaml(updated), sort_keys=False), encoding="utf-8"
         )

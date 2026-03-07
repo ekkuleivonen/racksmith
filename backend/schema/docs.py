@@ -2,8 +2,7 @@
 
 from __future__ import annotations
 
-from config_schema.models import GroupConfig, NodeConfig, RackConfig
-from config_schema.registry import SCHEMA_REGISTRY
+from schema.models import GroupConfig, NodeConfig, RackConfig
 
 
 def _model_to_markdown(name: str, model: type) -> str:
@@ -11,9 +10,18 @@ def _model_to_markdown(name: str, model: type) -> str:
     for field_name, field_info in model.model_fields.items():
         desc = field_info.description or ""
         default = field_info.default
-        default_str = f" (default: `{default}`)" if default not in (None, "", [], {}) else ""
-        if hasattr(field_info, "default_factory") and field_info.default_factory is not None:
-            default_str = " (default: `[]` or `{}`)" if callable(field_info.default_factory) else ""
+        default_str = (
+            f" (default: `{default}`)" if default not in (None, "", [], {}) else ""
+        )
+        if (
+            hasattr(field_info, "default_factory")
+            and field_info.default_factory is not None
+        ):
+            default_str = (
+                " (default: `[]` or `{}`)"
+                if callable(field_info.default_factory)
+                else ""
+            )
         annotation = field_info.annotation
         type_str = str(annotation) if annotation is not None else "any"
         lines.append(f"- **{field_name}** (`{type_str}`){default_str}: {desc}")

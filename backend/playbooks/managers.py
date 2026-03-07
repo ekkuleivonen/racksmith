@@ -17,7 +17,7 @@ from _utils.db import _get_db, row_to_playbook_run
 from github.misc import get_head_sha, user_storage_id
 from playbooks.role_templates import BUILTIN_ROLE_PREFIX, ROLE_TEMPLATE_SPECS
 from nodes.managers import node_manager
-from setup.managers import setup_manager
+from repos.managers import repos_manager
 
 from playbooks.schemas import (
     PlaybookDetail,
@@ -208,7 +208,7 @@ class PlaybookManager:
         return summary, role_entries, raw
 
     def list_playbooks(self, session) -> list[PlaybookSummary]:
-        repo_path = setup_manager.active_repo_path(session)
+        repo_path = repos_manager.active_repo_path(session)
         self._ensure_builtin_role_templates(repo_path)
         playbooks_dir = self._playbooks_dir(repo_path)
         if not playbooks_dir.is_dir():
@@ -224,7 +224,7 @@ class PlaybookManager:
         return sorted(results, key=lambda playbook: playbook.file_name.lower())
 
     def get_playbook(self, session, playbook_id: str) -> PlaybookDetail:
-        repo_path = setup_manager.active_repo_path(session)
+        repo_path = repos_manager.active_repo_path(session)
         self._ensure_builtin_role_templates(repo_path)
         path = self._playbook_path(repo_path, playbook_id)
         if not path.is_file():
@@ -238,7 +238,7 @@ class PlaybookManager:
         )
 
     def create_playbook(self, session, body: PlaybookUpsertRequest) -> PlaybookDetail:
-        repo_path = setup_manager.active_repo_path(session)
+        repo_path = repos_manager.active_repo_path(session)
         self._ensure_builtin_role_templates(repo_path)
         playbook_id = (
             self._normalize_playbook_id(body.file_name)
@@ -256,7 +256,7 @@ class PlaybookManager:
         return self.get_playbook(session, playbook_id)
 
     def update_playbook(self, session, playbook_id: str, body: PlaybookUpsertRequest) -> PlaybookDetail:
-        repo_path = setup_manager.active_repo_path(session)
+        repo_path = repos_manager.active_repo_path(session)
         self._ensure_builtin_role_templates(repo_path)
         path = self._playbook_path(repo_path, playbook_id)
         if not path.is_file():
@@ -278,7 +278,7 @@ class PlaybookManager:
         return self.get_playbook(session, next_id)
 
     def delete_playbook(self, session, playbook_id: str) -> None:
-        repo_path = setup_manager.active_repo_path(session)
+        repo_path = repos_manager.active_repo_path(session)
         path = self._playbook_path(repo_path, playbook_id)
         if not path.is_file():
             raise FileNotFoundError("Playbook not found")
@@ -345,7 +345,7 @@ class PlaybookManager:
         return row_to_playbook_run(row)
 
     async def create_run(self, session, playbook_id: str, body: PlaybookRunRequest) -> PlaybookRun:
-        repo_path = setup_manager.active_repo_path(session)
+        repo_path = repos_manager.active_repo_path(session)
         playbook = self.get_playbook(session, playbook_id)
         hosts = self.resolve_targets(session, body.targets).hosts
         if not hosts:

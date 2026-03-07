@@ -9,7 +9,7 @@ import yaml
 from groups.schemas import Group, GroupInput, GroupWithMembers
 from nodes.managers import node_manager
 from nodes.schemas import NodeSummary
-from setup.managers import setup_manager
+from repos.managers import repos_manager
 
 GROUPS_DIR = Path(".racksmith/groups")
 GROUP_FILE_EXTENSIONS = (".yml", ".yaml")
@@ -35,7 +35,7 @@ class GroupManager:
 
     def list_groups(self, session) -> list[Group]:
         try:
-            repo_path = setup_manager.active_repo_path(session)
+            repo_path = repos_manager.active_repo_path(session)
         except FileNotFoundError:
             return []
         groups: list[Group] = []
@@ -55,7 +55,7 @@ class GroupManager:
         return sorted(groups, key=lambda g: (g.name.lower(), g.slug))
 
     def get_group(self, session, slug: str) -> GroupWithMembers:
-        repo_path = setup_manager.active_repo_path(session)
+        repo_path = repos_manager.active_repo_path(session)
         path = self._group_file(repo_path, slug)
         if not path.is_file():
             raise KeyError(f"Group {slug} not found")
@@ -81,7 +81,7 @@ class GroupManager:
         return GroupWithMembers(**group.model_dump(), nodes=members)
 
     def create_group(self, session, data: GroupInput) -> Group:
-        repo_path = setup_manager.active_repo_path(session)
+        repo_path = repos_manager.active_repo_path(session)
         slug = self._slugify(data.name)
         slug = self._next_slug(repo_path, slug)
         group = Group(slug=slug, name=data.name.strip(), description=data.description.strip())
@@ -97,7 +97,7 @@ class GroupManager:
         return group
 
     def update_group(self, session, slug: str, data: GroupInput) -> Group:
-        repo_path = setup_manager.active_repo_path(session)
+        repo_path = repos_manager.active_repo_path(session)
         if not self._group_file(repo_path, slug).is_file():
             raise KeyError(f"Group {slug} not found")
         group = Group(slug=slug, name=data.name.strip(), description=data.description.strip())
@@ -111,7 +111,7 @@ class GroupManager:
         return group
 
     def delete_group(self, session, slug: str) -> None:
-        repo_path = setup_manager.active_repo_path(session)
+        repo_path = repos_manager.active_repo_path(session)
         path = self._group_file(repo_path, slug)
         if not path.is_file():
             raise KeyError(f"Group {slug} not found")
