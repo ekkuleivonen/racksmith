@@ -28,7 +28,7 @@ while true; do
       -v "${HOST_WORKSPACE}:/workspace" \
       -w /workspace \
       docker:25 \
-      sh -c "docker compose down && docker compose up -d --build"
+      sh -c "docker compose -f /workspace/docker-compose.yml down && docker compose -f /workspace/docker-compose.yml up -d --build"
     then
       echo "[$(date)] Rebuild complete."
     else
