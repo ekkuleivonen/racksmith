@@ -372,6 +372,12 @@ def ensure_racksmith_branch(repo_path: Path) -> None:
         run_git(repo_path, ["checkout", "-b", RACKSMITH_BRANCH, f"origin/{base}"])
 
 
+def discard_changes(repo_path: Path) -> None:
+    """Discard all uncommitted changes (modified, staged, and untracked)."""
+    run_git(repo_path, ["reset", "--hard", "HEAD"])
+    run_git(repo_path, ["clean", "-fd"])
+
+
 def sync_racksmith_branch(repo_path: Path) -> None:
     """Rebase the racksmith branch on top of the user's base branch (e.g. main)."""
     run_git(repo_path, ["fetch", "origin"])
@@ -432,6 +438,22 @@ def get_file_diffs(repo_path: Path) -> list[dict]:
     return result
 
 
+def _delete_conflicting_racksmith_branches(repo_path: Path) -> None:
+    """Delete remote branches under racksmith/ that would block pushing racksmith."""
+    result = run_git(repo_path, ["ls-remote", "origin"], check=False)
+    if result.returncode != 0:
+        return
+    prefix = "refs/heads/racksmith/"
+    for line in result.stdout.strip().splitlines():
+        parts = line.split()
+        if len(parts) < 2:
+            continue
+        ref = parts[1]
+        if ref.startswith(prefix):
+            branch = ref.removeprefix("refs/heads/")
+            run_git(repo_path, ["push", "origin", "--delete", branch], check=False)
+
+
 def commit_and_push(
     repo_path: Path,
     message: str,
@@ -450,6 +472,7 @@ def commit_and_push(
     if not msg:
         raise ValueError("Commit message cannot be empty")
     run_git(repo_path, ["commit", "-m", msg])
+    _delete_conflicting_racksmith_branches(repo_path)
     run_git(repo_path, ["push", "origin", RACKSMITH_BRANCH])
 
     base = detect_base_branch(repo_path)

@@ -17,3 +17,7 @@ export async function commitAndPush(
     message,
   });
 }
+
+export async function discardChanges(): Promise<void> {
+  await apiPost("/code/discard", {});
+}

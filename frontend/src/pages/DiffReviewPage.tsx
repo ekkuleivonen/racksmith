@@ -1,8 +1,19 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import {
   Accordion,
   AccordionContent,
@@ -36,25 +47,74 @@ function DiffViewer({ diff }: { diff: string }) {
 
 export function DiffReviewPage() {
   const navigate = useNavigate();
+  const [discardOpen, setDiscardOpen] = useState(false);
   const files = useDiffStore((s) => s.files);
   const loading = useDiffStore((s) => s.loading);
+  const discarding = useDiffStore((s) => s.discarding);
   const loadDiffs = useDiffStore((s) => s.loadDiffs);
+  const discardChanges = useDiffStore((s) => s.discardChanges);
 
   useEffect(() => {
     void loadDiffs();
   }, [loadDiffs]);
 
+  const handleDiscard = async () => {
+    try {
+      await discardChanges();
+      toast.success("Changes discarded");
+      setDiscardOpen(false);
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Failed to discard changes",
+      );
+    }
+  };
+
   return (
     <div className="flex flex-col h-full">
       <div className="flex items-center justify-between gap-4 px-6 py-4 border-b border-zinc-800 shrink-0">
         <h1 className="text-lg font-semibold text-zinc-100">Review changes</h1>
-        <Button
-          onClick={() => navigate("/diff/commit")}
-          disabled={files.length === 0}
-        >
-          Commit to Racksmith branch
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            onClick={() => setDiscardOpen(true)}
+            disabled={files.length === 0 || discarding}
+          >
+            Discard changes
+          </Button>
+          <Button
+            onClick={() => navigate("/diff/commit")}
+            disabled={files.length === 0}
+          >
+            Commit to Racksmith branch
+          </Button>
+        </div>
       </div>
+
+      <AlertDialog open={discardOpen} onOpenChange={setDiscardOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Discard all changes?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently discard all uncommitted changes. Modified
+              files will be reverted and untracked files will be removed. This
+              cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault();
+                void handleDiscard();
+              }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Discard
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <div className="flex-1 min-h-0 overflow-hidden">
         {loading ? (

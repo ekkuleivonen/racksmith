@@ -1,18 +1,25 @@
 import { create } from "zustand";
 import type { DiffFile } from "@/lib/diff";
-import { commitAndPush as apiCommitAndPush, getDiffs } from "@/lib/diff";
+import {
+  commitAndPush as apiCommitAndPush,
+  discardChanges as apiDiscardChanges,
+  getDiffs,
+} from "@/lib/diff";
 import { useCodeStore } from "./code";
 
 export const useDiffStore = create<{
   files: DiffFile[];
   loading: boolean;
   committing: boolean;
+  discarding: boolean;
   loadDiffs: () => Promise<void>;
   commitAndPush: (message: string) => Promise<{ pr_url?: string | null }>;
+  discardChanges: () => Promise<void>;
 }>((set, get) => ({
   files: [],
   loading: false,
   committing: false,
+  discarding: false,
 
   loadDiffs: async () => {
     set({ loading: true });
@@ -35,6 +42,17 @@ export const useDiffStore = create<{
       return { pr_url: res.pr_url };
     } finally {
       set({ committing: false });
+    }
+  },
+
+  discardChanges: async () => {
+    set({ discarding: true });
+    try {
+      await apiDiscardChanges();
+      await get().loadDiffs();
+      await useCodeStore.getState().refreshStatuses();
+    } finally {
+      set({ discarding: false });
     }
   },
 }));

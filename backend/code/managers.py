@@ -6,6 +6,7 @@ import shutil
 
 from github.misc import (
     commit_and_push as git_commit_and_push,
+    discard_changes as git_discard_changes,
     ensure_racksmith_branch,
     get_file_diffs as get_git_file_diffs,
     get_file_statuses as get_git_file_statuses,
@@ -110,6 +111,10 @@ class CodeManager:
             binding.owner,
             binding.repo,
         )
+
+    def discard_changes(self, session) -> None:
+        repo_path = repos_manager.active_repo_path(session)
+        git_discard_changes(repo_path)
 
 
 code_manager = CodeManager()

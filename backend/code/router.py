@@ -120,6 +120,16 @@ async def delete_folder(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
+@router.post("/discard", status_code=204)
+async def discard(session=Depends(auth_manager.get_current_session)):
+    try:
+        code_manager.discard_changes(session)
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="Active repo is not configured")
+    except RuntimeError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
 @router.post("/commit")
 async def commit(
     body: CommitRequest, session=Depends(auth_manager.get_current_session)
