@@ -55,7 +55,7 @@ services:
       - app
 
   auto-update:
-    image: docker:24
+    image: docker:25
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - .:/workspace

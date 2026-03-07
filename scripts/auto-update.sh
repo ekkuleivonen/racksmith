@@ -21,13 +21,17 @@ while true; do
   if [ -n "$BEFORE" ] && [ -n "$AFTER" ] && [ "$BEFORE" != "$AFTER" ]; then
     echo "[$(date)] Changes detected ($BEFORE -> $AFTER). Rebuilding stack..."
     # Use a one-off container so we're not stopped by 'docker compose down'
-    docker run --rm \
+    if docker run --rm \
       -v /var/run/docker.sock:/var/run/docker.sock \
       -v /workspace:/workspace \
       -w /workspace \
-      docker:24 \
+      docker:25 \
       sh -c "docker compose down && docker compose up -d --build"
-    echo "[$(date)] Rebuild complete."
+    then
+      echo "[$(date)] Rebuild complete."
+    else
+      echo "[$(date)] Rebuild failed."
+    fi
   else
     echo "[$(date)] No changes."
   fi
