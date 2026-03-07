@@ -19,7 +19,6 @@ services:
       DB_PATH: /app/data/racksmith.db
       REPOS_WORKSPACE: /app/workspace
       LIBRARY_DIR: /app/.racksmith
-      APP_URL: http://localhost:3000
     volumes:
       - ./data:/app/data
       - ./workspace:/app/workspace
