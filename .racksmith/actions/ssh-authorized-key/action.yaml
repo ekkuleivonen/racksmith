@@ -1,0 +1,28 @@
+slug: ssh-authorized-key
+name: Add SSH Authorized Key
+description: Add a public SSH key to a user's authorized_keys file for remote access.
+executor: ansible
+source: user
+inputs:
+- key: ssh_user
+  label: Target user
+  type: string
+  placeholder: ubuntu
+  default: ''
+  required: true
+- key: public_key
+  label: Public SSH key
+  type: string
+  placeholder: ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAA...
+  default: ''
+  required: true
+- key: key_state
+  label: Key state
+  type: select
+  options:
+  - present
+  - absent
+  default: present
+  required: true
+compatibility:
+  os_family: []

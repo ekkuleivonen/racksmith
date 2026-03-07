@@ -1,0 +1,13 @@
+slug: node-1
+name: gateway
+host: 192.168.1.105
+ssh_user: ekku
+ssh_port: 22
+managed: true
+groups: []
+tags:
+- rpi4
+- 8gb
+os_family: debian
+mac_address: e4:5f:01:fd:e6:09
+notes: ''
