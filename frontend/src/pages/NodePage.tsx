@@ -1,16 +1,18 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { Layers, Power, RefreshCw, Trash2 } from "lucide-react";
+import { Layers, Pencil, Power, RefreshCw, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { SshTerminal } from "@/components/ssh/ssh-terminal";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import {
   deleteNode,
   getNode,
   isReachableNode,
   refreshNode,
+  updateNode,
   type Node,
 } from "@/lib/nodes";
 import {
@@ -31,6 +33,26 @@ export function NodePage() {
   const [deleting, setDeleting] = useState(false);
   const [pingStatus, setPingStatus] = useState<PingStatus>("unknown");
   const [stacks, setStacks] = useState<StackSummary[]>([]);
+  const [editingConnection, setEditingConnection] = useState(false);
+  const [connectionDraft, setConnectionDraft] = useState({
+    host: "",
+    ssh_user: "",
+    ssh_port: 22,
+  });
+  const [savingConnection, setSavingConnection] = useState(false);
+
+  useEffect(() => {
+    if (node) {
+      setConnectionDraft({
+        host: node.host ?? "",
+        ssh_user: node.ssh_user ?? "",
+        ssh_port: node.ssh_port ?? 22,
+      });
+      if (!node.host || !node.ssh_user) {
+        setEditingConnection(true);
+      }
+    }
+  }, [node]);
 
   const loadNode = useCallback(async () => {
     if (!nodeSlug) {
@@ -288,17 +310,120 @@ export function NodePage() {
 
           <Separator />
 
-          <div className="space-y-1 text-sm text-zinc-300">
-            <p>Host: {node.host || "Not set"}</p>
-            <p>User: {node.ssh_user || "Not set"}</p>
-            <p>Port: {node.ssh_port}</p>
-            <p>
+          <div className="space-y-3">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-[11px] text-zinc-500 font-medium uppercase tracking-wider">
+                Connection
+              </p>
+              {!editingConnection ? (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-7 gap-1.5 text-zinc-400 hover:text-zinc-200"
+                  onClick={() => setEditingConnection(true)}
+                >
+                  <Pencil className="size-3" />
+                  Edit
+                </Button>
+              ) : null}
+            </div>
+            {editingConnection ? (
+              <div className="space-y-2">
+                <Input
+                  className="h-8 text-xs"
+                  value={connectionDraft.host}
+                  onChange={(e) =>
+                    setConnectionDraft((d) => ({ ...d, host: e.target.value }))
+                  }
+                  placeholder="Host or IP"
+                />
+                <div className="flex gap-2">
+                  <Input
+                    className="h-8 text-xs flex-1"
+                    value={connectionDraft.ssh_user}
+                    onChange={(e) =>
+                      setConnectionDraft((d) => ({
+                        ...d,
+                        ssh_user: e.target.value,
+                      }))
+                    }
+                    placeholder="SSH user"
+                  />
+                  <Input
+                    className="h-8 text-xs w-20"
+                    type="number"
+                    value={connectionDraft.ssh_port}
+                    onChange={(e) =>
+                      setConnectionDraft((d) => ({
+                        ...d,
+                        ssh_port: Number(e.target.value) || 22,
+                      }))
+                    }
+                  />
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    size="sm"
+                    disabled={savingConnection}
+                    onClick={async () => {
+                      setSavingConnection(true);
+                      try {
+                        await updateNode(node.slug, {
+                          name: node.name ?? "",
+                          host: connectionDraft.host,
+                          ssh_user: connectionDraft.ssh_user,
+                          ssh_port: connectionDraft.ssh_port,
+                          tags: node.tags ?? [],
+                          groups: node.groups ?? [],
+                        });
+                        await loadNode();
+                        setEditingConnection(false);
+                        toast.success("Connection updated");
+                      } catch (error) {
+                        toast.error(
+                          error instanceof Error
+                            ? error.message
+                            : "Failed to update connection",
+                        );
+                      } finally {
+                        setSavingConnection(false);
+                      }
+                    }}
+                  >
+                    {savingConnection ? "Saving..." : "Save"}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      setConnectionDraft({
+                        host: node.host ?? "",
+                        ssh_user: node.ssh_user ?? "",
+                        ssh_port: node.ssh_port ?? 22,
+                      });
+                      setEditingConnection(false);
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-1 text-sm text-zinc-300">
+                <p>Host: {node.host || "Not set"}</p>
+                <p>User: {node.ssh_user || "Not set"}</p>
+                <p>Port: {node.ssh_port}</p>
+              </div>
+            )}
+            <p className="text-xs text-zinc-500">
               OS:{" "}
               {node.os_family ??
                 (node as { os?: string }).os ??
                 "Not discovered"}
             </p>
-            <p>MAC: {node.mac_address || "Not discovered"}</p>
+            <p className="text-xs text-zinc-500">
+              MAC: {node.mac_address || "Not discovered"}
+            </p>
           </div>
         </section>
 
@@ -313,8 +438,7 @@ export function NodePage() {
           ) : (
             <section className="border border-zinc-800 bg-zinc-900/30 p-4">
               <p className="text-zinc-500 text-sm">
-                This node is missing host or SSH user details. Edit the node
-                first from the rack view.
+                Add host and SSH user above, then Save to enable SSH access.
               </p>
             </section>
           )}
