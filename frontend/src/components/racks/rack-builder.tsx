@@ -187,7 +187,7 @@ export function RackBuilder({
     host: item.host ?? "",
     ssh_user: item.ssh_user ?? "",
     ssh_port: item.ssh_port ?? 22,
-    tags: item.tags ?? [],
+    labels: item.labels ?? [],
     os_family: item.os_family ?? null,
     mac_address: item.mac_address,
   });
@@ -340,7 +340,7 @@ export function RackBuilder({
                 onChange={(patch) =>
                   onPendingChange({
                     ...patch,
-                    tags: patch.tags ?? pending.tags ?? [],
+                    labels: patch.labels ?? pending.labels ?? [],
                   })
                 }
               />
@@ -387,7 +387,7 @@ export function RackBuilder({
                 onChange={(patch) =>
                   onSelectedItemChange({
                     ...patch,
-                    tags: patch.tags ?? selectedItem.tags ?? [],
+                    labels: patch.labels ?? selectedItem.labels ?? [],
                   })
                 }
               />

@@ -43,7 +43,7 @@ export type StackDetail = StackSummary & {
 
 export type StackTargetSelection = {
   groups: string[];
-  tags: string[];
+  labels: string[];
   nodes: string[];
 };
 

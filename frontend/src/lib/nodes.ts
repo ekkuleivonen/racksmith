@@ -15,7 +15,7 @@ export type NodeInput = {
   ssh_port?: number;
   managed?: boolean;
   groups?: string[];
-  tags?: string[];
+  labels?: string[];
   os_family?: string | null;
   notes?: string;
   placement?: NodePlacement | null;
@@ -32,7 +32,7 @@ export type NodeSummary = {
   host: string;
   managed: boolean;
   groups: string[];
-  tags: string[];
+  labels: string[];
   reachable?: boolean | null;
 };
 

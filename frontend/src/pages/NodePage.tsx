@@ -293,16 +293,16 @@ export function NodePage() {
           </div>
 
           {((node.os_family ?? (node as { os?: string }).os) ||
-            (node.tags ?? []).length > 0) && (
+            (node.labels ?? []).length > 0) && (
             <div className="flex flex-wrap gap-1">
               {(node as { os?: string }).os || node.os_family ? (
                 <Badge variant="outline">
                   {(node as { os?: string }).os ?? node.os_family ?? ""}
                 </Badge>
               ) : null}
-              {(node.tags ?? []).map((tag) => (
-                <Badge key={tag} variant="outline">
-                  {tag}
+              {(node.labels ?? []).map((label) => (
+                <Badge key={label} variant="outline">
+                  {label}
                 </Badge>
               ))}
             </div>
@@ -373,7 +373,7 @@ export function NodePage() {
                           host: connectionDraft.host,
                           ssh_user: connectionDraft.ssh_user,
                           ssh_port: connectionDraft.ssh_port,
-                          tags: node.tags ?? [],
+                          labels: node.labels ?? [],
                           groups: node.groups ?? [],
                         });
                         await loadNode();

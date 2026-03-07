@@ -10,7 +10,7 @@ type ItemLike = {
   host: string;
   ssh_user: string;
   ssh_port: number;
-  tags?: string[];
+  labels?: string[];
   os?: string;
   os_family?: string | null;
   mac_address?: string;
@@ -36,13 +36,13 @@ function addLabel(existing: string[], value: string): string[] {
 }
 
 function LabelsSection({
-  tags,
+  labels,
   labelInput,
   setLabelInput,
   onChange,
   commitLabel,
 }: {
-  tags: string[];
+  labels: string[];
   labelInput: string;
   setLabelInput: (v: string) => void;
   onChange: (patch: Partial<ItemLike>) => void;
@@ -53,11 +53,11 @@ function LabelsSection({
       <p className="text-[11px] text-zinc-500 font-medium uppercase tracking-wider">
         Labels
       </p>
-      {tags.length > 0 ? (
+      {labels.length > 0 ? (
         <div className="flex flex-wrap gap-1">
-          {tags.map((tag) => (
-            <div key={tag} className="flex items-center gap-1">
-              <Badge variant="outline">{tag}</Badge>
+          {labels.map((label) => (
+            <div key={label} className="flex items-center gap-1">
+              <Badge variant="outline">{label}</Badge>
               <Button
                 type="button"
                 variant="ghost"
@@ -67,7 +67,7 @@ function LabelsSection({
                   event.preventDefault();
                   event.stopPropagation();
                   onChange({
-                    tags: tags.filter((existingTag) => existingTag !== tag),
+                    labels: labels.filter((existing) => existing !== label),
                   });
                 }}
               >
@@ -86,8 +86,8 @@ function LabelsSection({
             e.preventDefault();
             commitLabel();
           }
-          if (e.key === "Backspace" && !labelInput && tags.length > 0) {
-            onChange({ tags: tags.slice(0, -1) });
+          if (e.key === "Backspace" && !labelInput && labels.length > 0) {
+            onChange({ labels: labels.slice(0, -1) });
           }
         }}
         placeholder="Type a label and press Enter"
@@ -144,24 +144,24 @@ export function ItemHardwareFields({
 }: ItemHardwareFieldsProps) {
   const [labelInput, setLabelInput] = useState("");
 
-  const tags = item.tags ?? [];
+  const labels = item.labels ?? [];
   const managed = item.managed ?? true;
 
   useEffect(() => {
     setLabelInput("");
-  }, [tags]);
+  }, [labels]);
 
   const commitLabel = () => {
-    const nextTags = addLabel(tags, labelInput);
-    if (nextTags !== tags) {
-      onChange({ tags: nextTags });
+    const nextLabels = addLabel(labels, labelInput);
+    if (nextLabels !== labels) {
+      onChange({ labels: nextLabels });
     }
     setLabelInput("");
   };
 
   const labelsSection = (
     <LabelsSection
-      tags={tags}
+      labels={labels}
       labelInput={labelInput}
       setLabelInput={setLabelInput}
       onChange={onChange}

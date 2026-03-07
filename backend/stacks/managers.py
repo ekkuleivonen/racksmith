@@ -333,11 +333,11 @@ class StackManager:
                 if wanted_groups.intersection(set(n.groups))
             ]
 
-        wanted_tags = {t.strip() for t in targets.tags if t.strip()}
-        if wanted_tags:
+        wanted_labels = {t.strip() for t in targets.labels if t.strip()}
+        if wanted_labels:
             filtered = [
                 n for n in filtered
-                if wanted_tags.issubset(set(n.tags))
+                if wanted_labels.issubset(set(n.labels))
             ]
 
         wanted_nodes = {s.strip() for s in targets.nodes if s.strip()}

@@ -18,7 +18,7 @@ class SSHProbeResult:
     name: str
     mac_address: str = ""
     os: str = ""
-    tags: list[str] = field(default_factory=list)
+    labels: list[str] = field(default_factory=list)
 
 
 def _connect_kwargs(host: str, username: str, port: int) -> dict:
@@ -198,5 +198,5 @@ async def probe_ssh_target(host: str, username: str, port: int) -> SSHProbeResul
         name=hostname or live_host,
         mac_address=mac_address,
         os=os_name,
-        tags=[],
+        labels=[],
     )

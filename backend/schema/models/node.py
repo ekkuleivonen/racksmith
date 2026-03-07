@@ -15,7 +15,7 @@ class NodeConfig(BaseModel):
     ssh_port: int = Field(default=22, description="SSH port")
     managed: bool = Field(default=True, description="Whether this node is managed (SSH, Ansible)")
     groups: list[str] = Field(default_factory=list, description="Group slugs this node belongs to")
-    tags: list[str] = Field(default_factory=list, description="Arbitrary labels for targeting")
+    labels: list[str] = Field(default_factory=list, description="Arbitrary labels for targeting")
     os_family: str | None = Field(default=None, description="OS family (debian, ubuntu, etc.)")
     mac_address: str = Field(default="", description="Auto-discovered on SSH probe")
     notes: str = Field(default="", description="Free-form notes")

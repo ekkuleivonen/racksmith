@@ -73,7 +73,7 @@ class GroupManager:
                 host=n.host,
                 managed=n.managed,
                 groups=n.groups,
-                tags=n.tags,
+                labels=n.labels,
             )
             for n in all_nodes
             if slug in n.groups

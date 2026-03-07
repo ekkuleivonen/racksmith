@@ -52,7 +52,7 @@ type SearchableFilterDropdownProps = {
 
 const EMPTY_TARGETS: StackTargetSelection = {
   groups: [],
-  tags: [],
+  labels: [],
   nodes: [],
 };
 
@@ -137,7 +137,7 @@ export function StackDetailPage() {
   const [draft, setDraft] = useState<StackUpsertRequest | null>(null);
   const [actions, setActions] = useState<Action[]>([]);
   const [targets, setTargets] = useState<StackTargetSelection>(
-    prefilledNode ? { groups: [], tags: [], nodes: [prefilledNode] } : EMPTY_TARGETS,
+    prefilledNode ? { groups: [], labels: [], nodes: [prefilledNode] } : EMPTY_TARGETS,
   );
   const [resolvedHosts, setResolvedHosts] = useState<string[]>([]);
   const [runs, setRuns] = useState<StackRun[]>([]);
@@ -190,7 +190,7 @@ export function StackDetailPage() {
   const tagOptions = useMemo(
     () =>
       Array.from(
-        new Set(nodes.flatMap((n) => n.tags ?? [])),
+        new Set(nodes.flatMap((n) => n.labels ?? [])),
       ).sort(),
     [nodes],
   );
@@ -306,14 +306,14 @@ export function StackDetailPage() {
                     }
                   />
                   <SearchableFilterDropdown
-                    label="Tags"
-                    placeholder="Search tags..."
+                    label="Labels"
+                    placeholder="Search labels..."
                     options={tagOptions.map((tag) => ({ value: tag, label: tag }))}
-                    values={targets.tags}
+                    values={targets.labels}
                     onToggle={(value) =>
                       setTargets((current) => ({
                         ...current,
-                        tags: toggleValue(current.tags, value),
+                        labels: toggleValue(current.labels, value),
                       }))
                     }
                   />
@@ -337,7 +337,7 @@ export function StackDetailPage() {
                     {resolving ? <LoaderCircle className="size-4 animate-spin text-zinc-400" /> : null}
                   </div>
                   <p className="text-xs text-zinc-500">
-                    Active filters: {targets.groups.length} group, {targets.tags.length} tag, {targets.nodes.length} node
+                    Active filters: {targets.groups.length} group, {targets.labels.length} label, {targets.nodes.length} node
                   </p>
                   {resolvedHosts.length === 0 ? (
                     <p className="text-xs text-zinc-500">No hosts matched the current selection.</p>

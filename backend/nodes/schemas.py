@@ -20,7 +20,7 @@ class NodeInput(BaseModel):
     ssh_port: int = 22
     managed: bool = True
     groups: list[str] = Field(default_factory=list)
-    tags: list[str] = Field(default_factory=list)
+    labels: list[str] = Field(default_factory=list)
     os_family: str | None = None
     notes: str = ""
     placement: NodePlacement | None = None
@@ -37,5 +37,5 @@ class NodeSummary(BaseModel):
     host: str
     managed: bool
     groups: list[str]
-    tags: list[str]
+    labels: list[str]
     reachable: bool | None = None

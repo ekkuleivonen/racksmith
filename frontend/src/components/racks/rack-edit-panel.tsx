@@ -10,7 +10,7 @@ function toItemLike(item: RackLayoutNode) {
     host: item.host ?? "",
     ssh_user: item.ssh_user ?? "",
     ssh_port: item.ssh_port ?? 22,
-    tags: item.tags ?? [],
+    labels: item.labels ?? [],
     os_family: item.os_family ?? null,
     mac_address: item.mac_address,
   };

@@ -17,7 +17,7 @@ const emptyForm: NodeInput = {
   ssh_port: 22,
   managed: true,
   groups: [],
-  tags: [],
+  labels: [],
   notes: "",
 };
 
@@ -44,7 +44,7 @@ export function SetupNodesStep({ onContinue, canContinue }: SetupNodesStepProps)
       const result = await createNode({
         ...form,
         name: form.name?.trim() ?? "",
-        tags: form.tags ?? [],
+        labels: form.labels ?? [],
         groups: form.groups ?? [],
       });
       resetForm();
@@ -96,9 +96,9 @@ export function SetupNodesStep({ onContinue, canContinue }: SetupNodesStepProps)
                   <span className="text-xs text-zinc-100 truncate min-w-0">
                     {node.name || node.host || node.slug}
                   </span>
-                  {node.tags && node.tags.length > 0 && (
+                  {node.labels && node.labels.length > 0 && (
                     <div className="flex gap-1 shrink-0 ml-auto">
-                      {node.tags.map((tag) => (
+                      {node.labels.map((tag) => (
                         <Badge
                           key={tag}
                           variant="outline"
@@ -123,7 +123,7 @@ export function SetupNodesStep({ onContinue, canContinue }: SetupNodesStepProps)
         item={{
           ...form,
           managed: true,
-          tags: form.tags ?? [],
+          labels: form.labels ?? [],
           host: form.host ?? "",
           ssh_user: form.ssh_user ?? "",
           ssh_port: form.ssh_port ?? 22,

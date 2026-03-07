@@ -60,7 +60,7 @@ class StackDetail(StackSummary):
 
 class StackTargetSelection(BaseModel):
     groups: list[str] = Field(default_factory=list)
-    tags: list[str] = Field(default_factory=list)
+    labels: list[str] = Field(default_factory=list)
     nodes: list[str] = Field(default_factory=list)
 
 

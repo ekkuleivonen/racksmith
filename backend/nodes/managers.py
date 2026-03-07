@@ -59,7 +59,7 @@ def _node_from_yaml(slug: str, data: dict) -> Node:
         ssh_port=data.get("ssh_port", 22),
         managed=data.get("managed", True),
         groups=data.get("groups", []),
-        tags=data.get("tags", []),
+        labels=data.get("labels", []),
         os_family=data.get("os_family"),
         notes=data.get("notes", ""),
         placement=placement,
@@ -77,7 +77,7 @@ def _node_to_yaml(node: Node) -> dict:
         "ssh_port": node.ssh_port,
         "managed": node.managed,
         "groups": node.groups,
-        "tags": node.tags,
+        "labels": node.labels,
         "os_family": node.os_family,
         "mac_address": node.mac_address,
         "notes": node.notes,
@@ -138,8 +138,8 @@ class NodeManager:
                 )
             if node.os_family:
                 hosts[node.slug]["os_family"] = node.os_family
-            if node.tags:
-                hosts[node.slug]["tags"] = node.tags
+            if node.labels:
+                hosts[node.slug]["labels"] = node.labels
 
             for group in node.groups:
                 if group not in children:
@@ -204,7 +204,7 @@ class NodeManager:
             ssh_port=data.ssh_port,
             managed=data.managed,
             groups=data.groups,
-            tags=data.tags,
+            labels=data.labels,
             os_family=data.os_family,
             notes=data.notes,
             placement=data.placement,
@@ -231,7 +231,7 @@ class NodeManager:
             ssh_port=data.ssh_port,
             managed=data.managed,
             groups=data.groups,
-            tags=data.tags,
+            labels=data.labels,
             os_family=data.os_family or existing.os_family,
             notes=data.notes,
             placement=data.placement,
@@ -265,7 +265,7 @@ class NodeManager:
             ssh_port=node.ssh_port,
             managed=node.managed,
             groups=node.groups,
-            tags=node.tags or probe.tags,
+            labels=node.labels or probe.labels,
             os_family=os_family,
             notes=node.notes,
             placement=node.placement,
@@ -289,7 +289,7 @@ class NodeManager:
                 ssh_port=data.ssh_port,
                 managed=data.managed,
                 groups=data.groups,
-                tags=data.tags,
+                labels=data.labels,
                 os_family=data.os_family,
                 notes=data.notes,
                 placement=data.placement,
@@ -305,7 +305,7 @@ class NodeManager:
             ssh_port=data.ssh_port,
             managed=data.managed,
             groups=data.groups,
-            tags=data.tags or probe.tags,
+            labels=data.labels or probe.labels,
             os_family=os_family,
             notes=data.notes,
             placement=data.placement,

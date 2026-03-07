@@ -12,7 +12,7 @@ const defaultForm: NodeInput = {
   ssh_port: 22,
   managed: true,
   groups: [],
-  tags: [],
+  labels: [],
   notes: "",
 };
 
@@ -48,7 +48,7 @@ export function NodeCreatePage() {
     host: form.host ?? "",
     ssh_user: form.ssh_user ?? "",
     ssh_port: form.ssh_port ?? 22,
-    tags: form.tags ?? [],
+    labels: form.labels ?? [],
   };
 
   return (

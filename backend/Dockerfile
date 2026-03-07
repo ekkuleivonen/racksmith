@@ -2,8 +2,8 @@ FROM ghcr.io/astral-sh/uv:python3.14-bookworm-slim
 
 WORKDIR /app
 
-# Install git (repo clone/fetch) and ping (node reachability checks)
-RUN apt-get update && apt-get install -y --no-install-recommends git iputils-ping && rm -rf /var/lib/apt/lists/*
+# Install git (repo clone/fetch), ping (node reachability), and openssh-client (Ansible SSH)
+RUN apt-get update && apt-get install -y --no-install-recommends git iputils-ping openssh-client && rm -rf /var/lib/apt/lists/*
 
 # Install dependencies
 COPY backend/pyproject.toml backend/uv.lock ./

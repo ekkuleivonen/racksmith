@@ -43,7 +43,7 @@ function makePendingNode(zone: ZoneSelection): PendingNode {
     position_col_count: zone.colCount,
     ssh_user: "",
     ssh_port: 22,
-    tags: [],
+    labels: [],
   };
 }
 
@@ -54,7 +54,7 @@ function pendingToNodeInput(pending: PendingNode, rackSlug: string): NodeInput {
     ssh_user: pending.ssh_user,
     ssh_port: pending.ssh_port,
     managed: pending.managed,
-    tags: pending.tags ?? [],
+    labels: pending.labels ?? [],
     os_family: pending.os_family ?? null,
     notes: pending.notes,
     placement: {
@@ -78,7 +78,7 @@ function layoutNodeToNodeInput(
     ssh_port: node.ssh_port,
     managed: node.managed,
     groups: node.groups,
-    tags: node.tags ?? [],
+    labels: node.labels ?? [],
     os_family: node.os_family ?? null,
     notes: node.notes,
     placement:
@@ -268,7 +268,7 @@ export function RackPage() {
           ssh_port: node.ssh_port ?? 22,
           managed: node.managed ?? true,
           groups: node.groups ?? [],
-          tags: node.tags ?? [],
+          labels: node.labels ?? [],
           os_family: node.os_family ?? null,
           notes: node.notes ?? "",
           placement: {
