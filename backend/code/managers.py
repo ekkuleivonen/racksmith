@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import shutil
+
 from github.misc import (
     get_file_statuses as get_git_file_statuses,
     is_yaml_path,
@@ -36,6 +38,59 @@ class CodeManager:
         if is_yaml_path(path):
             validate_yaml_text(content)
         file_path.write_text(content, encoding="utf-8")
+
+    def create_file(self, session, path: str, content: str) -> None:
+        repo_path = setup_manager.active_repo_path(session)
+        file_path = safe_relative_path(repo_path, path)
+        if file_path.exists():
+            raise ValueError("File already exists")
+        if "\x00" in content:
+            raise ValueError("Binary content is not supported")
+        if is_yaml_path(path):
+            validate_yaml_text(content)
+        file_path.parent.mkdir(parents=True, exist_ok=True)
+        file_path.write_text(content, encoding="utf-8")
+
+    def delete_file(self, session, path: str) -> None:
+        repo_path = setup_manager.active_repo_path(session)
+        file_path = safe_relative_path(repo_path, path)
+        if not file_path.exists():
+            raise FileNotFoundError("File not found")
+        if not file_path.is_file():
+            raise ValueError("Cannot delete directory")
+        file_path.unlink(missing_ok=True)
+
+    def create_folder(self, session, path: str) -> None:
+        repo_path = setup_manager.active_repo_path(session)
+        folder_path = safe_relative_path(repo_path, path)
+        if folder_path.exists():
+            raise ValueError("Already exists")
+        folder_path.mkdir(parents=True, exist_ok=True)
+
+    def delete_folder(self, session, path: str) -> None:
+        repo_path = setup_manager.active_repo_path(session)
+        folder_path = safe_relative_path(repo_path, path)
+        if not folder_path.exists():
+            raise FileNotFoundError("Folder not found")
+        if not folder_path.is_dir():
+            raise ValueError("Not a directory")
+        shutil.rmtree(folder_path)
+
+    def create_folder(self, session, path: str) -> None:
+        repo_path = setup_manager.active_repo_path(session)
+        folder_path = safe_relative_path(repo_path, path)
+        if folder_path.exists():
+            raise ValueError("Already exists")
+        folder_path.mkdir(parents=True, exist_ok=True)
+
+    def delete_folder(self, session, path: str) -> None:
+        repo_path = setup_manager.active_repo_path(session)
+        folder_path = safe_relative_path(repo_path, path)
+        if not folder_path.exists():
+            raise FileNotFoundError("Folder not found")
+        if not folder_path.is_dir():
+            raise ValueError("Not a directory")
+        shutil.rmtree(folder_path)
 
     def get_file_statuses(self, session) -> dict[str, list[str]]:
         return get_git_file_statuses(setup_manager.active_repo_path(session))

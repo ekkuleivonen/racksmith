@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { getCodeViewForFile } from "@/components/code/get-code-view-for-file";
 import { apiGet, apiPut } from "@/lib/api";
@@ -9,6 +9,7 @@ const AUTOSAVE_DELAY_MS = 600;
 
 export function CodePage() {
   const params = useParams();
+  const navigate = useNavigate();
   const filePath = (params["*"] || null) as string | null;
 
   const [loadedContent, setLoadedContent] = useState<string | null>(null);
@@ -18,24 +19,34 @@ export function CodePage() {
   const refreshStatuses = useCodeStore((s) => s.refreshStatuses);
   const saveTimeoutRef = useRef<number | null>(null);
 
-  const loadFile = useCallback(async (path: string) => {
-    setContentLoading(true);
-    setLoadedContent(null);
-    setCodeValue("");
-    try {
-      const data = await apiGet<{ content: string }>(
-        `/code/file?path=${encodeURIComponent(path)}`,
-      );
-      setLoadedContent(data.content);
-      setCodeValue(data.content);
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to load file");
+  const loadFile = useCallback(
+    async (path: string) => {
+      setContentLoading(true);
       setLoadedContent(null);
       setCodeValue("");
-    } finally {
-      setContentLoading(false);
-    }
-  }, []);
+      try {
+        const data = await apiGet<{ content: string }>(
+          `/code/file?path=${encodeURIComponent(path)}`,
+        );
+        setLoadedContent(data.content);
+        setCodeValue(data.content);
+      } catch (error) {
+        toast.error(
+          error instanceof Error ? error.message : "Failed to load file",
+        );
+        setLoadedContent(null);
+        setCodeValue("");
+        const owner = params.owner as string | undefined;
+        const repo = params.repo as string | undefined;
+        if (owner && repo) {
+          navigate(`/code/${owner}/${repo}`, { replace: true });
+        }
+      } finally {
+        setContentLoading(false);
+      }
+    },
+    [params.owner, params.repo, navigate],
+  );
 
   useEffect(() => {
     if (filePath) {

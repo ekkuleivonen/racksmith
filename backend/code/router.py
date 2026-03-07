@@ -5,7 +5,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException
 
 from code.managers import code_manager
-from code.schemas import UpdateCodeFileRequest
+from code.schemas import CreateFolderRequest, UpdateCodeFileRequest
 from github.managers import auth_manager
 
 router = APIRouter()
@@ -56,3 +56,49 @@ async def update_file(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return {"status": "updated"}
+
+
+@router.post("/file", status_code=201)
+async def create_file(
+    body: UpdateCodeFileRequest, session=Depends(auth_manager.get_current_session)
+):
+    try:
+        code_manager.create_file(session, body.path, body.content)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"status": "created"}
+
+
+@router.delete("/file", status_code=204)
+async def delete_file(
+    path: str, session=Depends(auth_manager.get_current_session)
+):
+    try:
+        code_manager.delete_file(session, path)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post("/folder", status_code=201)
+async def create_folder(
+    body: CreateFolderRequest, session=Depends(auth_manager.get_current_session)
+):
+    try:
+        code_manager.create_folder(session, body.path)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"status": "created"}
+
+
+@router.delete("/folder", status_code=204)
+async def delete_folder(
+    path: str, session=Depends(auth_manager.get_current_session)
+):
+    try:
+        code_manager.delete_folder(session, path)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc

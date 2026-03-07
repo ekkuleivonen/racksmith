@@ -8,3 +8,11 @@ from pydantic import BaseModel
 class UpdateCodeFileRequest(BaseModel):
     path: str
     content: str
+
+
+class CreateFolderRequest(BaseModel):
+    path: str
+
+
+class CreateFolderRequest(BaseModel):
+    path: str

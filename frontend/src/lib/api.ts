@@ -4,6 +4,9 @@ export async function handleResponse<T>(res: Response): Promise<T> {
     const detail = body.detail ?? body.error ?? `HTTP ${res.status}`;
     throw new Error(Array.isArray(detail) ? detail[0]?.msg ?? String(detail) : String(detail));
   }
+  if (res.status === 204) {
+    return {} as T;
+  }
   return res.json();
 }
 
