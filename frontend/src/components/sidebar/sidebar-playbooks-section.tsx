@@ -11,7 +11,7 @@ export function SidebarPlaybooksSection() {
 
   return (
     <div className="space-y-1">
-      <div className="flex items-center justify-between gap-2 px-3 py-1.5 border border-transparent">
+      <div className="flex items-center justify-between gap-2 px-2 py-1.5 border border-transparent">
         <NavLink
           to="/playbooks"
           className={({ isActive }) =>
@@ -33,9 +33,9 @@ export function SidebarPlaybooksSection() {
           <Plus className="size-3" />
         </NavLink>
       </div>
-      <div className="space-y-1 pl-3">
+      <div className="space-y-1 pl-2">
         {playbooks.length === 0 ? (
-          <p className="px-3 py-1 text-[10px] text-zinc-500">
+          <p className="px-2 py-1 text-[10px] text-zinc-500">
             No playbooks yet
           </p>
         ) : (
@@ -45,7 +45,7 @@ export function SidebarPlaybooksSection() {
               to={`/playbooks/${playbook.id}`}
               className={({ isActive }) =>
                 cn(
-                  "flex items-center rounded-none px-3 py-1.5 text-[11px] border border-transparent",
+                  "flex items-center rounded-none px-2 py-1.5 text-[11px] border border-transparent",
                   isActive
                     ? "bg-zinc-800 text-zinc-100 border-zinc-700"
                     : "text-zinc-300 hover:text-zinc-100 hover:bg-zinc-900",

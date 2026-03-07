@@ -10,9 +10,9 @@ type SidebarProps = {
 
 export function Sidebar({ onLogout }: SidebarProps) {
   return (
-    <aside className="w-full h-full shrink-0 border-r border-zinc-800 bg-zinc-900/40 p-4 flex flex-col gap-4 min-w-0">
+    <aside className="w-full h-full shrink-0 border-r border-zinc-800 bg-zinc-900/40 p-2 flex flex-col gap-3 min-w-0">
       <SidebarHeader />
-      <nav className="scrollbar-hide space-y-1 overflow-x-visible overflow-y-auto flex-1 min-h-0">
+      <nav className="scrollbar-hide space-y-0.5 overflow-x-visible overflow-y-auto flex-1 min-h-0">
         <SidebarRacksSection />
         <SidebarPlaybooksSection />
         <SidebarCodeSection />

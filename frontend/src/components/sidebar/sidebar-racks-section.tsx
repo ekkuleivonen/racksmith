@@ -24,7 +24,7 @@ export function SidebarRacksSection() {
 
   return (
     <div className="space-y-1">
-      <div className="flex items-center justify-between gap-2 px-3 py-1.5 border border-transparent">
+      <div className="flex items-center justify-between gap-2 px-2 py-1.5 border border-transparent">
         <NavLink
           to={racksHref}
           className={({ isActive }) =>
@@ -46,9 +46,9 @@ export function SidebarRacksSection() {
           <Plus className="size-3" />
         </NavLink>
       </div>
-      <div className="space-y-1 pl-3">
+      <div className="space-y-1 pl-2">
         {rackEntries.length === 0 ? (
-          <p className="px-3 py-1 text-[10px] text-zinc-500">No racks yet</p>
+          <p className="px-2 py-0.5 text-[10px] text-zinc-500">No racks yet</p>
         ) : (
           <Accordion
             type="multiple"
@@ -61,10 +61,10 @@ export function SidebarRacksSection() {
                 value={rack.id}
                 className="border-0"
               >
-                <AccordionTrigger hideIcon className="py-1.5 pl-1 pr-3 hover:no-underline bg-transparent hover:bg-transparent flex items-center gap-1.5 group">
+                <AccordionTrigger hideIcon className="py-0.5 pl-0.5 pr-1.5 hover:no-underline font-normal rounded text-zinc-400 hover:bg-zinc-800/50 hover:text-zinc-300 flex items-center gap-1.5 group">
                   <button
                     type="button"
-                    className="shrink-0 w-6 h-6 -ml-0.5 flex items-center justify-center rounded cursor-pointer hover:bg-zinc-800 text-zinc-400 hover:text-zinc-300 transition-transform group-data-[state=open]:rotate-90"
+                    className="shrink-0 p-0.5 -m-0.5 flex items-center justify-center rounded cursor-pointer hover:bg-zinc-800 text-zinc-400 hover:text-zinc-300 transition-transform group-data-[state=open]:rotate-90"
                     aria-label="Expand or collapse rack"
                   >
                     <ChevronRight className="size-3.5" />
@@ -74,20 +74,20 @@ export function SidebarRacksSection() {
                     onClick={(e) => e.stopPropagation()}
                     className={({ isActive }) =>
                       cn(
-                        "flex-1 min-w-0 truncate text-left text-[11px] rounded-none py-1 -mx-1 px-1",
+                        "flex-1 min-w-0 truncate text-left text-[11px] rounded-none py-0.5 -mx-1 px-1",
                         isActive
                           ? "text-zinc-100"
-                          : "text-zinc-300 hover:text-zinc-100",
+                          : "text-zinc-400 hover:text-zinc-300",
                       )
                     }
                   >
                     {rack.name}
                   </NavLink>
                 </AccordionTrigger>
-                <AccordionContent className="pt-0 pb-1">
-                  <div className="space-y-1 pl-3">
+                <AccordionContent className="pt-0 !pb-0 !h-auto [&_a]:no-underline">
+                  <div className="space-y-0.5 border-l border-zinc-800 ml-2 pl-2">
                     {items.length === 0 ? (
-                      <p className="px-3 py-1 text-[10px] text-zinc-600">
+                      <p className="px-2 py-0.5 text-[10px] text-zinc-600">
                         No hardware yet
                       </p>
                     ) : (
@@ -101,10 +101,10 @@ export function SidebarRacksSection() {
                             to={`/rack/${rack.id}/item/${item.id}`}
                             className={({ isActive }) =>
                               cn(
-                                "flex items-center gap-2 rounded-none px-3 py-1 text-[10px] border border-transparent",
+                                "flex items-center gap-1.5 rounded py-0.5 px-1.5 text-xs no-underline",
                                 isActive
-                                  ? "bg-zinc-800 text-zinc-100 border-zinc-700"
-                                  : "text-zinc-500 hover:text-zinc-200 hover:bg-zinc-900",
+                                  ? "bg-zinc-700 text-zinc-100"
+                                  : "text-zinc-400 hover:bg-zinc-800/50 hover:text-zinc-300",
                               )
                             }
                           >

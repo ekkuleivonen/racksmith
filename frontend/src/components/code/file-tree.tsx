@@ -142,7 +142,7 @@ function TreeItem({
     const showInput = pendingInput?.parentPath === fullPath;
     const showChildren = open || showInput;
 
-    const indentPx = depth * (compact ? 8 : 16);
+    const indentPx = depth * (compact ? 6 : 12);
     const dirRow = (
       <div
         className={cn(
@@ -312,7 +312,7 @@ function TreeItem({
 
   const isSelected = selectedPath === fullPath;
   const status = fileStatuses?.[fullPath] ?? "default";
-  const indentPx = depth * (compact ? 8 : 16);
+    const indentPx = depth * (compact ? 6 : 12);
   const fileRow = (
     <div
       className={cn(

@@ -167,7 +167,7 @@ export function SidebarCodeSection() {
 
   return (
     <div className="space-y-1">
-      <div className="flex items-center justify-between gap-2 px-3 py-1.5 border border-transparent">
+      <div className="flex items-center justify-between gap-2 px-2 py-1.5 border border-transparent">
         <NavLink
           to={codeHref}
           className={({ isActive }) =>
@@ -204,13 +204,13 @@ export function SidebarCodeSection() {
           </div>
         )}
       </div>
-      <div className="space-y-1 pl-3">
+      <div className="space-y-1 pl-2">
         {!repo ? (
-          <p className="px-3 py-1 text-[10px] text-zinc-500">No repo</p>
+          <p className="px-2 py-1 text-[10px] text-zinc-500">No repo</p>
         ) : loading ? (
-          <p className="px-3 py-1 text-[10px] text-zinc-500">Loading...</p>
+          <p className="px-2 py-1 text-[10px] text-zinc-500">Loading...</p>
         ) : entries.length === 0 ? (
-          <p className="px-3 py-1 text-[10px] text-zinc-500">No files</p>
+          <p className="px-2 py-1 text-[10px] text-zinc-500">No files</p>
         ) : (
           <FileTree
             entries={entries}
