@@ -35,12 +35,16 @@ while true; do
     # Use a one-off container so we're not stopped by 'docker compose down'.
     # HOST_WORKSPACE must be the real host path (set via env in docker-compose.yml)
     # because Docker resolves volume paths on the host, not inside this container.
+    # Use same project name as host (from directory name) so we replace existing containers, not create duplicates
+    PROJECT_NAME="$(basename "${HOST_WORKSPACE}")"
     if docker run --rm \
+      -e HOST_WORKSPACE="${HOST_WORKSPACE}" \
+      -e PROJECT_NAME="${PROJECT_NAME}" \
       -v /var/run/docker.sock:/var/run/docker.sock \
       -v "${HOST_WORKSPACE}:/workspace" \
       -w /workspace \
       docker:25 \
-      sh -c "docker compose -f /workspace/docker-compose.yml build app worker frontend && docker compose -f /workspace/docker-compose.yml up -d --no-deps app worker frontend"
+      sh -c 'docker compose -p "$PROJECT_NAME" -f /workspace/docker-compose.yml build app worker frontend && docker compose -p "$PROJECT_NAME" -f /workspace/docker-compose.yml up -d --no-deps app worker frontend'
     then
       echo "[$(date)] Rebuild complete."
     else
