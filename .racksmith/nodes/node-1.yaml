@@ -5,7 +5,7 @@ ssh_user: ekku
 ssh_port: 22
 managed: true
 groups: []
-tags:
+labels:
 - rpi4
 - 8gb
 os_family: debian
