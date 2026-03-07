@@ -1,17 +1,22 @@
-import { NavLink } from "react-router-dom";
+import { useLocation, NavLink } from "react-router-dom";
 import { Plus, Zap } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useActionsStore } from "@/stores/actions";
 
 export function SidebarActionsSection() {
+  const location = useLocation();
+  const pathname = location.pathname;
+  const actions = useActionsStore((s) => s.actions);
+
   return (
     <div className="space-y-1">
       <div className="flex items-center justify-between gap-2 px-2 py-1.5 border border-transparent">
         <NavLink
-          to="/actions/new"
+          to="/actions"
           className={({ isActive }) =>
             cn(
               "flex items-center gap-1.5 text-[11px] uppercase tracking-wide",
-              isActive
+              isActive || pathname.startsWith("/actions")
                 ? "text-zinc-100"
                 : "text-zinc-400 hover:text-zinc-200",
             )
@@ -21,12 +26,36 @@ export function SidebarActionsSection() {
           Actions
         </NavLink>
         <NavLink
-          to="/actions/new"
+          to="/actions/create"
           className="text-zinc-500 hover:text-zinc-100"
           aria-label="New action"
         >
           <Plus className="size-3" />
         </NavLink>
+      </div>
+      <div className="space-y-1 pl-2">
+        {actions.length === 0 ? (
+          <p className="px-2 py-1 text-[10px] text-zinc-500">
+            No actions yet
+          </p>
+        ) : (
+          actions.map((action) => (
+            <NavLink
+              key={action.slug}
+              to={`/actions/${action.slug}`}
+              className={({ isActive }) =>
+                cn(
+                  "flex items-center rounded-none px-2 py-1.5 text-[11px] border border-transparent",
+                  isActive
+                    ? "bg-zinc-800 text-zinc-100 border-zinc-700"
+                    : "text-zinc-300 hover:text-zinc-100 hover:bg-zinc-900",
+                )
+              }
+            >
+              <span className="truncate">{action.name}</span>
+            </NavLink>
+          ))
+        )}
       </div>
     </div>
   );

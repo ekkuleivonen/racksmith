@@ -6,7 +6,7 @@ import settings
 from arq.connections import RedisSettings
 from redis.asyncio import Redis
 
-from worker.functions import execute_run
+from worker.functions import execute_action_run, execute_run
 
 REDIS_SETTINGS = RedisSettings.from_dsn(settings.REDIS_URL)
 
@@ -23,7 +23,7 @@ async def _on_shutdown(ctx: dict) -> None:
 class WorkerSettings:
     """arq worker configuration. Pass to CLI: arq worker.settings.WorkerSettings"""
 
-    functions = [execute_run]
+    functions = [execute_run, execute_action_run]
     redis_settings = REDIS_SETTINGS
     max_jobs = 10
     on_startup = _on_startup

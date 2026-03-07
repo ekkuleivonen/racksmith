@@ -138,7 +138,7 @@ tasks:
     when: tailscale_auth_key is defined and tailscale_auth_key != ""
 ```
 
-There is also a browser UI at `/actions/new` (not linked in the sidebar) for
+There is also a browser UI at `/actions/create` for
 pasting the same YAML format directly.
 
 ### Other endpoints

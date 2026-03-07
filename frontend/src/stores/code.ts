@@ -7,15 +7,18 @@ type CodeStore = {
   entries: TreeEntry[];
   modifiedPaths: Record<string, true>;
   untrackedPaths: Record<string, true>;
+  expandedPaths: Record<string, boolean>;
   loading: boolean;
   loadTree: () => Promise<void>;
   refreshStatuses: () => Promise<void>;
+  toggleExpanded: (path: string) => void;
 };
 
 export const useCodeStore = create<CodeStore>((set) => ({
   entries: [],
   modifiedPaths: {},
   untrackedPaths: {},
+  expandedPaths: {},
   loading: false,
 
   loadTree: async () => {
@@ -65,4 +68,12 @@ export const useCodeStore = create<CodeStore>((set) => ({
       // ignore
     }
   },
+
+  toggleExpanded: (path: string) =>
+    set((state) => ({
+      expandedPaths: {
+        ...state.expandedPaths,
+        [path]: !state.expandedPaths[path],
+      },
+    })),
 }));

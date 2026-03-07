@@ -153,3 +153,154 @@ async def execute_run(
             os.unlink(tmp_vars_path)
         except OSError:
             pass
+
+
+async def execute_action_run(
+    ctx,
+    *,
+    run_id: str,
+    repo_path: str,
+    action_slug: str,
+    hosts: list[str],
+    action_vars: dict | None = None,
+    become: bool = False,
+    runtime_vars: dict | None = None,
+    become_password: str | None = None,
+) -> None:
+    """Execute a single action as an ansible-playbook run."""
+    redis = ctx["redis"]
+    channel = f"{RUN_EVENTS_CHANNEL_PREFIX}{run_id}:events"
+
+    repo = Path(repo_path)
+    inventory_dir = repo / INVENTORY_DIR
+    actions_dir = (repo / ACTIONS_DIR).resolve()
+
+    sync_builtin_actions(repo)
+
+    role_entry: dict | str = action_slug
+    if action_vars:
+        role_entry = {"role": action_slug, "vars": dict(action_vars)}
+
+    playbook = [
+        {
+            "name": f"Run action: {action_slug}",
+            "hosts": "all",
+            "gather_facts": False,
+            "become": become,
+            "roles": [role_entry],
+        }
+    ]
+
+    tmp_playbook = tempfile.NamedTemporaryFile(
+        mode="w", suffix=".yml", delete=False, prefix="racksmith_action_"
+    )
+    tmp_playbook.write(yaml.safe_dump(playbook, sort_keys=False))
+    tmp_playbook.close()
+    playbook_path = tmp_playbook.name
+
+    with tempfile.NamedTemporaryFile(
+        mode="w", suffix=".cfg", delete=False, prefix="racksmith_ansible_"
+    ) as f:
+        f.write(f"[defaults]\nroles_path = {actions_dir}\n")
+        ansible_config_path = f.name
+
+    async with aiosqlite.connect(settings.DB_PATH) as db:
+        await db.execute(
+            "UPDATE action_runs SET status = ?, started_at = ? WHERE id = ?",
+            ("running", _now_iso(), run_id),
+        )
+        await db.commit()
+
+    await redis.publish(channel, json.dumps({"type": "status", "status": "running"}))
+
+    command = [
+        "ansible-playbook",
+        playbook_path,
+        "-i",
+        str(inventory_dir),
+        "--limit",
+        ",".join(hosts),
+    ]
+
+    extra: dict[str, str] = dict(runtime_vars or {})
+    if become_password:
+        extra["ansible_become_pass"] = become_password
+
+    tmp_vars_path: str | None = None
+    if extra:
+        tmp = Path(tempfile.mktemp(suffix=".yml"))
+        tmp.write_text(yaml.safe_dump(extra))
+        tmp_vars_path = str(tmp)
+        command += ["--extra-vars", f"@{tmp_vars_path}"]
+        command_line = f"$ ansible-playbook [action: {action_slug}] [runtime vars redacted]\n"
+    else:
+        command_line = f"$ ansible-playbook [action: {action_slug}]\n"
+
+    await redis.publish(channel, json.dumps({"type": "output", "data": command_line}))
+    output = command_line
+
+    try:
+        env = os.environ.copy()
+        env["ANSIBLE_CONFIG"] = ansible_config_path
+        env["ANSIBLE_ROLES_PATH"] = str(actions_dir)
+        if settings.SSH_DISABLE_HOST_KEY_CHECK:
+            env["ANSIBLE_HOST_KEY_CHECKING"] = "False"
+        env["ANSIBLE_FORCE_COLOR"] = "True"
+        env["PY_COLORS"] = "1"
+        env["TERM"] = env.get("TERM") or "xterm-256color"
+
+        process = await asyncio.create_subprocess_exec(
+            *command,
+            cwd=repo_path,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.STDOUT,
+            env=env,
+        )
+    except FileNotFoundError:
+        error_msg = "ansible-playbook was not found on PATH.\n"
+        output += error_msg
+        await redis.publish(channel, json.dumps({"type": "output", "data": error_msg}))
+        async with aiosqlite.connect(settings.DB_PATH) as db:
+            await db.execute(
+                """UPDATE action_runs SET status = ?, started_at = ?, finished_at = ?, exit_code = ?, output = ?
+                   WHERE id = ?""",
+                ("failed", _now_iso(), _now_iso(), 127, output, run_id),
+            )
+            await db.commit()
+        await redis.publish(channel, json.dumps({"type": "status", "status": "failed"}))
+        await redis.publish(channel, json.dumps({"type": "done"}))
+        _cleanup_temp_files(playbook_path, ansible_config_path, tmp_vars_path)
+        return
+
+    assert process.stdout is not None
+    while True:
+        chunk = await process.stdout.read(4096)
+        if not chunk:
+            break
+        text = chunk.decode("utf-8", errors="replace")
+        output += text
+        await redis.publish(channel, json.dumps({"type": "output", "data": text}))
+
+    exit_code = await process.wait()
+    status = "completed" if exit_code == 0 else "failed"
+    finished_at = _now_iso()
+
+    async with aiosqlite.connect(settings.DB_PATH) as db:
+        await db.execute(
+            """UPDATE action_runs SET status = ?, finished_at = ?, exit_code = ?, output = ? WHERE id = ?""",
+            (status, finished_at, exit_code, output, run_id),
+        )
+        await db.commit()
+
+    await redis.publish(channel, json.dumps({"type": "status", "status": status}))
+    await redis.publish(channel, json.dumps({"type": "done"}))
+    _cleanup_temp_files(playbook_path, ansible_config_path, tmp_vars_path)
+
+
+def _cleanup_temp_files(*paths: str | None) -> None:
+    for p in paths:
+        if p:
+            try:
+                os.unlink(p)
+            except OSError:
+                pass

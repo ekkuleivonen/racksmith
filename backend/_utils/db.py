@@ -11,6 +11,7 @@ import aiosqlite
 import settings
 
 if TYPE_CHECKING:
+    from actions.schemas import ActionRun
     from stacks.schemas import StackRun
 
 _db: aiosqlite.Connection | None = None
@@ -54,6 +55,28 @@ async def init_db() -> None:
         except Exception:
             await _db.rollback()
 
+    await _db.execute(
+        """
+        CREATE TABLE IF NOT EXISTS action_runs (
+            id          TEXT PRIMARY KEY,
+            user_id     TEXT NOT NULL,
+            action_slug TEXT NOT NULL,
+            action_name TEXT NOT NULL,
+            status      TEXT NOT NULL,
+            created_at  TEXT NOT NULL,
+            started_at  TEXT,
+            finished_at TEXT,
+            exit_code   INTEGER,
+            hosts       TEXT NOT NULL,
+            output      TEXT NOT NULL DEFAULT '',
+            vars        TEXT NOT NULL DEFAULT '{}',
+            become      INTEGER NOT NULL DEFAULT 0,
+            commit_sha  TEXT
+        )
+        """
+    )
+    await _db.commit()
+
 
 async def close_db() -> None:
     """Close the database connection."""
@@ -87,4 +110,27 @@ def row_to_stack_run(row: aiosqlite.Row) -> StackRun:
         hosts=hosts,
         output=row["output"] or "",
         commit_sha=commit_sha,
+    )
+
+
+def row_to_action_run(row: aiosqlite.Row) -> ActionRun:
+    """Convert a database row to an ActionRun schema."""
+    from actions.schemas import ActionRun
+
+    hosts = json.loads(row["hosts"]) if isinstance(row["hosts"], str) else row["hosts"]
+    run_vars = json.loads(row["vars"]) if isinstance(row["vars"], str) else row["vars"]
+    return ActionRun(
+        id=row["id"],
+        action_slug=row["action_slug"],
+        action_name=row["action_name"],
+        status=row["status"],
+        created_at=row["created_at"],
+        started_at=row["started_at"],
+        finished_at=row["finished_at"],
+        exit_code=row["exit_code"],
+        hosts=hosts,
+        output=row["output"] or "",
+        vars=run_vars,
+        become=bool(row["become"]),
+        commit_sha=row["commit_sha"],
     )

@@ -32,10 +32,13 @@ async def lifespan(app: FastAPI):
     from arq.connections import RedisSettings
     from stacks.managers import stack_manager
 
+    from actions.managers import action_manager
+
     configure_logging()
     await init_db()
     arq_pool = await create_pool(RedisSettings.from_dsn(settings.REDIS_URL))
     stack_manager.set_arq_pool(arq_pool)
+    action_manager.set_arq_pool(arq_pool)
     try:
         yield
     finally:

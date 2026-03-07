@@ -1,19 +1,34 @@
 import { useEffect } from "react";
 import { Link } from "react-router-dom";
+import { Folder, Layout, Layers, Server, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useNodesStore } from "@/stores/nodes";
 import { useRackStore } from "@/stores/racks";
+import { useGroupsStore } from "@/stores/groups";
+import { useStackStore } from "@/stores/stacks";
+import { useActionsStore } from "@/stores/actions";
 
 export function HomeDashboard() {
   const nodes = useNodesStore((s) => s.nodes);
   const rackEntries = useRackStore((s) => s.rackEntries);
+  const groups = useGroupsStore((s) => s.groups);
+  const stacks = useStackStore((s) => s.stacks);
+  const actions = useActionsStore((s) => s.actions);
   const loadNodes = useNodesStore((s) => s.load);
   const loadRacks = useRackStore((s) => s.load);
+  const loadGroups = useGroupsStore((s) => s.load);
+  const loadStacks = useStackStore((s) => s.load);
+  const loadActions = useActionsStore((s) => s.load);
 
   useEffect(() => {
-    void loadNodes();
-    void loadRacks();
-  }, [loadNodes, loadRacks]);
+    void Promise.all([
+      loadNodes(),
+      loadRacks(),
+      loadGroups(),
+      loadStacks(),
+      loadActions(),
+    ]);
+  }, [loadNodes, loadRacks, loadGroups, loadStacks, loadActions]);
 
   return (
     <div className="flex-1 min-h-0 overflow-auto p-6">
@@ -21,7 +36,7 @@ export function HomeDashboard() {
         <div className="space-y-2">
           <h1 className="text-2xl font-semibold text-zinc-100">Welcome to Racksmith</h1>
           <p className="text-zinc-400 text-sm">
-            Your infrastructure is ready. Manage nodes, racks, and stacks from the sidebar.
+            Your infrastructure is ready. Manage nodes, racks, groups, stacks, and actions from the sidebar.
           </p>
         </div>
 
@@ -38,6 +53,27 @@ export function HomeDashboard() {
             <p className="text-2xl font-semibold text-zinc-100 mt-1">{rackEntries.length}</p>
             <Button variant="outline" size="sm" className="mt-2" asChild>
               <Link to="/racks">View racks</Link>
+            </Button>
+          </div>
+          <div className="border border-zinc-800 bg-zinc-900/40 p-4 rounded">
+            <p className="text-zinc-500 text-xs font-medium uppercase tracking-wider">Groups</p>
+            <p className="text-2xl font-semibold text-zinc-100 mt-1">{groups.length}</p>
+            <Button variant="outline" size="sm" className="mt-2" asChild>
+              <Link to="/groups">View groups</Link>
+            </Button>
+          </div>
+          <div className="border border-zinc-800 bg-zinc-900/40 p-4 rounded">
+            <p className="text-zinc-500 text-xs font-medium uppercase tracking-wider">Stacks</p>
+            <p className="text-2xl font-semibold text-zinc-100 mt-1">{stacks.length}</p>
+            <Button variant="outline" size="sm" className="mt-2" asChild>
+              <Link to="/stacks">View stacks</Link>
+            </Button>
+          </div>
+          <div className="border border-zinc-800 bg-zinc-900/40 p-4 rounded">
+            <p className="text-zinc-500 text-xs font-medium uppercase tracking-wider">Actions</p>
+            <p className="text-2xl font-semibold text-zinc-100 mt-1">{actions.length}</p>
+            <Button variant="outline" size="sm" className="mt-2" asChild>
+              <Link to="/actions">View actions</Link>
             </Button>
           </div>
         </div>

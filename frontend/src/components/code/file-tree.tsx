@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect } from "react";
 import {
   DndContext,
   useDraggable,
@@ -22,6 +22,7 @@ import {
   ContextMenuItem,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
+import { useCodeStore } from "@/stores/code";
 
 export type TreeEntry = {
   name: string;
@@ -83,7 +84,9 @@ function TreeItem({
 }) {
   const fullPath = basePath ? `${basePath}/${entry.name}` : entry.name;
   const depth = basePath ? basePath.split("/").filter(Boolean).length : 0;
-  const [open, setOpen] = useState(false);
+  const expandedPaths = useCodeStore((s) => s.expandedPaths);
+  const toggleExpanded = useCodeStore((s) => s.toggleExpanded);
+  const open = expandedPaths[fullPath] ?? false;
 
   const {
     attributes,
@@ -101,8 +104,10 @@ function TreeItem({
   });
 
   useEffect(() => {
-    if (pendingInput?.parentPath === fullPath) setOpen(true);
-  }, [pendingInput, fullPath]);
+    if (pendingInput?.parentPath === fullPath && !expandedPaths[fullPath]) {
+      toggleExpanded(fullPath);
+    }
+  }, [pendingInput, fullPath, toggleExpanded, expandedPaths]);
 
   const { hasChanges, hasUntracked } = (() => {
     const hasChangesInEntry = (
@@ -158,7 +163,7 @@ function TreeItem({
           type="button"
           onClick={(e) => {
             e.stopPropagation();
-            setOpen((o) => !o);
+            toggleExpanded(fullPath);
           }}
           className="shrink-0 p-0.5 -m-0.5 rounded hover:bg-zinc-700/50"
           aria-label={open ? "Collapse" : "Expand"}
