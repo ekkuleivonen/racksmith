@@ -245,14 +245,13 @@ export function RackItemPage() {
         </section>
 
         <section className="space-y-3">
-          <div className="space-y-1">
-            <h2 className="text-zinc-100 font-semibold">SSH</h2>
-            <p className="text-xs text-zinc-500">
-              Open a terminal to this device using the server host machine&apos;s SSH credentials.
-            </p>
-          </div>
           {isReachableRackItem(selectedItem) ? (
-            <SshTerminal rackId={rack.id} item={selectedItem} />
+            <SshTerminal
+              rackId={rack.id}
+              item={selectedItem}
+              title="SSH"
+              description="Open a terminal to this device using the server host machine's SSH credentials."
+            />
           ) : (
             <section className="border border-zinc-800 bg-zinc-900/30 p-4">
               <p className="text-zinc-500 text-sm">

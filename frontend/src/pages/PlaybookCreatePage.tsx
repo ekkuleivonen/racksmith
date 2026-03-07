@@ -4,6 +4,8 @@ import { toast } from "sonner";
 import { PlaybookEditorForm } from "@/components/playbooks/playbook-editor-form";
 import type { PlaybookUpsertRequest, RoleTemplate } from "@/lib/playbooks";
 import { createPlaybook, listPlaybooks } from "@/lib/playbooks";
+import { usePlaybookStore } from "@/stores/playbooks";
+import { useRackStore } from "@/stores/racks";
 
 const EMPTY_DRAFT: PlaybookUpsertRequest = {
   play_name: "",
@@ -64,7 +66,10 @@ export function PlaybookCreatePage() {
             try {
               const result = await createPlaybook(draft);
               toast.success("Playbook created");
-              window.dispatchEvent(new Event("racksmith:sidebar-refresh"));
+              await Promise.all([
+                usePlaybookStore.getState().load(),
+                useRackStore.getState().load(),
+              ]);
               navigate(`/playbooks/${result.playbook.id}`);
             } catch (error) {
               toast.error(error instanceof Error ? error.message : "Failed to create playbook");

@@ -34,12 +34,15 @@ async def get_file(path: str, session=Depends(auth_manager.get_current_session))
 @router.get("/file-statuses")
 async def get_file_statuses(session=Depends(auth_manager.get_current_session)):
     try:
-        modified_paths = code_manager.get_file_statuses(session)
+        statuses = code_manager.get_file_statuses(session)
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail="Active repo is not configured")
     except RuntimeError as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
-    return {"modified_paths": modified_paths}
+    return {
+        "modified_paths": statuses["modified"],
+        "untracked_paths": statuses["untracked"],
+    }
 
 
 @router.put("/file")

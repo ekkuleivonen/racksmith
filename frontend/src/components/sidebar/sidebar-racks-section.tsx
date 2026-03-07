@@ -1,4 +1,4 @@
-import { NavLink } from "react-router-dom";
+import { useLocation, NavLink } from "react-router-dom";
 import { ChevronRight, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -7,15 +7,19 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
-import { itemStatusKey } from "./types";
-import type { SidebarRacksSectionProps } from "./types";
+import { useRackStore } from "@/stores/racks";
+import { usePingStore } from "@/stores/ping";
+import { itemStatusKey } from "@/lib/ssh";
 
-export function SidebarRacksSection({
-  racksHref,
-  rackEntries,
-  pingStatuses,
-  pathname,
-}: SidebarRacksSectionProps) {
+export function SidebarRacksSection() {
+  const location = useLocation();
+  const pathname = location.pathname;
+
+  const rackEntries = useRackStore((s) => s.rackEntries);
+  const pingStatuses = usePingStore((s) => s.statuses);
+
+  const racksHref =
+    rackEntries[0] ? `/rack/view/${rackEntries[0].rack.id}` : "/rack/create";
   const defaultExpanded = rackEntries.map(({ rack }) => rack.id);
 
   return (

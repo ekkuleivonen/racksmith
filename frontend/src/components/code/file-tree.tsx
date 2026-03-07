@@ -8,7 +8,7 @@ export type TreeEntry = {
   children?: TreeEntry[];
 };
 
-export type FileStatus = "default" | "modified";
+export type FileStatus = "default" | "modified" | "untracked";
 
 type FileTreeProps = {
   entries: TreeEntry[];
@@ -16,6 +16,7 @@ type FileTreeProps = {
   onSelectFile: (path: string) => void;
   fileStatuses?: Record<string, FileStatus>;
   basePath?: string;
+  compact?: boolean;
 };
 
 function TreeItem({
@@ -24,26 +25,29 @@ function TreeItem({
   onSelectFile,
   fileStatuses,
   basePath = "",
+  compact = false,
 }: {
   entry: TreeEntry;
   selectedPath: string | null;
   onSelectFile: (path: string) => void;
   fileStatuses?: Record<string, FileStatus>;
   basePath: string;
+  compact?: boolean;
 }) {
   const fullPath = basePath ? `${basePath}/${entry.name}` : entry.name;
   const [open, setOpen] = useState(false);
-  const hasModifiedFiles = (() => {
-    const hasModifiedInEntry = (node: TreeEntry, currentPath: string): boolean => {
+  const hasChanges = (() => {
+    const hasChangesInEntry = (node: TreeEntry, currentPath: string): boolean => {
       if (node.type === "file") {
-        return (fileStatuses?.[currentPath] ?? "default") === "modified";
+        const status = fileStatuses?.[currentPath] ?? "default";
+        return status === "modified" || status === "untracked";
       }
       if (!node.children || node.children.length === 0) return false;
       return node.children.some((child) =>
-        hasModifiedInEntry(child, `${currentPath}/${child.name}`)
+        hasChangesInEntry(child, `${currentPath}/${child.name}`)
       );
     };
-    return hasModifiedInEntry(entry, fullPath);
+    return hasChangesInEntry(entry, fullPath);
   })();
 
   if (entry.type === "dir") {
@@ -53,7 +57,10 @@ function TreeItem({
         <button
           type="button"
           onClick={() => setOpen((o) => !o)}
-          className="flex items-center gap-1.5 py-1 px-2 w-full text-left text-sm text-zinc-400 hover:bg-zinc-800/50 hover:text-zinc-300 rounded"
+          className={cn(
+            "flex items-center gap-1.5 w-full text-left text-zinc-400 hover:bg-zinc-800/50 hover:text-zinc-300 rounded",
+            compact ? "py-0.5 px-1.5 text-xs" : "py-1 px-2 text-sm"
+          )}
         >
           {hasChildren ? (
             open ? (
@@ -70,16 +77,16 @@ function TreeItem({
             <Folder className="size-4 shrink-0 text-amber-500/80" />
           )}
           <span className="truncate">{entry.name}</span>
-          {hasModifiedFiles && (
+          {hasChanges && (
             <span
               className="ml-auto inline-flex size-2 rounded-full bg-amber-400/90"
-              title="Contains modified files"
-              aria-label="Contains modified files"
+              title="Contains modified or untracked files"
+              aria-label="Contains modified or untracked files"
             />
           )}
         </button>
         {open && hasChildren && (
-          <div className="pl-4 border-l border-zinc-800 ml-2 mt-0.5">
+          <div className={cn("border-l border-zinc-800 ml-2 mt-0.5", compact ? "pl-2" : "pl-4")}>
             {entry.children!.map((child) => (
               <TreeItem
                 key={child.name}
@@ -88,6 +95,7 @@ function TreeItem({
                 onSelectFile={onSelectFile}
                 fileStatuses={fileStatuses}
                 basePath={fullPath}
+                compact={compact}
               />
             ))}
           </div>
@@ -103,7 +111,8 @@ function TreeItem({
       type="button"
       onClick={() => onSelectFile(fullPath)}
       className={cn(
-        "flex items-center gap-1.5 py-1 px-2 w-full text-left text-sm rounded",
+        "flex items-center gap-1.5 w-full text-left rounded",
+        compact ? "py-0.5 px-1.5 text-xs" : "py-1 px-2 text-sm",
         isSelected
           ? "bg-zinc-700 text-zinc-100"
           : "text-zinc-400 hover:bg-zinc-800/50 hover:text-zinc-300"
@@ -124,6 +133,18 @@ function TreeItem({
           M
         </span>
       )}
+      {status === "untracked" && (
+        <span
+          className={cn(
+            "inline-flex h-4 min-w-4 items-center justify-center rounded text-[10px] font-medium px-1",
+            "text-zinc-400"
+          )}
+          title="Untracked file"
+          aria-label="Untracked file"
+        >
+          U
+        </span>
+      )}
     </button>
   );
 }
@@ -134,9 +155,10 @@ export function FileTree({
   onSelectFile,
   fileStatuses,
   basePath = "",
+  compact = false,
 }: FileTreeProps) {
   return (
-    <div className="py-1">
+    <div className={compact ? "py-0.5" : "py-1"}>
       {entries.map((entry) => (
         <TreeItem
           key={basePath ? `${basePath}/${entry.name}` : entry.name}
@@ -145,6 +167,7 @@ export function FileTree({
           onSelectFile={onSelectFile}
           fileStatuses={fileStatuses}
           basePath={basePath}
+          compact={compact}
         />
       ))}
     </div>

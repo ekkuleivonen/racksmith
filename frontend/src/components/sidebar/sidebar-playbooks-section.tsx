@@ -1,18 +1,19 @@
-import { NavLink } from "react-router-dom";
+import { useLocation, NavLink } from "react-router-dom";
 import { Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { SidebarPlaybooksSectionProps } from "./types";
+import { usePlaybookStore } from "@/stores/playbooks";
 
-export function SidebarPlaybooksSection({
-  playbooksHref,
-  playbooks,
-  pathname,
-}: SidebarPlaybooksSectionProps) {
+export function SidebarPlaybooksSection() {
+  const location = useLocation();
+  const pathname = location.pathname;
+
+  const playbooks = usePlaybookStore((s) => s.playbooks);
+
   return (
     <div className="space-y-1">
       <div className="flex items-center justify-between gap-2 px-3 py-1.5 border border-transparent">
         <NavLink
-          to={playbooksHref}
+          to="/playbooks"
           className={({ isActive }) =>
             cn(
               "text-[11px] uppercase tracking-wide",

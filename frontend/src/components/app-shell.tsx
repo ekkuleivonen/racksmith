@@ -1,5 +1,5 @@
-import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
-import { Navigate, useLocation, useNavigate } from "react-router-dom";
+import { type ReactNode, useEffect } from "react";
+import { Navigate, useLocation } from "react-router-dom";
 import { Copy } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -18,225 +18,69 @@ import {
   ResizablePanelGroup,
 } from "@/components/ui/resizable";
 import { Sidebar } from "@/components/sidebar/sidebar";
-import {
-  activateLocalRepo,
-  getSetupStatus,
-  listLocalRepos,
-  type LocalRepo,
-  type SetupStatus,
-} from "@/lib/setup";
-import { getRack, listRacks } from "@/lib/racks";
-import { listPlaybooks, type PlaybookSummary } from "@/lib/playbooks";
-import { fetchMachinePublicKey, fetchPingStatuses, type PingStatus } from "@/lib/ssh";
 import { useAuth } from "@/context/auth-context";
-import { itemStatusKey, type RackNavEntry } from "@/components/sidebar/types";
+import { useSetupStore } from "@/stores/setup";
+import { useRackStore } from "@/stores/racks";
+import { usePlaybookStore } from "@/stores/playbooks";
+import { usePingStore } from "@/stores/ping";
 
 type AppShellProps = {
   children: ReactNode;
   title: string;
 };
 
-async function loadSidebarData() {
-  const [nextStatus, nextRacks, nextLocalRepos, nextPlaybooksResult] = await Promise.all([
-    getSetupStatus(),
-    listRacks().catch(() => []),
-    listLocalRepos().catch(() => []),
-    listPlaybooks().catch(() => ({ playbooks: [], role_templates: [] })),
+export function AppShell({ children }: AppShellProps) {
+  const location = useLocation();
+
+  const loading = useSetupStore((s) => s.loading);
+  const status = useSetupStore((s) => s.status);
+  const publicKeyOpen = useSetupStore((s) => s.publicKeyOpen);
+  const publicKey = useSetupStore((s) => s.publicKey);
+  const loadingPublicKey = useSetupStore((s) => s.loadingPublicKey);
+  const setPublicKeyOpen = useSetupStore((s) => s.setPublicKeyOpen);
+  const loadSetup = useSetupStore((s) => s.load);
+  const loadRacks = useRackStore((s) => s.load);
+  const loadPlaybooks = usePlaybookStore((s) => s.load);
+
+  const rackEntries = useRackStore((s) => s.rackEntries);
+  const startPolling = usePingStore((s) => s.startPolling);
+  const stopPolling = usePingStore((s) => s.stopPolling);
+
+  useEffect(() => {
+    void Promise.all([loadSetup(), loadRacks(), loadPlaybooks()]);
+  }, [location.pathname, loadSetup, loadRacks, loadPlaybooks]);
+
+  useEffect(() => {
+    if (!status?.repo_ready || rackEntries.length === 0) {
+      stopPolling();
+      return;
+    }
+    const targets = rackEntries.flatMap(({ rack, items }) =>
+      items.map((item) => ({ rack_id: rack.id, item_id: item.id })),
+    );
+    startPolling(targets);
+    return () => {
+      stopPolling();
+    };
+  }, [
+    status?.repo_ready,
+    status?.repo?.full_name,
+    rackEntries,
+    startPolling,
+    stopPolling,
   ]);
 
-  const nextRackEntries = await Promise.all(
-    nextRacks.map(async (rack) => {
-      const detail = await getRack(rack.id);
-      return { rack, items: detail.items.filter((item) => item.managed) };
-    }),
-  );
-
-  return {
-    nextStatus,
-    nextRackEntries,
-    nextLocalRepos,
-    nextPlaybooks: nextPlaybooksResult.playbooks,
-  };
-}
-
-export function AppShell({ children }: AppShellProps) {
-  const { logout } = useAuth();
-  const location = useLocation();
-  const navigate = useNavigate();
-  const [status, setStatus] = useState<SetupStatus | null>(null);
-  const [rackEntries, setRackEntries] = useState<RackNavEntry[]>([]);
-  const [playbooks, setPlaybooks] = useState<PlaybookSummary[]>([]);
-  const [localRepos, setLocalRepos] = useState<LocalRepo[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [switchingRepo, setSwitchingRepo] = useState(false);
-  const [publicKeyOpen, setPublicKeyOpen] = useState(false);
-  const [publicKey, setPublicKey] = useState("");
-  const [loadingPublicKey, setLoadingPublicKey] = useState(false);
-  const [pingStatuses, setPingStatuses] = useState<Record<string, PingStatus>>(
-    {},
-  );
-
-  const racksHref = useMemo(
-    () =>
-      rackEntries[0] ? `/rack/view/${rackEntries[0].rack.id}` : "/rack/create",
-    [rackEntries],
-  );
-  const playbooksHref = useMemo(() => "/playbooks", []);
-
-  const pingTargets = useMemo(
-    () =>
-      rackEntries.flatMap(({ rack, items }) =>
-        items.map((item) => ({
-          rack_id: rack.id,
-          item_id: item.id,
-        })),
-      ),
-    [rackEntries],
-  );
-
-  const refreshSidebar = useCallback(async () => {
-    const { nextStatus, nextRackEntries, nextLocalRepos, nextPlaybooks } =
-      await loadSidebarData();
-    setStatus(nextStatus);
-    setRackEntries(nextRackEntries);
-    setPlaybooks(nextPlaybooks);
-    setLocalRepos(nextLocalRepos);
-  }, []);
-
-  useEffect(() => {
-    let active = true;
-    void loadSidebarData()
-      .then(({ nextStatus, nextRackEntries, nextLocalRepos, nextPlaybooks }) => {
-        if (!active) return;
-        setStatus(nextStatus);
-        setRackEntries(nextRackEntries);
-        setPlaybooks(nextPlaybooks);
-        setLocalRepos(nextLocalRepos);
-      })
-      .catch(() => {
-        if (!active) return;
-        setStatus(null);
-        setRackEntries([]);
-        setPlaybooks([]);
-        setLocalRepos([]);
-      })
-      .finally(() => {
-        if (active) setLoading(false);
-      });
-    return () => {
-      active = false;
-    };
-  }, [location.pathname]);
-
-  useEffect(() => {
-    const handleRefresh = () => {
-      void refreshSidebar();
-    };
-    window.addEventListener("racksmith:sidebar-refresh", handleRefresh);
-    return () => {
-      window.removeEventListener("racksmith:sidebar-refresh", handleRefresh);
-    };
-  }, [refreshSidebar]);
-
-  useEffect(() => {
-    if (!status?.repo_ready || pingTargets.length === 0) {
-      setPingStatuses({});
-      return;
-    }
-
-    let active = true;
-    let timer: number | null = null;
-
-    const poll = async () => {
-      try {
-        const response = await fetchPingStatuses(pingTargets);
-        if (!active) return;
-        setPingStatuses(
-          Object.fromEntries(
-            response.statuses.map((entry) => [
-              itemStatusKey(entry.rack_id, entry.item_id),
-              entry.status,
-            ]),
-          ),
-        );
-      } catch {
-        if (!active) return;
-      } finally {
-        if (active) {
-          timer = window.setTimeout(() => {
-            void poll();
-          }, 10000);
-        }
-      }
-    };
-
-    void poll();
-
-    return () => {
-      active = false;
-      if (timer !== null) window.clearTimeout(timer);
-    };
-  }, [pingTargets, status?.repo_ready, status?.repo?.full_name]);
-
-  const openPublicKeyDialog = useCallback(async () => {
-    setPublicKeyOpen(true);
-    if (publicKey || loadingPublicKey) {
-      return;
-    }
-    setLoadingPublicKey(true);
-    try {
-      const result = await fetchMachinePublicKey();
-      setPublicKey(result.public_key);
-    } catch (error) {
-      toast.error(
-        error instanceof Error ? error.message : "Failed to load public key",
-      );
-    } finally {
-      setLoadingPublicKey(false);
-    }
-  }, [loadingPublicKey, publicKey]);
-
-  const copyPublicKey = useCallback(async () => {
-    if (!publicKey) {
-      return;
-    }
+  const copyPublicKey = async () => {
+    if (!publicKey) return;
     try {
       await navigator.clipboard.writeText(publicKey);
       toast.success("Public key copied");
     } catch {
       toast.error("Failed to copy public key");
     }
-  }, [publicKey]);
+  };
 
-  const handleRepoChange = useCallback(
-    async (value: string) => {
-      const [owner, repo] = value.split("/", 2);
-      if (!owner || !repo) return;
-      setSwitchingRepo(true);
-      try {
-        await activateLocalRepo(owner, repo);
-        const { nextStatus, nextRackEntries, nextLocalRepos, nextPlaybooks } =
-          await loadSidebarData();
-        setStatus(nextStatus);
-        setRackEntries(nextRackEntries);
-        setPlaybooks(nextPlaybooks);
-        navigate(
-          nextStatus.rack_ready && nextRackEntries[0]
-            ? `/rack/view/${nextRackEntries[0].rack.id}`
-            : "/rack/create",
-          { replace: true },
-        );
-        toast.success(`Switched to ${owner}/${repo}`);
-      } catch (error) {
-        toast.error(
-          error instanceof Error ? error.message : "Failed to switch repo",
-        );
-      } finally {
-        setSwitchingRepo(false);
-      }
-    },
-    [navigate],
-  );
+  const { logout } = useAuth();
 
   if (loading) {
     return (
@@ -263,24 +107,11 @@ export function AppShell({ children }: AppShellProps) {
           collapsible
           className="min-w-0"
         >
-          <Sidebar
-            status={status}
-            rackEntries={rackEntries}
-            playbooks={playbooks}
-            localRepos={localRepos}
-            pingStatuses={pingStatuses}
-            racksHref={racksHref}
-            playbooksHref={playbooksHref}
-            pathname={location.pathname}
-            switchingRepo={switchingRepo}
-            onRepoChange={handleRepoChange}
-            onOpenPublicKey={openPublicKeyDialog}
-            onLogout={logout}
-          />
+          <Sidebar onLogout={logout} />
         </ResizablePanel>
         <ResizableHandle withHandle className="bg-zinc-800" />
         <ResizablePanel defaultSize={85} minSize={30} className="min-w-0">
-          <main className="h-full flex-1 min-w-0 overflow-hidden">
+          <main className="h-full flex-1 min-w-0 overflow-auto">
             {children}
           </main>
         </ResizablePanel>
@@ -291,7 +122,8 @@ export function AppShell({ children }: AppShellProps) {
           <AlertDialogHeader className="items-start text-left">
             <AlertDialogTitle>Racksmith public key</AlertDialogTitle>
             <AlertDialogDescription className="text-left">
-              Add this key to the target host&apos;s `authorized_keys` so Racksmith can SSH in without a password.
+              Add this key to the target host&apos;s `authorized_keys` so
+              Racksmith can SSH in without a password.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <div className="space-y-2">

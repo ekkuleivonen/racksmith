@@ -19,6 +19,10 @@ export type PingStatusEntry = PingStatusTarget & {
   status: PingStatus;
 };
 
+export function itemStatusKey(rackId: string, itemId: string) {
+  return `${rackId}:${itemId}`;
+}
+
 export async function fetchCommandHistory(rackId: string, itemId: string) {
   return apiGet<{ history: CommandHistoryEntry[] }>(`/ssh/racks/${rackId}/items/${itemId}/history`);
 }

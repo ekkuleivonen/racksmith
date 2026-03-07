@@ -287,6 +287,17 @@ def detect_base_branch(repo_path: Path) -> str:
 
 
 def get_modified_paths(repo_path: Path) -> list[str]:
+    statuses = get_file_statuses(repo_path)
+    return statuses["modified"]
+
+
+def get_untracked_paths(repo_path: Path) -> list[str]:
+    statuses = get_file_statuses(repo_path)
+    return statuses["untracked"]
+
+
+def get_file_statuses(repo_path: Path) -> dict[str, list[str]]:
+    """Return modified and untracked paths from git status --porcelain."""
     result = subprocess.run(
         ["git", "-C", str(repo_path), "status", "--porcelain"],
         capture_output=True,
@@ -295,18 +306,24 @@ def get_modified_paths(repo_path: Path) -> list[str]:
     if result.returncode != 0:
         raise RuntimeError("Failed to read git status")
     modified: set[str] = set()
+    untracked: set[str] = set()
     for line in result.stdout.splitlines():
         if len(line) < 4:
             continue
+        status = line[:2]
         part = line[3:]
         if " -> " in part:
             _, new = part.split(" -> ", 1)
             candidate = new.strip()
         else:
             candidate = part.strip()
-        if candidate:
+        if not candidate:
+            continue
+        if status == "??":
+            untracked.add(candidate)
+        else:
             modified.add(candidate)
-    return sorted(modified)
+    return {"modified": sorted(modified), "untracked": sorted(untracked)}
 
 
 def slugify_branch_name(value: str) -> str:

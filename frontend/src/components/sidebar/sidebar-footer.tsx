@@ -9,19 +9,41 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import type { SidebarFooterProps } from "./types";
+import { useSetupStore } from "@/stores/setup";
+import { useRackStore } from "@/stores/racks";
 
 export const MANAGE_REPOS_VALUE = "__manage_repos__";
 
-export function SidebarFooter({
-  status,
-  localRepos,
-  switchingRepo,
-  onRepoChange,
-  onPublicKeyClick,
-  onLogout,
-}: SidebarFooterProps) {
+type SidebarFooterProps = {
+  onLogout: () => void;
+};
+
+export function SidebarFooter({ onLogout }: SidebarFooterProps) {
   const navigate = useNavigate();
+
+  const status = useSetupStore((s) => s.status);
+  const openPublicKey = useSetupStore((s) => s.openPublicKey);
+  const localRepos = useSetupStore((s) => s.localRepos);
+  const switchingRepo = useSetupStore((s) => s.switchingRepo);
+  const switchRepo = useSetupStore((s) => s.switchRepo);
+
+  const handleRepoChange = async (value: string) => {
+    if (!value || switchingRepo) return;
+    if (value === MANAGE_REPOS_VALUE) {
+      navigate("/?manageRepos=1");
+      return;
+    }
+    const [owner, repo] = value.split("/", 2);
+    if (!owner || !repo) return;
+    await switchRepo(owner, repo);
+    const newStatus = useSetupStore.getState().status;
+    const newRackEntries = useRackStore.getState().rackEntries;
+    const path =
+      newStatus?.rack_ready && newRackEntries[0]
+        ? `/rack/view/${newRackEntries[0].rack.id}`
+        : "/rack/create";
+    navigate(path, { replace: true });
+  };
 
   return (
     <div className="mt-auto space-y-3">
@@ -31,14 +53,7 @@ export function SidebarFooter({
           value={
             status?.repo ? `${status.repo.owner}/${status.repo.repo}` : ""
           }
-          onValueChange={(value) => {
-            if (!value || switchingRepo) return;
-            if (value === MANAGE_REPOS_VALUE) {
-              navigate("/?manageRepos=1");
-              return;
-            }
-            onRepoChange(value);
-          }}
+          onValueChange={handleRepoChange}
         >
           <SelectTrigger className="min-w-0 flex-1 text-[10px]" size="sm">
             <SelectValue placeholder="Select repo" />
@@ -62,7 +77,7 @@ export function SidebarFooter({
           variant="outline"
           size="icon"
           className="size-7 shrink-0"
-          onClick={onPublicKeyClick}
+          onClick={() => void openPublicKey()}
           aria-label="Show Racksmith public key"
           title="Show Racksmith public key"
         >

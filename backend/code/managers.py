@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from github.misc import (
-    get_modified_paths,
+    get_file_statuses as get_git_file_statuses,
     is_yaml_path,
     safe_relative_path,
     validate_yaml_text,
@@ -37,8 +37,8 @@ class CodeManager:
             validate_yaml_text(content)
         file_path.write_text(content, encoding="utf-8")
 
-    def get_file_statuses(self, session) -> list[str]:
-        return get_modified_paths(setup_manager.active_repo_path(session))
+    def get_file_statuses(self, session) -> dict[str, list[str]]:
+        return get_git_file_statuses(setup_manager.active_repo_path(session))
 
 
 code_manager = CodeManager()

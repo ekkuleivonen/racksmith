@@ -1,8 +1,8 @@
-type SidebarHeaderProps = {
-  repoFullName?: string | null;
-};
+import { useSetupStore } from "@/stores/setup";
 
-export function SidebarHeader({ repoFullName }: SidebarHeaderProps) {
+export function SidebarHeader() {
+  const repoFullName = useSetupStore((s) => s.status?.repo?.full_name);
+
   return (
     <div className="space-y-1">
       <p className="text-sm text-zinc-100 font-semibold tracking-wide">

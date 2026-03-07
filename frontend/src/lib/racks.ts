@@ -46,6 +46,11 @@ export type RackDetail = {
   updated_at: string;
 };
 
+export type RackNavEntry = {
+  rack: RackSummary;
+  items: RackItem[];
+};
+
 export type ZoneSelection = {
   startU: number;
   heightU: number;

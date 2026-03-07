@@ -14,6 +14,8 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { getRack, listRacks, type RackDetail, type RackItem } from "@/lib/racks";
+import { usePlaybookStore } from "@/stores/playbooks";
+import { useRackStore } from "@/stores/racks";
 import {
   createPlaybookRun,
   deletePlaybook,
@@ -406,7 +408,10 @@ export function PlaybookDetailPage() {
                     roles: result.playbook.role_entries,
                   });
                   setRoleTemplates(result.playbook.role_templates);
-                  window.dispatchEvent(new Event("racksmith:sidebar-refresh"));
+                  await Promise.all([
+                    usePlaybookStore.getState().load(),
+                    useRackStore.getState().load(),
+                  ]);
                   if (result.playbook.id !== playbookId) {
                     navigate(`/playbooks/${result.playbook.id}`, { replace: true });
                   }
@@ -422,7 +427,10 @@ export function PlaybookDetailPage() {
                 setSaving(true);
                 try {
                   await deletePlaybook(playbookId);
-                  window.dispatchEvent(new Event("racksmith:sidebar-refresh"));
+                  await Promise.all([
+                    usePlaybookStore.getState().load(),
+                    useRackStore.getState().load(),
+                  ]);
                   toast.success("Playbook deleted");
                   navigate("/playbooks", { replace: true });
                 } catch (error) {

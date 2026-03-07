@@ -8,9 +8,16 @@ import type { RackItem } from "@/lib/racks";
 interface SshTerminalProps {
   rackId: string;
   item: RackItem;
+  title?: string;
+  description?: string;
 }
 
-export function SshTerminal({ rackId, item }: SshTerminalProps) {
+export function SshTerminal({
+  rackId,
+  item,
+  title,
+  description,
+}: SshTerminalProps) {
   const [enabled, setEnabled] = useState(false);
   const [connected, setConnected] = useState(false);
   const hostRef = useRef<HTMLDivElement | null>(null);
@@ -146,24 +153,48 @@ export function SshTerminal({ rackId, item }: SshTerminalProps) {
     setEnabled(false);
   };
 
+  const hasHeader = title || description;
+
   if (!enabled) {
     return (
       <div className="space-y-2">
-        <Button size="sm" onClick={() => setEnabled(true)}>
-          Open SSH session
-        </Button>
+        {hasHeader ? (
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex flex-col gap-0.5 text-[11px] text-zinc-500 min-w-0">
+              {title ? (
+                <h2 className="text-zinc-100 font-semibold text-sm">{title}</h2>
+              ) : null}
+              {description ? (
+                <p className="text-zinc-500">{description}</p>
+              ) : null}
+            </div>
+            <Button
+              size="sm"
+              onClick={() => setEnabled(true)}
+              className="shrink-0"
+            >
+              Open SSH session
+            </Button>
+          </div>
+        ) : (
+          <Button size="sm" onClick={() => setEnabled(true)}>
+            Open SSH session
+          </Button>
+        )}
       </div>
     );
   }
 
   return (
     <div className="space-y-2">
-      <div className="flex items-center justify-between text-[11px] text-zinc-500">
-        <span>
-          {connected ? "Connected" : "Connecting"} • {item.ssh_user}@{item.host}
-          :{item.ssh_port}
-        </span>
-        <div className="flex items-center gap-1">
+      <div className="flex items-end justify-between gap-3 text-[11px] text-zinc-500">
+        <div className="flex flex-col gap-0.5 min-w-0">
+          {title ? (
+            <h2 className="text-zinc-100 font-semibold text-sm">{title}</h2>
+          ) : null}
+          {description ? <p className="text-zinc-500">{description}</p> : null}
+        </div>
+        <div className="flex items-center gap-1 shrink-0">
           <Button
             size="sm"
             variant="ghost"
@@ -184,7 +215,7 @@ export function SshTerminal({ rackId, item }: SshTerminalProps) {
           </Button>
         </div>
       </div>
-      <div className="border border-zinc-800 bg-zinc-950 h-[36rem] p-2">
+      <div className="border border-zinc-800 bg-zinc-950 h-[min(34rem,60vh)] min-h-[18rem] p-2">
         <div ref={hostRef} className="h-full w-full overflow-hidden" />
       </div>
     </div>

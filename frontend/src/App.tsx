@@ -110,6 +110,16 @@ function AppRoutes() {
               }
             />
             <Route
+              path="/code/:owner/:repo/*"
+              element={
+                <ProtectedRoute>
+                  <AppShell title="Code">
+                    <CodePage />
+                  </AppShell>
+                </ProtectedRoute>
+              }
+            />
+            <Route
               path="/code"
               element={
                 <ProtectedRoute>
