@@ -1,6 +1,7 @@
 - name: Set system hostname
   ansible.builtin.hostname:
     name: '{{ target_hostname }}'
+    use: debian
 - name: Ensure /etc/hosts contains localhost mapping for hostname
   ansible.builtin.lineinfile:
     path: /etc/hosts
