@@ -1,17 +1,24 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { Power, RefreshCw } from "lucide-react";
+import { Layers, Power, RefreshCw, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { SshTerminal } from "@/components/ssh/ssh-terminal";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import { getNode, isReachableNode, refreshNode, type Node } from "@/lib/nodes";
+import {
+  deleteNode,
+  getNode,
+  isReachableNode,
+  refreshNode,
+  type Node,
+} from "@/lib/nodes";
 import {
   fetchPingStatuses,
   rebootNode as rebootNodeApi,
   type PingStatus,
 } from "@/lib/ssh";
+import { listStacks, type StackSummary } from "@/lib/stacks";
 import { cn } from "@/lib/utils";
 
 export function NodePage() {
@@ -21,7 +28,9 @@ export function NodePage() {
   const [loading, setLoading] = useState(true);
   const [rebooting, setRebooting] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [pingStatus, setPingStatus] = useState<PingStatus>("unknown");
+  const [stacks, setStacks] = useState<StackSummary[]>([]);
 
   const loadNode = useCallback(async () => {
     if (!nodeSlug) {
@@ -49,6 +58,13 @@ export function NodePage() {
       active = false;
     };
   }, [loadNode]);
+
+  useEffect(() => {
+    if (!nodeSlug) return;
+    listStacks()
+      .then((data) => setStacks(data.stacks))
+      .catch(() => setStacks([]));
+  }, [nodeSlug]);
 
   useEffect(() => {
     if (!nodeSlug || !node?.host) {
@@ -224,6 +240,33 @@ export function NodePage() {
               >
                 <Power className="size-3.5" />
               </Button>
+              <Button
+                size="icon"
+                variant="outline"
+                className="h-8 w-8 text-red-400 hover:text-red-300 hover:bg-red-500/10"
+                aria-label="Delete node"
+                disabled={deleting}
+                onClick={async () => {
+                  if (!window.confirm("Delete this node? This cannot be undone."))
+                    return;
+                  setDeleting(true);
+                  try {
+                    await deleteNode(node.slug);
+                    toast.success("Node deleted");
+                    navigate(rackSlug ? `/rack/view/${rackSlug}` : "/nodes");
+                  } catch (error) {
+                    toast.error(
+                      error instanceof Error
+                        ? error.message
+                        : "Failed to delete node",
+                    );
+                  } finally {
+                    setDeleting(false);
+                  }
+                }}
+              >
+                <Trash2 className="size-3.5" />
+              </Button>
             </div>
           </div>
 
@@ -274,6 +317,79 @@ export function NodePage() {
                 first from the rack view.
               </p>
             </section>
+          )}
+        </section>
+
+        <section className="border border-zinc-800 bg-zinc-900/30 p-4 space-y-3">
+          <div className="flex items-center gap-2">
+            <Layers className="size-4 text-zinc-400" />
+            <h2 className="text-sm font-medium text-zinc-200">
+              Available stacks
+            </h2>
+          </div>
+          {stacks.length === 0 ? (
+            <p className="text-xs text-zinc-500">
+              No stacks defined yet.{" "}
+              <button
+                type="button"
+                className="underline underline-offset-2 hover:text-zinc-300"
+                onClick={() => navigate("/stacks/create")}
+              >
+                Create one
+              </button>
+            </p>
+          ) : (
+            <ul className="space-y-2">
+              {stacks.map((stack) => (
+                <li
+                  key={stack.id}
+                  className="flex items-center justify-between gap-3 rounded border border-zinc-800 bg-zinc-900/60 px-3 py-2"
+                >
+                  <div className="min-w-0 space-y-0.5">
+                    <p className="text-sm text-zinc-200 truncate">
+                      {stack.name}
+                    </p>
+                    {stack.description ? (
+                      <p className="text-xs text-zinc-500 truncate">
+                        {stack.description}
+                      </p>
+                    ) : null}
+                    <div className="flex flex-wrap gap-1 pt-0.5">
+                      {stack.roles.slice(0, 4).map((role) => (
+                        <Badge
+                          key={role}
+                          variant="outline"
+                          className="text-[10px] border-zinc-700 text-zinc-400"
+                        >
+                          {role}
+                        </Badge>
+                      ))}
+                      {stack.roles.length > 4 ? (
+                        <Badge
+                          variant="outline"
+                          className="text-[10px] border-zinc-700 text-zinc-400"
+                        >
+                          +{stack.roles.length - 4} more
+                        </Badge>
+                      ) : null}
+                    </div>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="shrink-0 gap-1.5"
+                    onClick={() =>
+                      navigate(
+                        `/stacks/${stack.id}?node=${encodeURIComponent(node.slug)}`,
+                      )
+                    }
+                  >
+                    <Layers className="size-3" />
+                    Run
+                  </Button>
+                </li>
+              ))}
+            </ul>
           )}
         </section>
       </div>

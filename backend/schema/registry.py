@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from pydantic import BaseModel
 
-from schema.models import ActionConfig, GroupConfig, NodeConfig, RackConfig
+from schema.models import ActionConfig, GroupConfig, NodeConfig, RackConfig, StackConfig
 
 SCHEMA_REGISTRY: dict[str, type[BaseModel]] = {
     "nodes/*.yaml": NodeConfig,
@@ -18,4 +18,6 @@ SCHEMA_REGISTRY: dict[str, type[BaseModel]] = {
     "racks/*.yml": RackConfig,
     "actions/*/action.yaml": ActionConfig,
     "actions/*/action.yml": ActionConfig,
+    "stacks/*.yaml": StackConfig,
+    "stacks/*.yml": StackConfig,
 }

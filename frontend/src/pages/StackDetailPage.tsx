@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { ChevronDown, LoaderCircle, Play, Search } from "lucide-react";
 import { toast } from "sonner";
 import { StackEditorForm } from "@/components/stacks/stack-editor-form";
@@ -132,9 +132,13 @@ function SearchableFilterDropdown({
 export function StackDetailPage() {
   const { stackId = "" } = useParams();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const prefilledNode = searchParams.get("node") ?? undefined;
   const [draft, setDraft] = useState<StackUpsertRequest | null>(null);
   const [actions, setActions] = useState<Action[]>([]);
-  const [targets, setTargets] = useState<StackTargetSelection>(EMPTY_TARGETS);
+  const [targets, setTargets] = useState<StackTargetSelection>(
+    prefilledNode ? { groups: [], tags: [], nodes: [prefilledNode] } : EMPTY_TARGETS,
+  );
   const [resolvedHosts, setResolvedHosts] = useState<string[]>([]);
   const [runs, setRuns] = useState<StackRun[]>([]);
   const [viewingRunId, setViewingRunId] = useState<string | null>(null);

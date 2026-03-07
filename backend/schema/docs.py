@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from schema.models import ActionConfig, ActionInputConfig, GroupConfig, NodeConfig, RackConfig
+from schema.models import ActionConfig, ActionInputConfig, GroupConfig, NodeConfig, RackConfig, StackPlay
 
 
 def _model_to_markdown(name: str, model: type) -> str:
@@ -41,5 +41,25 @@ def generate_docs() -> str:
         _model_to_markdown("Rack (racks/<slug>.yaml)", RackConfig),
         _model_to_markdown("Action (actions/<slug>/action.yaml)", ActionConfig),
         _model_to_markdown("Action Input", ActionInputConfig),
+        "## Stack (stacks/<slug>.yml)",
+        "",
+        "A stack file is a **single-element YAML list** containing one Ansible play.",
+        "Each stack composes multiple actions (roles) in execution order.",
+        "Example:",
+        "```yaml",
+        "- name: Basic Health Check",
+        "  hosts: all",
+        "  gather_facts: false",
+        "  become: false",
+        "  vars:",
+        "    racksmith_description: Verifies connectivity and gathers system facts",
+        "  roles:",
+        "    - ping",
+        "    - role: get-info",
+        "      vars:",
+        "        some_var: value",
+        "```",
+        "",
+        _model_to_markdown("Stack Play fields", StackPlay),
     ]
     return "\n".join(sections)

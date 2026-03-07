@@ -69,8 +69,9 @@ export type StackRun = {
   commit_sha: string | null;
 };
 
-export async function listStacks() {
-  return apiGet<{ stacks: StackSummary[]; actions: Action[] }>("/stacks");
+export async function listStacks(nodeSlug?: string) {
+  const suffix = nodeSlug ? `?node=${encodeURIComponent(nodeSlug)}` : "";
+  return apiGet<{ stacks: StackSummary[]; actions: Action[] }>(`/stacks${suffix}`);
 }
 
 export async function getStack(stackId: string) {
