@@ -53,13 +53,13 @@ async def resolve_targets(
 
 @router.get("/runs")
 async def list_runs(playbook_id: str | None = None, session=Depends(auth_manager.get_current_session)):
-    return {"runs": playbook_manager.list_runs(session, playbook_id=playbook_id)}
+    return {"runs": await playbook_manager.list_runs(session, playbook_id=playbook_id)}
 
 
 @router.get("/runs/{run_id}")
 async def get_run(run_id: str, session=Depends(auth_manager.get_current_session)):
     try:
-        run = playbook_manager.get_run(session, run_id)
+        run = await playbook_manager.get_run(session, run_id)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     return {"run": run}

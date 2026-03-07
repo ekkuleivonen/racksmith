@@ -13,6 +13,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
+import { formatRelativeTime } from "@/lib/format";
 import { getRack, listRacks, type RackDetail, type RackItem } from "@/lib/racks";
 import { usePlaybookStore } from "@/stores/playbooks";
 import { useRackStore } from "@/stores/racks";
@@ -28,6 +29,7 @@ import {
   type PlaybookTargetSelection,
   type PlaybookUpsertRequest,
 } from "@/lib/playbooks";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 type RackItemGroup = {
@@ -140,7 +142,8 @@ export function PlaybookDetailPage() {
   const [rackGroups, setRackGroups] = useState<RackItemGroup[]>([]);
   const [targets, setTargets] = useState<PlaybookTargetSelection>(EMPTY_TARGETS);
   const [resolvedHosts, setResolvedHosts] = useState<string[]>([]);
-  const [currentRun, setCurrentRun] = useState<PlaybookRun | null>(null);
+  const [runs, setRuns] = useState<PlaybookRun[]>([]);
+  const [viewingRunId, setViewingRunId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [resolving, setResolving] = useState(false);
@@ -173,10 +176,12 @@ export function PlaybookDetailPage() {
         }),
       );
       setRackGroups(groups);
-      setCurrentRun(
-        runsResult.runs.find(
-          (run) => run.status === "queued" || run.status === "running",
-        ) ?? null,
+      setRuns(runsResult.runs);
+      const activeRun = runsResult.runs.find(
+        (run) => run.status === "queued" || run.status === "running",
+      );
+      setViewingRunId(
+        activeRun?.id ?? runsResult.runs[0]?.id ?? null,
       );
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to load playbook");
@@ -223,7 +228,13 @@ export function PlaybookDetailPage() {
   );
 
   const handleRunUpdate = useCallback((run: PlaybookRun) => {
-    setCurrentRun(run);
+    setRuns((prev) => {
+      const idx = prev.findIndex((r) => r.id === run.id);
+      if (idx < 0) return [run, ...prev];
+      const next = [...prev];
+      next[idx] = run;
+      return next;
+    });
     if (run.status === "completed" || run.status === "failed") {
       setRunning(false);
     }
@@ -278,6 +289,7 @@ export function PlaybookDetailPage() {
         <Tabs defaultValue="run">
           <TabsList variant="line">
             <TabsTrigger value="run">Run</TabsTrigger>
+            <TabsTrigger value="history">History</TabsTrigger>
             <TabsTrigger value="editor">Editor</TabsTrigger>
           </TabsList>
 
@@ -361,7 +373,8 @@ export function PlaybookDetailPage() {
                       setRunning(true);
                       try {
                         const result = await createPlaybookRun(playbookId, targets);
-                        setCurrentRun(result.run);
+                        setRuns((prev) => [result.run, ...prev]);
+                        setViewingRunId(result.run.id);
                         toast.success("Playbook started");
                       } catch (error) {
                         toast.error(error instanceof Error ? error.message : "Failed to run playbook");
@@ -384,8 +397,70 @@ export function PlaybookDetailPage() {
                 </div>
               </section>
 
-              <PlaybookRunOutput run={currentRun} onRunUpdate={handleRunUpdate} />
+              <PlaybookRunOutput
+                run={runs.find((r) => r.status === "queued" || r.status === "running") ?? null}
+                onRunUpdate={handleRunUpdate}
+              />
             </div>
+          </TabsContent>
+
+          <TabsContent value="history">
+            {runs.length === 0 ? (
+              <section className="border border-zinc-800 bg-zinc-900/30 p-4">
+                <p className="text-zinc-500 text-sm">No runs yet. Run a playbook from the Run tab.</p>
+              </section>
+            ) : (
+              <div className="grid gap-4 lg:grid-cols-[12rem_1fr]">
+                <section className="border border-zinc-800 bg-zinc-900/30 p-3">
+                  <p className="mb-2 text-xs font-medium text-zinc-400">Run history</p>
+                  <ScrollArea className="h-[20rem]">
+                    <div className="space-y-0.5 pr-2">
+                      {runs.map((r) => (
+                        <button
+                          key={r.id}
+                          type="button"
+                          onClick={() => setViewingRunId(r.id)}
+                          className={`w-full rounded px-2 py-1.5 text-left text-xs transition-colors hover:bg-zinc-800/80 ${
+                            viewingRunId === r.id
+                              ? "bg-zinc-800 text-zinc-100"
+                              : "text-zinc-400"
+                          }`}
+                        >
+                          <div className="flex items-center gap-1.5">
+                            <Badge
+                              variant={
+                                r.status === "completed"
+                                  ? "default"
+                                  : r.status === "failed"
+                                    ? "destructive"
+                                    : "outline"
+                              }
+                              className="text-[10px] px-1"
+                            >
+                              {r.status}
+                            </Badge>
+                            <span className="truncate text-[10px]">
+                              {formatRelativeTime(r.created_at)}
+                            </span>
+                          </div>
+                          <p className="mt-0.5 truncate text-[10px] text-zinc-500">
+                            {r.hosts.length} host{r.hosts.length === 1 ? "" : "s"}
+                            {r.exit_code != null ? ` · exit ${r.exit_code}` : ""}
+                            {r.commit_sha ? (
+                              <span title={r.commit_sha}> · {r.commit_sha.slice(0, 7)}</span>
+                            ) : null}
+                          </p>
+                        </button>
+                      ))}
+                    </div>
+                  </ScrollArea>
+                </section>
+                <PlaybookRunOutput
+                  run={runs.find((r) => r.id === viewingRunId) ?? null}
+                  onRunUpdate={handleRunUpdate}
+                />
+              </div>
+            )}
           </TabsContent>
 
           <TabsContent value="editor">

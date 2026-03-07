@@ -2,18 +2,20 @@
 
 from __future__ import annotations
 
-import asyncio
+import json
 import os
 import re
 import uuid
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 import yaml
+import redis.asyncio as aioredis
 import settings
-from github.misc import user_storage_id
+from _utils.db import _get_db, row_to_playbook_run
+from github.misc import get_head_sha, user_storage_id
 from playbooks.role_templates import BUILTIN_ROLE_PREFIX, ROLE_TEMPLATE_SPECS
 from racks.managers import rack_manager
 from setup.managers import setup_manager
@@ -35,6 +37,7 @@ ROLES_DIR = PLAYBOOKS_DIR / "roles"
 LEGACY_ROLES_DIR = Path("ansible_scripts/roles")
 INVENTORY_DIR = Path("ansible_scripts/inventory")
 RESERVED_DESCRIPTION_KEY = "racksmith_description"
+RUN_EVENTS_CHANNEL_PREFIX = "racksmith:run:"
 PLAYBOOK_ID_RE = re.compile(r"^[a-zA-Z0-9._-]+$")
 
 
@@ -56,16 +59,12 @@ class _InventoryEntry:
     labels: list[str]
 
 
-@dataclass(slots=True)
-class _RunRecord:
-    user_id: str
-    run: PlaybookRun
-    subscribers: list[asyncio.Queue[dict[str, Any]]] = field(default_factory=list)
-
-
 class PlaybookManager:
     def __init__(self) -> None:
-        self._runs: dict[str, _RunRecord] = {}
+        self._arq_pool = None
+
+    def set_arq_pool(self, pool) -> None:
+        self._arq_pool = pool
 
     def _playbooks_dir(self, repo_path: Path) -> Path:
         return repo_path / PLAYBOOKS_DIR
@@ -358,24 +357,33 @@ class PlaybookManager:
         hosts = sorted({entry.host_key for entry in filtered_entries})
         return PlaybookResolveTargetsResponse(hosts=hosts)
 
-    def _run_record_for_user(self, user_id: str, run_id: str) -> _RunRecord:
-        record = self._runs.get(run_id)
-        if record is None or record.user_id != user_id:
+    async def list_runs(self, session, playbook_id: str | None = None) -> list[PlaybookRun]:
+        user_id = user_storage_id(session.user)
+        db = _get_db()
+        if playbook_id:
+            cursor = await db.execute(
+                "SELECT * FROM runs WHERE user_id = ? AND playbook_id = ? ORDER BY created_at DESC",
+                (user_id, playbook_id),
+            )
+        else:
+            cursor = await db.execute(
+                "SELECT * FROM runs WHERE user_id = ? ORDER BY created_at DESC",
+                (user_id,),
+            )
+        rows = await cursor.fetchall()
+        return [row_to_playbook_run(row) for row in rows]
+
+    async def get_run(self, session, run_id: str) -> PlaybookRun:
+        user_id = user_storage_id(session.user)
+        db = _get_db()
+        cursor = await db.execute(
+            "SELECT * FROM runs WHERE id = ? AND user_id = ?",
+            (run_id, user_id),
+        )
+        row = await cursor.fetchone()
+        if row is None:
             raise KeyError("Run not found")
-        return record
-
-    def list_runs(self, session, playbook_id: str | None = None) -> list[PlaybookRun]:
-        user_id = user_storage_id(session.user)
-        runs = [
-            record.run
-            for record in self._runs.values()
-            if record.user_id == user_id and (playbook_id is None or record.run.playbook_id == playbook_id)
-        ]
-        return sorted(runs, key=lambda run: run.created_at, reverse=True)
-
-    def get_run(self, session, run_id: str) -> PlaybookRun:
-        user_id = user_storage_id(session.user)
-        return self._run_record_for_user(user_id, run_id).run
+        return row_to_playbook_run(row)
 
     async def create_run(self, session, playbook_id: str, body: PlaybookRunRequest) -> PlaybookRun:
         repo_path = setup_manager.active_repo_path(session)
@@ -384,6 +392,8 @@ class PlaybookManager:
         if not hosts:
             raise ValueError("No hosts matched the selected targets")
 
+        user_id = user_storage_id(session.user)
+        commit_sha = get_head_sha(repo_path)
         run = PlaybookRun(
             id=_new_id(),
             playbook_id=playbook.id,
@@ -391,116 +401,63 @@ class PlaybookManager:
             status="queued",
             created_at=_now_iso(),
             hosts=hosts,
+            commit_sha=commit_sha,
         )
-        record = _RunRecord(user_id=user_storage_id(session.user), run=run)
-        self._runs[run.id] = record
-        asyncio.create_task(self._execute_run(record, repo_path, playbook.id, hosts))
+        db = _get_db()
+        await db.execute(
+            """INSERT INTO runs (id, user_id, playbook_id, playbook_name, status, created_at, hosts, output, commit_sha)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (run.id, user_id, run.playbook_id, run.playbook_name, run.status, run.created_at, json.dumps(run.hosts), run.output, run.commit_sha),
+        )
+        await db.commit()
+
+        if self._arq_pool is None:
+            raise RuntimeError("arq pool not initialized")
+        await self._arq_pool.enqueue_job(
+            "execute_run",
+            run_id=run.id,
+            repo_path=str(repo_path),
+            playbook_id=playbook.id,
+            hosts=hosts,
+        )
         return run
 
-    async def _notify(self, record: _RunRecord, payload: dict[str, Any]) -> None:
-        for queue in list(record.subscribers):
-            await queue.put(payload)
-
-    async def _append_output(self, record: _RunRecord, text: str) -> None:
-        record.run.output += text
-        await self._notify(record, {"type": "output", "data": text})
-
-    async def _set_run_status(
-        self,
-        record: _RunRecord,
-        *,
-        status: str,
-        started_at: str | None = None,
-        finished_at: str | None = None,
-        exit_code: int | None = None,
-    ) -> None:
-        record.run.status = status
-        if started_at is not None:
-            record.run.started_at = started_at
-        if finished_at is not None:
-            record.run.finished_at = finished_at
-        if exit_code is not None:
-            record.run.exit_code = exit_code
-        await self._notify(record, {"type": "status", "run": record.run.model_dump()})
-
-    async def _execute_run(
-        self,
-        record: _RunRecord,
-        repo_path: Path,
-        playbook_id: str,
-        hosts: list[str],
-    ) -> None:
-        playbook_path = self._playbook_path(repo_path, playbook_id)
-        inventory_dir = self._inventory_dir(repo_path)
-        await self._set_run_status(record, status="running", started_at=_now_iso())
-        command = [
-            "ansible-playbook",
-            str(playbook_path),
-            "-i",
-            str(inventory_dir),
-            "--limit",
-            ",".join(hosts),
-        ]
-        await self._append_output(record, f"$ {' '.join(command)}\n")
-
-        try:
-            env = os.environ.copy()
-            env["ANSIBLE_ROLES_PATH"] = os.pathsep.join(
-                [
-                    str(self._roles_dir(repo_path)),
-                    env.get("ANSIBLE_ROLES_PATH", ""),
-                ]
-            ).strip(os.pathsep)
-            if settings.SSH_DISABLE_HOST_KEY_CHECK:
-                env["ANSIBLE_HOST_KEY_CHECKING"] = "False"
-            env["ANSIBLE_FORCE_COLOR"] = "True"
-            env["PY_COLORS"] = "1"
-            env["TERM"] = env.get("TERM") or "xterm-256color"
-            process = await asyncio.create_subprocess_exec(
-                *command,
-                cwd=str(repo_path),
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.STDOUT,
-                env=env,
-            )
-        except FileNotFoundError:
-            await self._append_output(record, "ansible-playbook was not found on PATH.\n")
-            await self._set_run_status(
-                record,
-                status="failed",
-                finished_at=_now_iso(),
-                exit_code=127,
-            )
+    async def stream_run(self, session, run_id: str, websocket) -> None:
+        run = await self.get_run(session, run_id)
+        if run.status in ("completed", "failed"):
+            await websocket.send_json({"type": "snapshot", "run": run.model_dump(), "done": True})
             return
 
-        assert process.stdout is not None
-        while True:
-            chunk = await process.stdout.read(4096)
-            if not chunk:
-                break
-            await self._append_output(record, chunk.decode("utf-8", errors="replace"))
-
-        exit_code = await process.wait()
-        await self._set_run_status(
-            record,
-            status="completed" if exit_code == 0 else "failed",
-            finished_at=_now_iso(),
-            exit_code=exit_code,
-        )
-
-    async def stream_run(self, session, run_id: str, websocket) -> None:
-        user_id = user_storage_id(session.user)
-        record = self._run_record_for_user(user_id, run_id)
-        queue: asyncio.Queue[dict[str, Any]] = asyncio.Queue()
-        record.subscribers.append(queue)
+        channel = f"{RUN_EVENTS_CHANNEL_PREFIX}{run_id}:events"
+        redis_client = aioredis.from_url(settings.REDIS_URL, decode_responses=True)
+        pubsub = redis_client.pubsub()
         try:
-            await websocket.send_json({"type": "snapshot", "run": record.run.model_dump()})
+            await pubsub.subscribe(channel)
+            await websocket.send_json({"type": "snapshot", "run": run.model_dump()})
             while True:
-                payload = await queue.get()
-                await websocket.send_json(payload)
+                message = await pubsub.get_message(ignore_subscribe_messages=True, timeout=5.0)
+                if message is None:
+                    # Re-check DB in case we subscribed after worker already finished
+                    run = await self.get_run(session, run_id)
+                    if run.status in ("completed", "failed"):
+                        await websocket.send_json({"type": "snapshot", "run": run.model_dump(), "done": True})
+                        break
+                    continue
+                if message["type"] != "message":
+                    continue
+                payload = json.loads(message["data"])
+                if payload.get("type") == "output":
+                    await websocket.send_json(payload)
+                elif payload.get("type") == "status":
+                    run = await self.get_run(session, run_id)
+                    await websocket.send_json({"type": "status", "run": run.model_dump()})
+                elif payload.get("type") == "done":
+                    run = await self.get_run(session, run_id)
+                    await websocket.send_json({"type": "snapshot", "run": run.model_dump(), "done": True})
+                    break
         finally:
-            if queue in record.subscribers:
-                record.subscribers.remove(queue)
+            await pubsub.unsubscribe(channel)
+            await redis_client.aclose()
 
 
 playbook_manager = PlaybookManager()

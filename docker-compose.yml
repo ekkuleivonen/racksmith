@@ -6,5 +6,36 @@ services:
     volumes:
       - redis_data:/data
 
+  app:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      REDIS_URL: redis://redis:6379
+      DB_PATH: /app/data/racksmith.db
+      REPOS_WORKSPACE: /app/workspace
+    volumes:
+      - ./data:/app/data
+      - ./workspace:/app/workspace
+    depends_on:
+      - redis
+
+  worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    command: ["uv", "run", "python", "run_worker.py", "worker.settings.WorkerSettings"]
+    environment:
+      REDIS_URL: redis://redis:6379
+      DB_PATH: /app/data/racksmith.db
+      REPOS_WORKSPACE: /app/workspace
+    volumes:
+      - ./data:/app/data
+      - ./workspace:/app/workspace
+    depends_on:
+      - redis
+
 volumes:
   redis_data:

@@ -14,6 +14,11 @@ APP_URL: str = env.str("APP_URL", default="http://localhost:5173")
 REPOS_WORKSPACE: str = env.str("REPOS_WORKSPACE", default="./workspace")
 
 # =============================================================================
+# Database
+# =============================================================================
+DB_PATH: str = env.str("DB_PATH", default="./data/racksmith.db")
+
+# =============================================================================
 # Redis (session store)
 # =============================================================================
 REDIS_URL: str = env.str("REDIS_URL", default="redis://localhost:6379")

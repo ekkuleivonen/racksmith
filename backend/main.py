@@ -23,9 +23,20 @@ load_dotenv()  # Also load from cwd
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    from _utils.db import close_db, init_db
+    from arq import create_pool
+    from arq.connections import RedisSettings
+    from playbooks.managers import playbook_manager
+
     configure_logging()
-    yield
-    # cleanup if any
+    await init_db()
+    arq_pool = await create_pool(RedisSettings.from_dsn(settings.REDIS_URL))
+    playbook_manager.set_arq_pool(arq_pool)
+    try:
+        yield
+    finally:
+        await arq_pool.close()
+        await close_db()
 
 
 app = FastAPI(

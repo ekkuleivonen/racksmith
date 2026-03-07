@@ -244,6 +244,14 @@ def run_git(
     return result
 
 
+def get_head_sha(repo_path: Path) -> str | None:
+    """Return the current Git HEAD commit SHA, or None if not a repo or detached."""
+    result = run_git(repo_path, ["rev-parse", "HEAD"], check=False)
+    if result.returncode != 0:
+        return None
+    return (result.stdout or "").strip() or None
+
+
 def clone_or_fetch(
     owner: str, repo_name: str, access_token: str, *, user_id: str | None = None
 ) -> Path:

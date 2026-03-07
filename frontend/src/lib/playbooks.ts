@@ -66,6 +66,7 @@ export type PlaybookRun = {
   exit_code: number | null;
   hosts: string[];
   output: string;
+  commit_sha: string | null;
 };
 
 export async function listPlaybooks() {

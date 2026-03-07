@@ -88,3 +88,4 @@ class PlaybookRun(BaseModel):
     exit_code: int | None = None
     hosts: list[str] = Field(default_factory=list)
     output: str = ""
+    commit_sha: str | None = None

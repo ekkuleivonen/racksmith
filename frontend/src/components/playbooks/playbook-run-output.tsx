@@ -3,7 +3,11 @@ import { LoaderCircle } from "lucide-react";
 import { Terminal } from "xterm";
 import { FitAddon } from "xterm-addon-fit";
 import { Button } from "@/components/ui/button";
-import { playbookRunStreamUrl, type PlaybookRun } from "@/lib/playbooks";
+import {
+  getPlaybookRun,
+  playbookRunStreamUrl,
+  type PlaybookRun,
+} from "@/lib/playbooks";
 
 interface PlaybookRunOutputProps {
   run: PlaybookRun | null;
@@ -58,14 +62,16 @@ export function PlaybookRunOutput({ run, onRunUpdate }: PlaybookRunOutputProps) 
     socket.onmessage = (event) => {
       const payload = JSON.parse(String(event.data));
       if (payload.type === "snapshot" || payload.type === "status") {
-        setActiveRun(payload.run);
-        onRunUpdate?.(payload.run);
-        if (terminalRef.current && payload.run?.output !== renderedOutputRef.current) {
-          terminalRef.current.clear();
-          if (payload.run?.output) {
-            terminalRef.current.write(String(payload.run.output));
+        if (payload.run) {
+          setActiveRun(payload.run);
+          onRunUpdate?.(payload.run);
+          if (terminalRef.current && payload.run.output !== renderedOutputRef.current) {
+            terminalRef.current.clear();
+            if (payload.run.output) {
+              terminalRef.current.write(String(payload.run.output));
+            }
+            renderedOutputRef.current = String(payload.run.output || "");
           }
-          renderedOutputRef.current = String(payload.run?.output || "");
         }
       }
       if (payload.type === "output") {
@@ -82,7 +88,30 @@ export function PlaybookRunOutput({ run, onRunUpdate }: PlaybookRunOutputProps) 
         });
       }
     };
+
+    // Polling fallback when WebSocket may have missed messages (e.g. reconnect after worker finished)
+    let pollInterval: number | null = null;
+    if (activeRun.status === "queued" || activeRun.status === "running") {
+      pollInterval = window.setInterval(() => {
+        void getPlaybookRun(activeRun.id).then((res) => {
+          const updated = res.run;
+          if (updated.status === "completed" || updated.status === "failed") {
+            setActiveRun(updated);
+            onRunUpdate?.(updated);
+            if (terminalRef.current && updated.output !== renderedOutputRef.current) {
+              terminalRef.current.clear();
+              if (updated.output) {
+                terminalRef.current.write(String(updated.output));
+              }
+              renderedOutputRef.current = String(updated.output || "");
+            }
+          }
+        });
+      }, 5000) as unknown as number;
+    }
+
     return () => {
+      if (pollInterval != null) window.clearInterval(pollInterval);
       resizeObserver.disconnect();
       socket.close();
       terminal.dispose();
