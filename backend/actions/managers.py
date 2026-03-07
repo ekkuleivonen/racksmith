@@ -7,6 +7,7 @@ from pathlib import Path
 
 import yaml
 
+import settings
 from github.misc import RACKSMITH_BRANCH, commit_and_push, run_git
 from repos.managers import repos_manager
 from schema.models.action import ActionConfig
@@ -121,7 +122,15 @@ class ActionManager:
         run_git(repo_path, ["add", str(rel)])
         result = run_git(
             repo_path,
-            ["commit", "-m", f"Add action: {slug}"],
+            [
+                "-c",
+                f"user.name={settings.GIT_COMMIT_USER_NAME}",
+                "-c",
+                f"user.email={settings.GIT_COMMIT_USER_EMAIL}",
+                "commit",
+                "-m",
+                f"Add action: {slug}",
+            ],
             check=False,
         )
         if result.returncode == 0:
@@ -160,7 +169,15 @@ class ActionManager:
         run_git(repo_path, ["rm", "-r", "--cached", "--ignore-unmatch", str(rel)])
         result = run_git(
             repo_path,
-            ["commit", "-m", f"Remove action: {slug}"],
+            [
+                "-c",
+                f"user.name={settings.GIT_COMMIT_USER_NAME}",
+                "-c",
+                f"user.email={settings.GIT_COMMIT_USER_EMAIL}",
+                "commit",
+                "-m",
+                f"Remove action: {slug}",
+            ],
             check=False,
         )
         if result.returncode == 0:

@@ -471,7 +471,18 @@ def commit_and_push(
     msg = message.strip()
     if not msg:
         raise ValueError("Commit message cannot be empty")
-    run_git(repo_path, ["commit", "-m", msg])
+    run_git(
+        repo_path,
+        [
+            "-c",
+            f"user.name={settings.GIT_COMMIT_USER_NAME}",
+            "-c",
+            f"user.email={settings.GIT_COMMIT_USER_EMAIL}",
+            "commit",
+            "-m",
+            msg,
+        ],
+    )
     _delete_conflicting_racksmith_branches(repo_path)
     run_git(repo_path, ["push", "origin", RACKSMITH_BRANCH])
 

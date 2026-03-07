@@ -37,6 +37,14 @@ SESSION_COOKIE_NAME: str = env.str("SESSION_COOKIE_NAME", default="racksmith_ses
 SESSION_MAX_AGE: int = env.int("SESSION_MAX_AGE", default=86400)  # 24h
 
 # =============================================================================
+# Git
+# =============================================================================
+GIT_COMMIT_USER_NAME: str = env.str("GIT_COMMIT_USER_NAME", default="Racksmith")
+GIT_COMMIT_USER_EMAIL: str = env.str(
+    "GIT_COMMIT_USER_EMAIL", default="racksmith@localhost"
+)
+
+# =============================================================================
 # SSH
 # =============================================================================
 SSH_DISABLE_HOST_KEY_CHECK: bool = env.bool("SSH_DISABLE_HOST_KEY_CHECK", default=True)
