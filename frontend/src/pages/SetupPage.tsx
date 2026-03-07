@@ -25,7 +25,7 @@ import {
   selectGithubRepo,
   type GithubRepoChoice,
 } from "@/lib/setup";
-import { fetchMachinePublicKey } from "@/lib/ssh";
+import { fetchMachinePublicKey, generateMachineKey } from "@/lib/ssh";
 import { useSetupStore } from "@/stores/setup";
 import { useNodesStore } from "@/stores/nodes";
 import { useRackStore } from "@/stores/racks";
@@ -99,6 +99,7 @@ export function SetupPage() {
   const [signingIn, setSigningIn] = useState(false);
   const [setupPublicKey, setSetupPublicKey] = useState<string | null>(null);
   const [setupPublicKeyLoading, setSetupPublicKeyLoading] = useState(false);
+  const [setupPublicKeyError, setSetupPublicKeyError] = useState<string | null>(null);
   const localRepos = useSetupStore((s) => s.localRepos);
   const dropRepo = useSetupStore((s) => s.dropRepo);
 
@@ -138,14 +139,26 @@ export function SetupPage() {
     void loadRacks();
   }, [loadSetup, loadNodes, loadRacks]);
 
+  const fetchSetupPublicKey = useCallback(() => {
+    setSetupPublicKeyLoading(true);
+    setSetupPublicKeyError(null);
+    fetchMachinePublicKey()
+      .then((res) => {
+        setSetupPublicKey(res.public_key);
+        setSetupPublicKeyError(null);
+      })
+      .catch((err) => {
+        setSetupPublicKey(null);
+        setSetupPublicKeyError(err instanceof Error ? err.message : "Failed to load public key");
+        toast.error("Could not load Racksmith public key. See the note below.");
+      })
+      .finally(() => setSetupPublicKeyLoading(false));
+  }, []);
+
   useEffect(() => {
     if (step !== 3) return;
-    setSetupPublicKeyLoading(true);
-    fetchMachinePublicKey()
-      .then((res) => setSetupPublicKey(res.public_key))
-      .catch(() => setSetupPublicKey(null))
-      .finally(() => setSetupPublicKeyLoading(false));
-  }, [step]);
+    fetchSetupPublicKey();
+  }, [step, fetchSetupPublicKey]);
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -478,6 +491,44 @@ export function SetupPage() {
                   <Copy className="size-3" />
                 </Button>
               </div>
+              {setupPublicKeyError && !setupPublicKeyLoading && (
+                <div className="flex items-center gap-2 text-amber-500 text-xs">
+                  <span>{setupPublicKeyError}</span>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => fetchSetupPublicKey()}
+                  >
+                    Retry
+                  </Button>
+                  <Button
+                    size="sm"
+                    onClick={async () => {
+                      setSetupPublicKeyLoading(true);
+                      setSetupPublicKeyError(null);
+                      try {
+                        const res = await generateMachineKey();
+                        setSetupPublicKey(res.public_key);
+                        toast.success("SSH key generated");
+                      } catch (err) {
+                        setSetupPublicKeyError(
+                          err instanceof Error ? err.message : "Failed to generate key"
+                        );
+                        toast.error("Could not generate SSH key");
+                      } finally {
+                        setSetupPublicKeyLoading(false);
+                      }
+                    }}
+                  >
+                    Generate key
+                  </Button>
+                </div>
+              )}
+              {setupPublicKeyError && (
+                <p className="text-xs text-zinc-500">
+                  No SSH key found. Click <strong>Generate key</strong> to create one, or mount your host&apos;s <code className="rounded bg-zinc-800 px-1">~/.ssh</code> in Docker.
+                </p>
+              )}
             </CardContent>
           </Card>
 

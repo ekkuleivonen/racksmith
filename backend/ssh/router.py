@@ -59,6 +59,18 @@ async def ping_statuses(
     return {"statuses": [entry.model_dump() for entry in statuses]}
 
 
+@router.post("/generate-key")
+async def generate_key(
+    session_id: str | None = Cookie(default=None, alias=settings.SESSION_COOKIE_NAME),
+):
+    session = _require_session(session_id)
+    try:
+        public_key = ssh_manager.generate_key(session)
+    except OSError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    return {"public_key": public_key}
+
+
 @router.get("/public-key")
 async def get_public_key(
     session_id: str | None = Cookie(default=None, alias=settings.SESSION_COOKIE_NAME),

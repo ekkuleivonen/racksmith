@@ -13,7 +13,7 @@ auth_router = APIRouter()
 
 @auth_router.get("/login")
 async def login(request: Request):
-    redirect_uri = f"{str(request.base_url).rstrip('/')}/api/auth/callback"
+    redirect_uri = f"{settings.APP_URL.rstrip('/')}/api/auth/callback"
     return RedirectResponse(url=auth_manager.get_login_url(redirect_uri))
 
 
@@ -23,7 +23,7 @@ async def callback(
     code: str | None = None,
     state: str | None = None,
 ):
-    redirect_uri = f"{str(request.base_url).rstrip('/')}/api/auth/callback"
+    redirect_uri = f"{settings.APP_URL.rstrip('/')}/api/auth/callback"
     session_id = await auth_manager.handle_callback(code, state, redirect_uri)
 
     redirect_url = f"{settings.APP_URL.rstrip('/')}/setup"

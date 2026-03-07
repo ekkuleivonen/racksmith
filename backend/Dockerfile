@@ -2,6 +2,9 @@ FROM ghcr.io/astral-sh/uv:python3.14-bookworm-slim
 
 WORKDIR /app
 
+# Install git (needed for repo clone/fetch)
+RUN apt-get update && apt-get install -y --no-install-recommends git && rm -rf /var/lib/apt/lists/*
+
 # Install dependencies
 COPY backend/pyproject.toml backend/uv.lock ./
 RUN uv sync --frozen --no-dev

@@ -12,7 +12,7 @@ from _utils.redis import Redis
 from github.misc import user_storage_id
 from nodes.managers import node_manager
 
-from ssh.misc import _connect_kwargs, machine_public_key
+from ssh.misc import _connect_kwargs, generate_ssh_key_pair, machine_public_key
 from ssh.schemas import CommandHistoryEntry, PingStatusEntry, PingStatusTarget
 
 _HISTORY_PREFIX = "racksmith:ssh_history"
@@ -27,6 +27,9 @@ def _now_iso() -> str:
 class SSHManager:
     def public_key(self, _session) -> str:
         return machine_public_key()
+
+    def generate_key(self, _session) -> str:
+        return generate_ssh_key_pair()
 
     def _history_key(self, user_id: str, node_slug: str) -> str:
         return f"{_HISTORY_PREFIX}:{user_id}:{node_slug}"

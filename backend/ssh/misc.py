@@ -6,6 +6,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 import asyncssh
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
 import settings
 
@@ -20,7 +22,7 @@ class SSHProbeResult:
 
 
 def _connect_kwargs(host: str, username: str, port: int) -> dict:
-    kwargs = {
+    kwargs: dict = {
         "host": host,
         "username": username,
         "port": port,
@@ -29,6 +31,9 @@ def _connect_kwargs(host: str, username: str, port: int) -> dict:
     }
     if settings.SSH_DISABLE_HOST_KEY_CHECK:
         kwargs["known_hosts"] = None
+    racksmith_priv = _racksmith_ssh_dir() / "id_ed25519"
+    if racksmith_priv.is_file():
+        kwargs["client_keys"] = [str(racksmith_priv)]
     return kwargs
 
 
@@ -92,21 +97,65 @@ def _extract_live_host(conn: asyncssh.SSHClientConnection, fallback: str) -> str
     return fallback
 
 
+def _racksmith_ssh_dir() -> Path:
+    """Directory for Racksmith-generated keys (e.g. /app/data/.ssh in Docker)."""
+    return Path(settings.DB_PATH).parent / ".ssh"
+
+
+def _key_search_dirs() -> list[Path]:
+    """Directories to search for SSH keys, in order. Racksmith dir first, then ~/.ssh."""
+    return [_racksmith_ssh_dir(), Path.home() / ".ssh"]
+
+
 def machine_public_key() -> str:
-    ssh_dir = Path.home() / ".ssh"
     candidates = [
-        ssh_dir / "id_ed25519.pub",
-        ssh_dir / "id_ecdsa.pub",
-        ssh_dir / "id_rsa.pub",
+        "id_ed25519.pub",
+        "id_ecdsa.pub",
+        "id_rsa.pub",
     ]
-    for path in candidates:
-        if path.is_file():
-            value = path.read_text(encoding="utf-8").strip()
-            if value:
-                return value
+    for ssh_dir in _key_search_dirs():
+        for name in candidates:
+            path = ssh_dir / name
+            if path.is_file():
+                value = path.read_text(encoding="utf-8").strip()
+                if value:
+                    return value
     raise FileNotFoundError(
-        "No public SSH key found in ~/.ssh (looked for id_ed25519.pub, id_ecdsa.pub, id_rsa.pub)"
+        "No public SSH key found. Add one to ~/.ssh or generate one below."
     )
+
+
+def generate_ssh_key_pair() -> str:
+    """Generate an Ed25519 key pair in ~/.ssh. Returns the public key."""
+    ssh_dir = Path.home() / ".ssh"
+    ssh_dir.mkdir(parents=True, exist_ok=True)
+    ssh_dir.chmod(0o700)
+
+    priv_path = ssh_dir / "id_ed25519"
+    pub_path = ssh_dir / "id_ed25519.pub"
+
+    if pub_path.is_file():
+        return pub_path.read_text(encoding="utf-8").strip()
+
+    private_key = Ed25519PrivateKey.generate()
+    private_pem = private_key.private_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PrivateFormat.OpenSSH,
+        encryption_algorithm=serialization.NoEncryption(),
+    )
+    public_key = private_key.public_key()
+    public_openssh = public_key.public_bytes(
+        encoding=serialization.Encoding.OpenSSH,
+        format=serialization.PublicFormat.OpenSSH,
+    )
+    public_str = public_openssh.decode("utf-8") + " racksmith"
+
+    priv_path.write_bytes(private_pem)
+    priv_path.chmod(0o600)
+    pub_path.write_text(public_str)
+    pub_path.chmod(0o644)
+
+    return public_str
 
 
 async def probe_ssh_target(host: str, username: str, port: int) -> SSHProbeResult:

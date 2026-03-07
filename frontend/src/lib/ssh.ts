@@ -38,6 +38,10 @@ export async function fetchMachinePublicKey() {
   return apiGet<{ public_key: string }>("/ssh/public-key");
 }
 
+export async function generateMachineKey() {
+  return apiPost<{ public_key: string }>("/ssh/generate-key");
+}
+
 export function sshTerminalUrl(nodeSlug: string) {
   const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
   return `${protocol}//${window.location.host}/api/ssh/nodes/${nodeSlug}/terminal`;
