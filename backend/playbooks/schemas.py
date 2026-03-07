@@ -54,15 +54,10 @@ class PlaybookDetail(PlaybookSummary):
     raw_content: str
 
 
-class PlaybookTargetItem(BaseModel):
-    rack_id: str = Field(min_length=1, max_length=120)
-    item_id: str = Field(min_length=1, max_length=120)
-
-
 class PlaybookTargetSelection(BaseModel):
-    rack_ids: list[str] = Field(default_factory=list)
-    labels: list[str] = Field(default_factory=list)
-    items: list[PlaybookTargetItem] = Field(default_factory=list)
+    groups: list[str] = Field(default_factory=list)
+    tags: list[str] = Field(default_factory=list)
+    nodes: list[str] = Field(default_factory=list)
 
 
 class PlaybookResolveTargetsRequest(BaseModel):

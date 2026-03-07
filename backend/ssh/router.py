@@ -19,29 +19,27 @@ def _require_session(session_id: str | None):
     return session
 
 
-@router.get("/racks/{rack_id}/items/{item_id}/history")
+@router.get("/nodes/{node_slug}/history")
 async def list_history(
-    rack_id: str,
-    item_id: str,
+    node_slug: str,
     session_id: str | None = Cookie(default=None, alias=settings.SESSION_COOKIE_NAME),
 ):
     session = _require_session(session_id)
     try:
-        history = ssh_manager.list_history(session, rack_id, item_id)
+        history = ssh_manager.list_history(session, node_slug)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     return {"history": [entry.model_dump() for entry in history]}
 
 
-@router.post("/racks/{rack_id}/items/{item_id}/reboot", status_code=202)
-async def reboot_item(
-    rack_id: str,
-    item_id: str,
+@router.post("/nodes/{node_slug}/reboot", status_code=202)
+async def reboot_node(
+    node_slug: str,
     session_id: str | None = Cookie(default=None, alias=settings.SESSION_COOKIE_NAME),
 ):
     session = _require_session(session_id)
     try:
-        await ssh_manager.reboot_item(session, rack_id, item_id)
+        await ssh_manager.reboot_node(session, node_slug)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ValueError as exc:
@@ -73,11 +71,10 @@ async def get_public_key(
     return {"public_key": public_key}
 
 
-@router.websocket("/racks/{rack_id}/items/{item_id}/terminal")
+@router.websocket("/nodes/{node_slug}/terminal")
 async def terminal_socket(
     websocket: WebSocket,
-    rack_id: str,
-    item_id: str,
+    node_slug: str,
     session_id: str | None = Cookie(default=None, alias=settings.SESSION_COOKIE_NAME),
 ):
     session = get_session(session_id)
@@ -87,7 +84,7 @@ async def terminal_socket(
 
     await websocket.accept()
     try:
-        await ssh_manager.proxy_terminal(session, rack_id, item_id, websocket)
+        await ssh_manager.proxy_terminal(session, node_slug, websocket)
     except WebSocketDisconnect:
         return
     except (KeyError, ValueError) as exc:

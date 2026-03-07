@@ -1,0 +1,26 @@
+"""Node config schema for nodes/<slug>.yaml."""
+
+from __future__ import annotations
+
+from pydantic import BaseModel, Field
+
+
+class NodeConfig(BaseModel):
+    """Schema for a single machine/node definition."""
+
+    slug: str = Field(description="Human-readable identifier, matches filename stem")
+    name: str = Field(default="", description="Display name for the node")
+    host: str = Field(default="", description="IP or hostname for SSH/Ansible")
+    ssh_user: str = Field(default="", description="SSH username")
+    ssh_port: int = Field(default=22, description="SSH port")
+    managed: bool = Field(default=True, description="Whether this node is managed (SSH, Ansible)")
+    groups: list[str] = Field(default_factory=list, description="Group slugs this node belongs to")
+    tags: list[str] = Field(default_factory=list, description="Arbitrary labels for targeting")
+    os_family: str | None = Field(default=None, description="OS family (debian, ubuntu, etc.)")
+    mac_address: str = Field(default="", description="Auto-discovered on SSH probe")
+    notes: str = Field(default="", description="Free-form notes")
+    rack: str | None = Field(default=None, description="Rack slug for visual placement")
+    position_u_start: int | None = Field(default=None, description="Rack unit start (1-based)")
+    position_u_height: int = Field(default=1, ge=1, description="Height in rack units")
+    position_col_start: int = Field(default=0, ge=0, description="Column start (0-based)")
+    position_col_count: int = Field(default=1, ge=1, description="Number of columns")

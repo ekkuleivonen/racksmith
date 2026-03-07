@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
-import type { RackItem, ZoneSelection } from "@/lib/racks";
+import type { RackLayoutNode, ZoneSelection } from "@/lib/racks";
 
 const ROW_HEIGHT = 28;
 const RESIZE_HANDLE_SIZE = 8;
@@ -25,17 +25,19 @@ export function RackCanvas({
   onSelectZone,
   onMoveItem,
   onResizeItem,
+  onPlaceUnplacedNode,
   selectionMode = false,
 }: {
   rackUnits: number;
   cols: number;
-  items: RackItem[];
+  items: RackLayoutNode[];
   selectedItemId?: string | null;
   pendingItemId?: string | null;
   onSelectItem?: (itemId: string) => void;
   onSelectZone?: (zone: ZoneSelection) => void;
   onMoveItem?: (itemId: string, position: MovePosition) => void;
   onResizeItem?: (itemId: string, position: MovePosition) => void;
+  onPlaceUnplacedNode?: (nodeSlug: string, position: MovePosition) => void;
   selectionMode?: boolean;
 }) {
   const totalHeight = rackUnits * ROW_HEIGHT;
@@ -48,8 +50,9 @@ export function RackCanvas({
     position_col_count: number;
   } | null>(null);
   const [dropPreviewTarget, setDropPreviewTarget] = useState<{ topU: number; dropCol: number } | null>(null);
+  const [dropPreviewUnplaced, setDropPreviewUnplaced] = useState(false);
   const [resizing, setResizing] = useState<{
-    item: RackItem;
+    item: RackLayoutNode;
     handle: ResizeHandle;
   } | null>(null);
   const resizePreviewRef = useRef<MovePosition | null>(null);
@@ -120,7 +123,7 @@ export function RackCanvas({
     (u: number, col: number, excludeItemId?: string) =>
       placedItems.some(
         (item) => {
-          if (excludeItemId && item.id === excludeItemId) return false;
+          if (excludeItemId && item.slug === excludeItemId) return false;
           const bottomU = item.position_u_start;
           const topU = item.position_u_start + item.position_u_height - 1;
           return (
@@ -134,18 +137,18 @@ export function RackCanvas({
     [placedItems]
   );
 
-  const handleItemDragStart = useCallback((e: React.DragEvent, item: RackItem) => {
+  const handleItemDragStart = useCallback((e: React.DragEvent, item: RackLayoutNode) => {
     e.dataTransfer.setData(
       "application/x-racksmith-item",
       JSON.stringify({
-        itemId: item.id,
+        itemId: item.slug,
         position_u_height: item.position_u_height,
         position_col_count: item.position_col_count,
       })
     );
     e.dataTransfer.effectAllowed = "move";
     setDraggedItem({
-      itemId: item.id,
+      itemId: item.slug,
       position_u_height: item.position_u_height,
       position_col_count: item.position_col_count,
     });
@@ -159,6 +162,31 @@ export function RackCanvas({
   const handleCellDrop = useCallback(
     (e: React.DragEvent, dropU: number, dropCol: number) => {
       e.preventDefault();
+      setDropPreviewTarget(null);
+      setDropPreviewUnplaced(false);
+
+      const unplacedRaw = e.dataTransfer.getData("application/x-racksmith-unplaced-node");
+      if (unplacedRaw && onPlaceUnplacedNode) {
+        try {
+          const { nodeSlug } = JSON.parse(unplacedRaw);
+          const topU = dropU;
+          const bottomU = topU;
+          const position_u_height = 1;
+          const position_col_count = 1;
+          if (bottomU < 1 || topU > rackUnits || dropCol >= cols) return;
+          if (isCellOccupied(bottomU, dropCol)) return;
+          onPlaceUnplacedNode(nodeSlug, {
+            position_u_start: bottomU,
+            position_u_height,
+            position_col_start: dropCol,
+            position_col_count,
+          });
+        } catch {
+          // ignore
+        }
+        return;
+      }
+
       const raw = e.dataTransfer.getData("application/x-racksmith-item");
       if (!raw || !onMoveItem) return;
       try {
@@ -183,16 +211,19 @@ export function RackCanvas({
         // ignore invalid data
       }
     },
-    [cols, isCellOccupied, onMoveItem, rackUnits]
+    [cols, isCellOccupied, onMoveItem, onPlaceUnplacedNode, rackUnits]
   );
 
   const handleCellDragOver = useCallback(
     (e: React.DragEvent, topU?: number, dropCol?: number) => {
-      if (e.dataTransfer.types.includes("application/x-racksmith-item")) {
+      const hasItem = e.dataTransfer.types.includes("application/x-racksmith-item");
+      const hasUnplaced = e.dataTransfer.types.includes("application/x-racksmith-unplaced-node");
+      if (hasItem || hasUnplaced) {
         e.preventDefault();
         e.dataTransfer.dropEffect = "move";
         if (topU !== undefined && dropCol !== undefined) {
           setDropPreviewTarget({ topU, dropCol });
+          setDropPreviewUnplaced(hasUnplaced);
         }
       }
     },
@@ -221,7 +252,7 @@ export function RackCanvas({
   const [resizePreview, setResizePreview] = useState<MovePosition | null>(null);
 
   const handleResizeMouseDown = useCallback(
-    (e: React.MouseEvent, item: RackItem, handle: ResizeHandle) => {
+    (e: React.MouseEvent, item: RackLayoutNode, handle: ResizeHandle) => {
       e.preventDefault();
       e.stopPropagation();
       if (!onResizeItem) return;
@@ -284,10 +315,10 @@ export function RackCanvas({
         let valid = true;
         for (let u = pos.position_u_start; u < pos.position_u_start + pos.position_u_height; u++) {
           for (let c = pos.position_col_start; c < pos.position_col_start + pos.position_col_count; c++) {
-            if (isCellOccupied(u, c, item.id)) valid = false;
+            if (isCellOccupied(u, c, item.slug)) valid = false;
           }
         }
-        if (valid) onResizeItem(item.id, pos);
+        if (valid) onResizeItem(item.slug, pos);
       }
       setResizing(null);
       setResizePreview(null);
@@ -362,10 +393,78 @@ export function RackCanvas({
             })}
           </div>
 
+          {(dropPreviewUnplaced && dropPreviewTarget && !draggedItem
+            ? (() => {
+                const { topU, dropCol } = dropPreviewTarget;
+                const bottomU = topU;
+                const isValid =
+                  bottomU >= 1 &&
+                  topU <= rackUnits &&
+                  dropCol < cols &&
+                  !isCellOccupied(bottomU, dropCol);
+                const top = (rackUnits - topU) * ROW_HEIGHT;
+                const height = ROW_HEIGHT;
+                const leftPct = (dropCol / cols) * 100;
+                const widthPct = (1 / cols) * 100;
+                return (
+                  <div
+                    className={cn(
+                      "absolute pointer-events-none border-2 border-dashed",
+                      isValid
+                        ? "border-emerald-400/80 bg-emerald-500/20"
+                        : "border-red-400/60 bg-red-500/10"
+                    )}
+                    style={{
+                      top,
+                      height,
+                      left: `${leftPct}%`,
+                      width: `${widthPct}%`,
+                    }}
+                  />
+                );
+              })()
+            : null)}
+          {dropPreviewUnplaced &&
+            dropPreviewTarget &&
+            !draggedItem &&
+            (() => {
+              const { topU, dropCol } = dropPreviewTarget;
+              const position_u_height = 1;
+              const position_col_count = 1;
+              const bottomU = topU;
+              const isValid =
+                bottomU >= 1 &&
+                topU <= rackUnits &&
+                dropCol + position_col_count <= cols &&
+                !isCellOccupied(bottomU, dropCol);
+              const top = (rackUnits - (bottomU + position_u_height - 1)) * ROW_HEIGHT;
+              const height = position_u_height * ROW_HEIGHT;
+              const leftPct = (dropCol / cols) * 100;
+              const widthPct = (position_col_count / cols) * 100;
+              return (
+                <div
+                  className={cn(
+                    "absolute pointer-events-none border-2 border-dashed",
+                    isValid
+                      ? "border-emerald-400/80 bg-emerald-500/20"
+                      : "border-red-400/60 bg-red-500/10"
+                  )}
+                  style={{
+                    top,
+                    height,
+                    left: `${leftPct}%`,
+                    width: `${widthPct}%`,
+                  }}
+                />
+              );
+            })()}
+
           {draggedItem &&
             dropPreviewTarget &&
             (() => {
-              const { position_u_height, position_col_count } = draggedItem;
+              const position_u_height = draggedItem.position_u_height;
+              const position_col_count = draggedItem.position_col_count;
+              const itemId = draggedItem.itemId;
               const { topU, dropCol } = dropPreviewTarget;
               const bottomU = topU - position_u_height + 1;
               let isValid =
@@ -375,7 +474,7 @@ export function RackCanvas({
               if (isValid) {
                 for (let u = bottomU; u <= topU; u++) {
                   for (let c = dropCol; c < dropCol + position_col_count; c++) {
-                    if (isCellOccupied(u, c, draggedItem.itemId)) {
+                    if (isCellOccupied(u, c, itemId)) {
                       isValid = false;
                       break;
                     }
@@ -405,9 +504,43 @@ export function RackCanvas({
               );
             })()}
 
+          {dropPreviewUnplaced &&
+            dropPreviewTarget &&
+            (() => {
+              const { topU, dropCol } = dropPreviewTarget;
+              const position_u_height = 1;
+              const position_col_count = 1;
+              const bottomU = topU;
+              const isValid =
+                bottomU >= 1 &&
+                topU <= rackUnits &&
+                dropCol + position_col_count <= cols &&
+                !isCellOccupied(bottomU, dropCol);
+              const top = (rackUnits - topU) * ROW_HEIGHT;
+              const height = position_u_height * ROW_HEIGHT;
+              const leftPct = (dropCol / cols) * 100;
+              const widthPct = (position_col_count / cols) * 100;
+              return (
+                <div
+                  className={cn(
+                    "absolute pointer-events-none border-2 border-dashed",
+                    isValid
+                      ? "border-emerald-400/80 bg-emerald-500/20"
+                      : "border-red-400/60 bg-red-500/10"
+                  )}
+                  style={{
+                    top,
+                    height,
+                    left: `${leftPct}%`,
+                    width: `${widthPct}%`,
+                  }}
+                />
+              );
+            })()}
+
           {placedItems.map((item) => {
-            const isPending = pendingItemId === item.id;
-            const isResizing = resizing?.item.id === item.id;
+            const isPending = pendingItemId === item.slug;
+            const isResizing = resizing?.item.slug === item.slug;
             const pos = isResizing && resizePreview ? resizePreview : item;
             const top =
               (rackUnits - (pos.position_u_start + pos.position_u_height - 1)) * ROW_HEIGHT;
@@ -418,17 +551,17 @@ export function RackCanvas({
               !isPending && !!onResizeItem && (height > RESIZE_HANDLE_MIN || widthPct > 4);
             return (
               <div
-                key={item.id}
+                key={item.slug}
                 className={cn(
                   "absolute rounded-none border text-left overflow-visible",
                   isResizing && "opacity-50",
                   isPending
                     ? "border-zinc-500/80 bg-zinc-500/15"
-                    : !item.managed && selectedItemId === item.id
+                    : !item.managed && selectedItemId === item.slug
                     ? "border-zinc-400 bg-zinc-500/20"
                     : !item.managed
                     ? "border-zinc-600 bg-zinc-500/10 hover:bg-zinc-500/15"
-                    : selectedItemId === item.id
+                    : selectedItemId === item.slug
                     ? "border-emerald-400 bg-emerald-500/20"
                     : "border-sky-400/60 bg-sky-500/10 hover:bg-sky-500/20"
                 )}
@@ -485,7 +618,7 @@ export function RackCanvas({
                   }}
                   onClick={(e) => {
                     e.stopPropagation();
-                    onSelectItem?.(item.id);
+                    onSelectItem?.(item.slug);
                   }}
                 >
                   <p className="text-[11px] text-zinc-100 truncate">

@@ -171,7 +171,7 @@ export function PlaybookRunOutput({ run, onRunUpdate }: PlaybookRunOutputProps) 
         {activeRun.exit_code !== null ? <p>Exit code: {activeRun.exit_code}</p> : null}
       </div>
 
-      <div className="border border-zinc-800 bg-zinc-950 h-[26rem] p-2">
+      <div className="border border-zinc-800 bg-zinc-950 h-[40rem] p-2">
         <div ref={terminalHostRef} className="h-full w-full overflow-hidden" />
       </div>
     </section>

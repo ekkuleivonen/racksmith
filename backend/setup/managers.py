@@ -2,14 +2,15 @@
 
 from __future__ import annotations
 
-import asyncio
 import re
+import shutil
 from pathlib import Path
 
 import httpx
 
 from github.misc import (
     ActiveRepoBinding,
+    clear_active_repo,
     clone_or_fetch,
     ensure_racksmith_branch,
     read_active_repo,
@@ -21,6 +22,7 @@ from github.misc import (
     user_workspace_path,
     write_active_repo,
 )
+from setup.migration import migrate_legacy_structure
 
 GITHUB_REMOTE_RE = re.compile(
     r"github\.com[:/](?P<owner>[^/]+)/(?P<repo>[^/]+?)(?:\.git)?$"
@@ -47,59 +49,16 @@ class SetupManager:
             if resp.status_code != 200:
                 raise RuntimeError("Failed to fetch repos from GitHub")
 
-            repos = [
-                {
-                    "id": repo["id"],
-                    "name": repo["name"],
-                    "full_name": repo["full_name"],
-                    "owner": repo["owner"]["login"],
-                    "private": bool(repo.get("private", False)),
-                }
-                for repo in resp.json()
-            ]
-
-            semaphore = asyncio.Semaphore(8)
-
-            async def is_importable(repo: dict) -> bool:
-                async with semaphore:
-                    return await self._repo_has_racksmith_dir(
-                        client, access_token, repo["owner"], repo["name"]
-                    )
-
-            allowed = await asyncio.gather(*(is_importable(repo) for repo in repos))
         return [
-            repo
-            for repo, include in zip(repos, allowed, strict=True)
-            if include
+            {
+                "id": repo["id"],
+                "name": repo["name"],
+                "full_name": repo["full_name"],
+                "owner": repo["owner"]["login"],
+                "private": bool(repo.get("private", False)),
+            }
+            for repo in resp.json()
         ]
-
-    async def _repo_has_racksmith_dir(
-        self,
-        client: httpx.AsyncClient,
-        access_token: str,
-        owner: str,
-        repo: str,
-    ) -> bool:
-        resp = await client.get(
-            f"https://api.github.com/repos/{owner}/{repo}/contents/.racksmith",
-            headers={"Authorization": f"Bearer {access_token}"},
-        )
-        if resp.status_code == 404:
-            return False
-        if resp.status_code != 200:
-            raise RuntimeError(f"Failed to inspect {owner}/{repo}")
-        payload = resp.json()
-        return isinstance(payload, list) or payload.get("type") == "dir"
-
-    async def ensure_repo_is_importable(
-        self, access_token: str, owner: str, repo: str
-    ) -> None:
-        async with httpx.AsyncClient() as client:
-            allowed = await self._repo_has_racksmith_dir(
-                client, access_token, owner, repo
-            )
-        if not allowed:
-            raise ValueError("Repo must already contain a .racksmith directory to import")
 
     async def create_repo(
         self, access_token: str, name: str, *, private: bool = True
@@ -127,6 +86,7 @@ class SetupManager:
         if not repo_path.exists():
             repo_path = user_repo_dir(user_id, owner, repo)
         ensure_racksmith_branch(repo_path)
+        migrate_legacy_structure(repo_path)
         binding = write_active_repo(
             ActiveRepoBinding(user_id=user_id, owner=owner, repo=repo)
         )
@@ -138,6 +98,7 @@ class SetupManager:
         if not repo_path.is_dir():
             raise FileNotFoundError("Local repo is missing on disk")
         ensure_racksmith_branch(repo_path)
+        migrate_legacy_structure(repo_path)
         binding = write_active_repo(
             ActiveRepoBinding(user_id=user_id, owner=owner, repo=repo)
         )
@@ -190,7 +151,17 @@ class SetupManager:
             repos.append(repo)
         return repos
 
-    def status(self, session, *, rack_ready: bool) -> dict:
+    def drop_repo(self, session, *, owner: str, repo: str) -> None:
+        user_id = self.user_id_from_session(session)
+        repo_path = user_repo_dir(user_id, owner, repo)
+        if not repo_path.is_dir():
+            raise FileNotFoundError("Local repo is missing on disk")
+        active = self.current_repo(session)
+        if active and active.owner == owner and active.repo == repo:
+            clear_active_repo(user_id)
+        shutil.rmtree(repo_path)
+
+    def status(self, session, *, nodes_ready: bool) -> dict:
         binding = self.current_repo(session)
         if binding:
             repo_path = user_repo_dir(binding.user_id, binding.owner, binding.repo)
@@ -205,7 +176,7 @@ class SetupManager:
                 "avatar_url": session.user.get("avatar_url"),
             },
             "repo_ready": binding is not None,
-            "rack_ready": rack_ready,
+            "nodes_ready": nodes_ready,
             "repo": repo,
         }
 

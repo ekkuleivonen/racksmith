@@ -1,16 +1,29 @@
 import { ItemHardwareFields } from "./item-hardware-fields";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import type { RackItem } from "@/lib/racks";
+import type { RackLayoutNode } from "@/lib/racks";
+
+function toItemLike(item: RackLayoutNode) {
+  return {
+    managed: item.managed ?? true,
+    name: item.name,
+    host: item.host ?? "",
+    ssh_user: item.ssh_user ?? "",
+    ssh_port: item.ssh_port ?? 22,
+    tags: item.tags ?? [],
+    os_family: item.os_family ?? null,
+    mac_address: item.mac_address,
+  };
+}
 
 interface RackEditPanelProps {
-  pending: RackItem | null;
-  selectedItem: RackItem | null;
+  pending: RackLayoutNode | null;
+  selectedItem: RackLayoutNode | null;
   saving: boolean;
-  onPendingChange: (patch: Partial<RackItem>) => void;
+  onPendingChange: (patch: Partial<RackLayoutNode>) => void;
   onPlacePending: () => Promise<void>;
   onCancelPending: () => void;
-  onSelectedItemChange: (patch: Partial<RackItem>) => void;
+  onSelectedItemChange: (patch: Partial<RackLayoutNode>) => void;
   onSaveSelected: () => Promise<void>;
   onDeleteSelected: () => Promise<void>;
 }
@@ -39,7 +52,7 @@ export function RackEditPanel({
             Place the item now. Add host details whenever you are ready.
           </p>
           <Separator />
-          <ItemHardwareFields item={pending} onChange={onPendingChange} />
+          <ItemHardwareFields item={toItemLike(pending)} onChange={onPendingChange} />
           <div className="flex gap-2">
             <Button size="sm" disabled={saving} onClick={() => void onPlacePending()}>
               Place item
@@ -62,7 +75,7 @@ export function RackEditPanel({
               {selectedItem.position_col_count > 1 ? "s" : ""}
             </p>
             <Separator />
-            <ItemHardwareFields item={selectedItem} onChange={onSelectedItemChange} />
+            <ItemHardwareFields item={toItemLike(selectedItem)} onChange={onSelectedItemChange} />
             <div className="flex gap-2">
               <Button size="sm" disabled={saving} onClick={() => void onSaveSelected()}>
                 Save item

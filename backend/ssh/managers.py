@@ -12,8 +12,7 @@ import asyncssh
 import settings
 from _utils.redis import Redis
 from github.misc import user_storage_id
-from racks.managers import rack_manager
-from racks.schemas import RackItem
+from nodes.managers import node_manager
 from ssh.misc import _connect_kwargs, machine_public_key
 from ssh.schemas import CommandHistoryEntry, PingStatusEntry, PingStatusTarget
 
@@ -30,23 +29,19 @@ class SSHManager:
     def public_key(self, _session) -> str:
         return machine_public_key()
 
-    def _history_key(self, user_id: str, rack_id: str, item_id: str) -> str:
-        return f"{_HISTORY_PREFIX}:{user_id}:{rack_id}:{item_id}"
+    def _history_key(self, user_id: str, node_slug: str) -> str:
+        return f"{_HISTORY_PREFIX}:{user_id}:{node_slug}"
 
-    def _find_item(self, session, rack_id: str, item_id: str) -> RackItem:
-        rack = rack_manager.get_rack(session, rack_id)
-        for item in rack.items:
-            if item.id == item_id:
-                return item
-        raise KeyError(f"Item {item_id} not found")
+    def _find_node(self, session, node_slug: str):
+        return node_manager.get_node(session, node_slug)
 
-    def _require_ssh_item(self, session, rack_id: str, item_id: str) -> RackItem:
-        item = self._find_item(session, rack_id, item_id)
-        if not item.managed:
-            raise ValueError("Item is not managed")
-        if not item.host or not item.ssh_user:
-            raise ValueError("Item is missing host or ssh_user")
-        return item
+    def _require_ssh_node(self, session, node_slug: str):
+        node = self._find_node(session, node_slug)
+        if not node.managed:
+            raise ValueError("Node is not managed")
+        if not node.host or not node.ssh_user:
+            raise ValueError("Node is missing host or ssh_user")
+        return node
 
     async def _ping_host(self, host: str) -> bool:
         process = await asyncio.create_subprocess_exec(
@@ -67,8 +62,8 @@ class SSHManager:
             return False
         return process.returncode == 0
 
-    def _load_history(self, user_id: str, rack_id: str, item_id: str) -> list[CommandHistoryEntry]:
-        raw = Redis.get(self._history_key(user_id, rack_id, item_id))
+    def _load_history(self, user_id: str, node_slug: str) -> list[CommandHistoryEntry]:
+        raw = Redis.get(self._history_key(user_id, node_slug))
         if not raw:
             return []
         try:
@@ -77,35 +72,35 @@ class SSHManager:
             return []
         return [CommandHistoryEntry.model_validate(entry) for entry in data]
 
-    def list_history(self, session, rack_id: str, item_id: str) -> list[CommandHistoryEntry]:
-        self._find_item(session, rack_id, item_id)
+    def list_history(self, session, node_slug: str) -> list[CommandHistoryEntry]:
+        self._find_node(session, node_slug)
         user_id = user_storage_id(session.user)
-        return list(reversed(self._load_history(user_id, rack_id, item_id)))
+        return list(reversed(self._load_history(user_id, node_slug)))
 
-    def record_command(self, session, rack_id: str, item_id: str, command: str) -> None:
-        item = self._find_item(session, rack_id, item_id)
+    def record_command(self, session, node_slug: str, command: str) -> None:
+        node = self._find_node(session, node_slug)
         normalized = command.strip()
         if not normalized:
             return
         user_id = user_storage_id(session.user)
-        history = self._load_history(user_id, rack_id, item_id)
+        history = self._load_history(user_id, node_slug)
         history.append(
             CommandHistoryEntry(
                 command=normalized,
                 created_at=_now_iso(),
-                item_id=item.id,
-                item_name=item.name,
-                host=item.host,
+                node_slug=node.slug,
+                node_name=node.name,
+                host=node.host,
             )
         )
         payload = json.dumps([entry.model_dump() for entry in history[-HISTORY_LIMIT:]])
-        Redis.setex(self._history_key(user_id, rack_id, item_id), HISTORY_TTL, payload)
+        Redis.setex(self._history_key(user_id, node_slug), HISTORY_TTL, payload)
 
-    async def reboot_item(self, session, rack_id: str, item_id: str) -> None:
-        item = self._require_ssh_item(session, rack_id, item_id)
-        self.record_command(session, rack_id, item_id, "sudo reboot")
+    async def reboot_node(self, session, node_slug: str) -> None:
+        node = self._require_ssh_node(session, node_slug)
+        self.record_command(session, node_slug, "sudo reboot")
         conn = await asyncssh.connect(
-            **_connect_kwargs(item.host, item.ssh_user, item.ssh_port)
+            **_connect_kwargs(node.host, node.ssh_user, node.ssh_port)
         )
         try:
             try:
@@ -115,7 +110,6 @@ class SSHManager:
                     stderr = (await process.stderr.read()).strip()
                     raise RuntimeError(stderr or "Failed to reboot device")
             except asyncio.TimeoutError:
-                # The reboot command often drops the SSH session before it can exit cleanly.
                 return
             except (asyncssh.ConnectionLost, BrokenPipeError, OSError):
                 return
@@ -130,26 +124,23 @@ class SSHManager:
 
         async def check_target(target: PingStatusTarget) -> PingStatusEntry:
             try:
-                item = self._find_item(session, target.rack_id, target.item_id)
+                node = self._find_node(session, target.node_slug)
             except KeyError:
                 return PingStatusEntry(
-                    rack_id=target.rack_id,
-                    item_id=target.item_id,
+                    node_slug=target.node_slug,
                     status="unknown",
                 )
 
-            if not item.managed:
+            if not node.managed:
                 return PingStatusEntry(
-                    rack_id=target.rack_id,
-                    item_id=target.item_id,
+                    node_slug=target.node_slug,
                     status="unknown",
                 )
 
-            host = (item.host or "").strip()
+            host = (node.host or "").strip()
             if not host:
                 return PingStatusEntry(
-                    rack_id=target.rack_id,
-                    item_id=target.item_id,
+                    node_slug=target.node_slug,
                     status="unknown",
                 )
 
@@ -159,17 +150,16 @@ class SSHManager:
                 host_checks[host] = task
 
             return PingStatusEntry(
-                rack_id=target.rack_id,
-                item_id=target.item_id,
+                node_slug=target.node_slug,
                 status="online" if await task else "offline",
             )
 
         return await asyncio.gather(*(check_target(target) for target in targets))
 
-    async def proxy_terminal(self, session, rack_id: str, item_id: str, websocket) -> None:
-        item = self._require_ssh_item(session, rack_id, item_id)
+    async def proxy_terminal(self, session, node_slug: str, websocket) -> None:
+        node = self._require_ssh_node(session, node_slug)
         conn = await asyncssh.connect(
-            **_connect_kwargs(item.host, item.ssh_user, item.ssh_port)
+            **_connect_kwargs(node.host, node.ssh_user, node.ssh_port)
         )
         process = await conn.create_process(term_type="xterm")
 
@@ -187,7 +177,7 @@ class SSHManager:
                 if event_type == "input":
                     data = str(message.get("data") or "")
                     if data.endswith("\n"):
-                        self.record_command(session, rack_id, item_id, data.rstrip("\r\n"))
+                        self.record_command(session, node_slug, data.rstrip("\r\n"))
                     process.stdin.write(data)
                 elif event_type == "resize":
                     cols = int(message.get("cols") or 120)
@@ -205,9 +195,9 @@ class SSHManager:
             await websocket.send_json(
                 {
                     "type": "connected",
-                    "host": item.host,
-                    "ssh_user": item.ssh_user,
-                    "ssh_port": item.ssh_port,
+                    "host": node.host,
+                    "ssh_user": node.ssh_user,
+                    "ssh_port": node.ssh_port,
                 }
             )
             done, pending = await asyncio.wait(

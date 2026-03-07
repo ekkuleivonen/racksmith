@@ -93,7 +93,6 @@ function TreeItem({
   } = useDraggable({
     id: `drag:${fullPath}`,
     data: { path: fullPath, type: entry.type },
-    activationConstraint: { distance: 8 },
   });
 
   const { setNodeRef: setDropRef, isOver } = useDroppable({

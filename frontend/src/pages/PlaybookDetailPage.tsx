@@ -14,9 +14,10 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { formatRelativeTime } from "@/lib/format";
-import { getRack, listRacks, type RackDetail, type RackItem } from "@/lib/racks";
 import { usePlaybookStore } from "@/stores/playbooks";
 import { useRackStore } from "@/stores/racks";
+import { useGroupsStore } from "@/stores/groups";
+import { useNodesStore } from "@/stores/nodes";
 import {
   createPlaybookRun,
   deletePlaybook,
@@ -29,13 +30,13 @@ import {
   type PlaybookTargetSelection,
   type PlaybookUpsertRequest,
 } from "@/lib/playbooks";
+import {
+  ResizableHandle,
+  ResizablePanel,
+  ResizablePanelGroup,
+} from "@/components/ui/resizable";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-
-type RackItemGroup = {
-  rack: RackDetail;
-  items: RackItem[];
-};
 
 type SearchableFilterDropdownProps = {
   label: string;
@@ -46,25 +47,15 @@ type SearchableFilterDropdownProps = {
 };
 
 const EMPTY_TARGETS: PlaybookTargetSelection = {
-  rack_ids: [],
-  labels: [],
-  items: [],
+  groups: [],
+  tags: [],
+  nodes: [],
 };
 
 function toggleValue(values: string[], value: string): string[] {
   return values.includes(value)
     ? values.filter((entry) => entry !== value)
     : [...values, value];
-}
-
-function toggleItem(
-  values: PlaybookTargetSelection["items"],
-  rackId: string,
-  itemId: string,
-): PlaybookTargetSelection["items"] {
-  return values.some((item) => item.rack_id === rackId && item.item_id === itemId)
-    ? values.filter((item) => !(item.rack_id === rackId && item.item_id === itemId))
-    : [...values, { rack_id: rackId, item_id: itemId }];
 }
 
 function SearchableFilterDropdown({
@@ -139,7 +130,6 @@ export function PlaybookDetailPage() {
   const navigate = useNavigate();
   const [draft, setDraft] = useState<PlaybookUpsertRequest | null>(null);
   const [roleTemplates, setRoleTemplates] = useState<RoleTemplate[]>([]);
-  const [rackGroups, setRackGroups] = useState<RackItemGroup[]>([]);
   const [targets, setTargets] = useState<PlaybookTargetSelection>(EMPTY_TARGETS);
   const [resolvedHosts, setResolvedHosts] = useState<string[]>([]);
   const [runs, setRuns] = useState<PlaybookRun[]>([]);
@@ -149,13 +139,17 @@ export function PlaybookDetailPage() {
   const [resolving, setResolving] = useState(false);
   const [running, setRunning] = useState(false);
 
+  const groups = useGroupsStore((s) => s.groups);
+  const nodes = useNodesStore((s) => s.nodes);
+  const loadGroups = useGroupsStore((s) => s.load);
+  const loadNodes = useNodesStore((s) => s.load);
+
   const load = useCallback(async () => {
     if (!playbookId) return;
     setLoading(true);
     try {
-      const [playbookResult, rackSummaries, runsResult] = await Promise.all([
+      const [playbookResult, runsResult] = await Promise.all([
         getPlaybook(playbookId),
-        listRacks(),
         listPlaybookRuns(playbookId),
       ]);
       setDraft({
@@ -165,17 +159,6 @@ export function PlaybookDetailPage() {
         roles: playbookResult.playbook.role_entries,
       });
       setRoleTemplates(playbookResult.playbook.role_templates);
-
-      const groups = await Promise.all(
-        rackSummaries.map(async (summary) => {
-          const rack = await getRack(summary.id);
-          return {
-            rack: rack.rack,
-            items: rack.items.filter((item) => item.managed && item.host && item.ssh_user),
-          };
-        }),
-      );
-      setRackGroups(groups);
       setRuns(runsResult.runs);
       const activeRun = runsResult.runs.find(
         (run) => run.status === "queued" || run.status === "running",
@@ -183,48 +166,45 @@ export function PlaybookDetailPage() {
       setViewingRunId(
         activeRun?.id ?? runsResult.runs[0]?.id ?? null,
       );
+      await Promise.all([loadGroups(), loadNodes()]);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to load playbook");
     } finally {
       setLoading(false);
     }
-  }, [playbookId]);
+  }, [playbookId, loadGroups, loadNodes]);
 
   useEffect(() => {
     void load();
   }, [load]);
 
-  const labelOptions = useMemo(
+  const tagOptions = useMemo(
     () =>
       Array.from(
-        new Set(
-          rackGroups.flatMap((group) =>
-            group.items.flatMap((item) => item.tags),
-          ),
-        ),
+        new Set(nodes.flatMap((n) => n.tags ?? [])),
       ).sort(),
-    [rackGroups],
+    [nodes],
   );
 
-  const rackFilterOptions = useMemo(
+  const groupFilterOptions = useMemo(
     () =>
-      rackGroups.map((group) => ({
-        value: group.rack.id,
-        label: group.rack.name,
+      groups.map((g) => ({
+        value: g.slug,
+        label: g.name,
       })),
-    [rackGroups],
+    [groups],
   );
 
-  const itemFilterOptions = useMemo(
+  const nodeFilterOptions = useMemo(
     () =>
-      rackGroups.flatMap((group) =>
-        group.items.map((item) => ({
-          value: `${group.rack.id}:${item.id}`,
-          label: item.name || item.host || item.id,
-          group: group.rack.name,
+      nodes
+        .filter((n) => n.managed && n.host && n.ssh_user)
+        .map((n) => ({
+          value: n.slug,
+          label: n.name || n.host || n.slug,
+          group: (n.groups ?? [])[0],
         })),
-      ),
-    [rackGroups],
+    [nodes],
   );
 
   const handleRunUpdate = useCallback((run: PlaybookRun) => {
@@ -305,42 +285,40 @@ export function PlaybookDetailPage() {
 
                 <div className="grid gap-3 xl:grid-cols-3">
                   <SearchableFilterDropdown
-                    label="Racks"
-                    placeholder="Search racks..."
-                    options={rackFilterOptions}
-                    values={targets.rack_ids}
+                    label="Groups"
+                    placeholder="Search groups..."
+                    options={groupFilterOptions}
+                    values={targets.groups}
                     onToggle={(value) =>
                       setTargets((current) => ({
                         ...current,
-                        rack_ids: toggleValue(current.rack_ids, value),
+                        groups: toggleValue(current.groups, value),
                       }))
                     }
                   />
                   <SearchableFilterDropdown
-                    label="Labels"
-                    placeholder="Search labels..."
-                    options={labelOptions.map((label) => ({ value: label, label }))}
-                    values={targets.labels}
+                    label="Tags"
+                    placeholder="Search tags..."
+                    options={tagOptions.map((tag) => ({ value: tag, label: tag }))}
+                    values={targets.tags}
                     onToggle={(value) =>
                       setTargets((current) => ({
                         ...current,
-                        labels: toggleValue(current.labels, value),
+                        tags: toggleValue(current.tags, value),
                       }))
                     }
                   />
                   <SearchableFilterDropdown
-                    label="Items"
-                    placeholder="Search items..."
-                    options={itemFilterOptions}
-                    values={targets.items.map((item) => `${item.rack_id}:${item.item_id}`)}
-                    onToggle={(value) => {
-                      const [rackId, itemId] = value.split(":", 2);
-                      if (!rackId || !itemId) return;
+                    label="Nodes"
+                    placeholder="Search nodes..."
+                    options={nodeFilterOptions}
+                    values={targets.nodes}
+                    onToggle={(value) =>
                       setTargets((current) => ({
                         ...current,
-                        items: toggleItem(current.items, rackId, itemId),
-                      }));
-                    }}
+                        nodes: toggleValue(current.nodes, value),
+                      }))
+                    }
                   />
                 </div>
 
@@ -350,7 +328,7 @@ export function PlaybookDetailPage() {
                     {resolving ? <LoaderCircle className="size-4 animate-spin text-zinc-400" /> : null}
                   </div>
                   <p className="text-xs text-zinc-500">
-                    Active filters: {targets.rack_ids.length} rack, {targets.labels.length} label, {targets.items.length} item
+                    Active filters: {targets.groups.length} group, {targets.tags.length} tag, {targets.nodes.length} node
                   </p>
                   {resolvedHosts.length === 0 ? (
                     <p className="text-xs text-zinc-500">No hosts matched the current selection.</p>
@@ -398,7 +376,11 @@ export function PlaybookDetailPage() {
               </section>
 
               <PlaybookRunOutput
-                run={runs.find((r) => r.status === "queued" || r.status === "running") ?? null}
+                run={
+                  runs.find((r) => r.status === "queued" || r.status === "running") ??
+                  runs.find((r) => r.id === viewingRunId) ??
+                  null
+                }
                 onRunUpdate={handleRunUpdate}
               />
             </div>
@@ -410,56 +392,64 @@ export function PlaybookDetailPage() {
                 <p className="text-zinc-500 text-sm">No runs yet. Run a playbook from the Run tab.</p>
               </section>
             ) : (
-              <div className="grid gap-4 lg:grid-cols-[12rem_1fr]">
-                <section className="border border-zinc-800 bg-zinc-900/30 p-3">
-                  <p className="mb-2 text-xs font-medium text-zinc-400">Run history</p>
-                  <ScrollArea className="h-[20rem]">
-                    <div className="space-y-0.5 pr-2">
-                      {runs.map((r) => (
-                        <button
-                          key={r.id}
-                          type="button"
-                          onClick={() => setViewingRunId(r.id)}
-                          className={`w-full rounded px-2 py-1.5 text-left text-xs transition-colors hover:bg-zinc-800/80 ${
-                            viewingRunId === r.id
-                              ? "bg-zinc-800 text-zinc-100"
-                              : "text-zinc-400"
-                          }`}
-                        >
-                          <div className="flex items-center gap-1.5">
-                            <Badge
-                              variant={
-                                r.status === "completed"
-                                  ? "default"
-                                  : r.status === "failed"
-                                    ? "destructive"
-                                    : "outline"
-                              }
-                              className="text-[10px] px-1"
-                            >
-                              {r.status}
-                            </Badge>
-                            <span className="truncate text-[10px]">
-                              {formatRelativeTime(r.created_at)}
-                            </span>
-                          </div>
-                          <p className="mt-0.5 truncate text-[10px] text-zinc-500">
-                            {r.hosts.length} host{r.hosts.length === 1 ? "" : "s"}
-                            {r.exit_code != null ? ` · exit ${r.exit_code}` : ""}
-                            {r.commit_sha ? (
-                              <span title={r.commit_sha}> · {r.commit_sha.slice(0, 7)}</span>
-                            ) : null}
-                          </p>
-                        </button>
-                      ))}
-                    </div>
-                  </ScrollArea>
-                </section>
-                <PlaybookRunOutput
-                  run={runs.find((r) => r.id === viewingRunId) ?? null}
-                  onRunUpdate={handleRunUpdate}
-                />
-              </div>
+              <ResizablePanelGroup
+                direction="horizontal"
+                className="min-h-0 flex-1"
+              >
+                <ResizablePanel defaultSize={20} minSize={12} className="min-w-0">
+                  <section className="h-full border border-zinc-800 bg-zinc-900/30 p-3 flex flex-col min-h-0">
+                    <p className="mb-2 text-xs font-medium text-zinc-400 shrink-0">Run history</p>
+                    <ScrollArea className="flex-1 min-h-0">
+                      <div className="space-y-0.5 pr-2">
+                        {runs.map((r) => (
+                          <button
+                            key={r.id}
+                            type="button"
+                            onClick={() => setViewingRunId(r.id)}
+                            className={`w-full rounded px-2 py-1.5 text-left text-xs transition-colors hover:bg-zinc-800/80 ${
+                              viewingRunId === r.id
+                                ? "bg-zinc-800 text-zinc-100"
+                                : "text-zinc-400"
+                            }`}
+                          >
+                            <div className="flex items-center gap-1.5">
+                              <Badge
+                                variant={
+                                  r.status === "completed"
+                                    ? "default"
+                                    : r.status === "failed"
+                                      ? "destructive"
+                                      : "outline"
+                                }
+                                className="text-[10px] px-1"
+                              >
+                                {r.status}
+                              </Badge>
+                              <span className="truncate text-[10px]">
+                                {formatRelativeTime(r.created_at)}
+                              </span>
+                            </div>
+                            <p className="mt-0.5 truncate text-[10px] text-zinc-500">
+                              {r.hosts.length} host{r.hosts.length === 1 ? "" : "s"}
+                              {r.exit_code != null ? ` · exit ${r.exit_code}` : ""}
+                              {r.commit_sha ? (
+                                <span title={r.commit_sha}> · {r.commit_sha.slice(0, 7)}</span>
+                              ) : null}
+                            </p>
+                          </button>
+                        ))}
+                      </div>
+                    </ScrollArea>
+                  </section>
+                </ResizablePanel>
+                <ResizableHandle withHandle className="bg-zinc-800" />
+                <ResizablePanel defaultSize={80} minSize={40} className="min-w-0">
+                  <PlaybookRunOutput
+                    run={runs.find((r) => r.id === viewingRunId) ?? null}
+                    onRunUpdate={handleRunUpdate}
+                  />
+                </ResizablePanel>
+              </ResizablePanelGroup>
             )}
           </TabsContent>
 

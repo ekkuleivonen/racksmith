@@ -6,7 +6,6 @@ import json
 import os
 import re
 import uuid
-from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -17,7 +16,7 @@ import settings
 from _utils.db import _get_db, row_to_playbook_run
 from github.misc import get_head_sha, user_storage_id
 from playbooks.role_templates import BUILTIN_ROLE_PREFIX, ROLE_TEMPLATE_SPECS
-from racks.managers import rack_manager
+from nodes.managers import node_manager
 from setup.managers import setup_manager
 
 from playbooks.schemas import (
@@ -32,10 +31,10 @@ from playbooks.schemas import (
     RoleTemplate,
 )
 
-PLAYBOOKS_DIR = Path("ansible_scripts/playbooks")
+PLAYBOOKS_DIR = Path(".racksmith/playbooks")
 ROLES_DIR = PLAYBOOKS_DIR / "roles"
 LEGACY_ROLES_DIR = Path("ansible_scripts/roles")
-INVENTORY_DIR = Path("ansible_scripts/inventory")
+INVENTORY_DIR = Path(".racksmith/inventory")
 RESERVED_DESCRIPTION_KEY = "racksmith_description"
 RUN_EVENTS_CHANNEL_PREFIX = "racksmith:run:"
 PLAYBOOK_ID_RE = re.compile(r"^[a-zA-Z0-9._-]+$")
@@ -47,16 +46,6 @@ def _now_iso() -> str:
 
 def _new_id() -> str:
     return uuid.uuid4().hex[:12]
-
-
-@dataclass(slots=True)
-class _InventoryEntry:
-    host_key: str
-    rack_id: str
-    rack_name: str
-    item_id: str
-    item_name: str
-    labels: list[str]
 
 
 class PlaybookManager:
@@ -295,66 +284,36 @@ class PlaybookManager:
             raise FileNotFoundError("Playbook not found")
         path.unlink(missing_ok=True)
 
-    def _inventory_entries(self, session) -> list[_InventoryEntry]:
-        entries: list[_InventoryEntry] = []
-        try:
-            rack_summaries = rack_manager.list_racks(session)
-        except FileNotFoundError:
-            return []
-
-        for summary in rack_summaries:
-            rack = rack_manager.get_rack(session, summary.id)
-            hosts: dict[str, dict[str, Any]] = {}
-            for item in rack.items:
-                if not item.managed or not item.host or not item.ssh_user:
-                    continue
-                host_key = rack_manager._inventory_unique_host_key(item, hosts)
-                hosts[host_key] = {}
-                entries.append(
-                    _InventoryEntry(
-                        host_key=host_key,
-                        rack_id=rack.id,
-                        rack_name=rack.name,
-                        item_id=item.id,
-                        item_name=item.name,
-                        labels=item.tags,
-                    )
-                )
-        return entries
-
     def resolve_targets(
         self, session, targets: PlaybookTargetSelection
     ) -> PlaybookResolveTargetsResponse:
-        entries = self._inventory_entries(session)
-        filtered_entries = entries
+        try:
+            all_nodes = node_manager.list_nodes(session)
+        except FileNotFoundError:
+            return PlaybookResolveTargetsResponse(hosts=[])
 
-        wanted_racks = {rack_id.strip() for rack_id in targets.rack_ids if rack_id.strip()}
-        if wanted_racks:
-            filtered_entries = [
-                entry for entry in filtered_entries if entry.rack_id in wanted_racks
+        managed = [n for n in all_nodes if n.managed and n.host and n.ssh_user]
+        filtered = managed
+
+        wanted_groups = {g.strip() for g in targets.groups if g.strip()}
+        if wanted_groups:
+            filtered = [
+                n for n in filtered
+                if wanted_groups.intersection(set(n.groups))
             ]
 
-        wanted_labels = {label.strip() for label in targets.labels if label.strip()}
-        if wanted_labels:
-            filtered_entries = [
-                entry
-                for entry in filtered_entries
-                if wanted_labels.issubset(set(entry.labels))
+        wanted_tags = {t.strip() for t in targets.tags if t.strip()}
+        if wanted_tags:
+            filtered = [
+                n for n in filtered
+                if wanted_tags.issubset(set(n.tags))
             ]
 
-        wanted_items = {
-            (item.rack_id.strip(), item.item_id.strip())
-            for item in targets.items
-            if item.rack_id.strip() and item.item_id.strip()
-        }
-        if wanted_items:
-            filtered_entries = [
-                entry
-                for entry in filtered_entries
-                if (entry.rack_id, entry.item_id) in wanted_items
-            ]
+        wanted_nodes = {s.strip() for s in targets.nodes if s.strip()}
+        if wanted_nodes:
+            filtered = [n for n in filtered if n.slug in wanted_nodes]
 
-        hosts = sorted({entry.host_key for entry in filtered_entries})
+        hosts = sorted({n.slug for n in filtered})
         return PlaybookResolveTargetsResponse(hosts=hosts)
 
     async def list_runs(self, session, playbook_id: str | None = None) -> list[PlaybookRun]:

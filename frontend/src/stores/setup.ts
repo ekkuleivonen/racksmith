@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { toast } from "sonner";
 import {
   activateLocalRepo,
+  dropLocalRepo,
   getSetupStatus,
   listLocalRepos,
   type LocalRepo,
@@ -9,6 +10,8 @@ import {
 } from "@/lib/setup";
 import { fetchMachinePublicKey } from "@/lib/ssh";
 import { useRackStore } from "./racks";
+import { useNodesStore } from "./nodes";
+import { useGroupsStore } from "./groups";
 import { usePlaybookStore } from "./playbooks";
 
 type SetupStore = {
@@ -21,6 +24,7 @@ type SetupStore = {
   publicKeyOpen: boolean;
   load: () => Promise<void>;
   switchRepo: (owner: string, repo: string) => Promise<void>;
+  dropRepo: (owner: string, repo: string) => Promise<void>;
   openPublicKey: () => Promise<void>;
   setPublicKeyOpen: (open: boolean) => void;
 };
@@ -59,6 +63,8 @@ export const useSetupStore = create<SetupStore>((set, get) => ({
       set({ status: nextStatus, localRepos: nextLocalRepos });
       await Promise.all([
         useRackStore.getState().load(),
+        useNodesStore.getState().load(),
+        useGroupsStore.getState().load(),
         usePlaybookStore.getState().load(),
       ]);
       toast.success(`Switched to ${owner}/${repo}`);
@@ -68,6 +74,28 @@ export const useSetupStore = create<SetupStore>((set, get) => ({
       );
     } finally {
       set({ switchingRepo: false });
+    }
+  },
+
+  dropRepo: async (owner: string, repo: string) => {
+    try {
+      await dropLocalRepo(owner, repo);
+      const [nextStatus, nextLocalRepos] = await Promise.all([
+        getSetupStatus(),
+        listLocalRepos().catch(() => []),
+      ]);
+      set({ status: nextStatus, localRepos: nextLocalRepos });
+      await Promise.all([
+        useRackStore.getState().load(),
+        useNodesStore.getState().load(),
+        useGroupsStore.getState().load(),
+        usePlaybookStore.getState().load(),
+      ]);
+      toast.success(`Dropped ${owner}/${repo}`);
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Failed to drop repo",
+      );
     }
   },
 

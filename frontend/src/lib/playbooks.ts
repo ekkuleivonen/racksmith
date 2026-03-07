@@ -36,15 +36,10 @@ export type PlaybookDetail = PlaybookSummary & {
   raw_content: string;
 };
 
-export type PlaybookTargetItem = {
-  rack_id: string;
-  item_id: string;
-};
-
 export type PlaybookTargetSelection = {
-  rack_ids: string[];
-  labels: string[];
-  items: PlaybookTargetItem[];
+  groups: string[];
+  tags: string[];
+  nodes: string[];
 };
 
 export type PlaybookUpsertRequest = {

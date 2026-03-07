@@ -3,23 +3,23 @@ import { Terminal } from "xterm";
 import { FitAddon } from "xterm-addon-fit";
 import { Button } from "@/components/ui/button";
 import { sshTerminalUrl } from "@/lib/ssh";
-import type { RackItem } from "@/lib/racks";
+import type { Node } from "@/lib/nodes";
 
 interface SshTerminalProps {
-  rackId: string;
-  item: RackItem;
+  nodeSlug: string;
+  node: Node;
   title?: string;
   description?: string;
 }
 
 export function SshTerminal({
-  rackId,
-  item,
+  nodeSlug,
+  node,
   title,
   description,
 }: SshTerminalProps) {
   const [enabled, setEnabled] = useState(false);
-  const [connected, setConnected] = useState(false);
+  const [, setConnected] = useState(false);
   const hostRef = useRef<HTMLDivElement | null>(null);
   const socketRef = useRef<WebSocket | null>(null);
   const terminalRef = useRef<Terminal | null>(null);
@@ -46,10 +46,10 @@ export function SshTerminal({
     terminal.open(hostRef.current);
     fitAddon.fit();
     terminal.writeln(
-      `Opening SSH session to ${item.ssh_user}@${item.host}:${item.ssh_port}...`,
+      `Opening SSH session to ${node.ssh_user}@${node.host}:${node.ssh_port}...`,
     );
 
-    const socket = new WebSocket(sshTerminalUrl(rackId, item.id));
+    const socket = new WebSocket(sshTerminalUrl(nodeSlug));
     socketRef.current = socket;
     terminalRef.current = terminal;
     fitAddonRef.current = fitAddon;
@@ -128,7 +128,7 @@ export function SshTerminal({
       terminalRef.current = null;
       fitAddonRef.current = null;
     };
-  }, [enabled, item.host, item.id, item.ssh_port, item.ssh_user, rackId]);
+  }, [enabled, node.host, node.slug, node.ssh_port, node.ssh_user, nodeSlug]);
 
   useEffect(() => {
     setEnabled(false);
@@ -138,7 +138,7 @@ export function SshTerminal({
     socketRef.current = null;
     terminalRef.current = null;
     fitAddonRef.current = null;
-  }, [item.id]);
+  }, [node.slug]);
 
   const closeSession = () => {
     if (socketRef.current?.readyState === WebSocket.OPEN) {

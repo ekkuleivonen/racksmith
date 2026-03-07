@@ -1,120 +1,36 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
-import { toast } from "sonner";
+import { useEffect } from "react";
+import { Link, Navigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { AppShell } from "@/components/app-shell";
+import { HomeDashboard } from "@/components/home-dashboard";
 import { useAuth } from "@/context/auth-context";
-import { listRacks } from "@/lib/racks";
-import {
-  createGithubRepo,
-  getSetupStatus,
-  listGithubRepos,
-  selectGithubRepo,
-  type GithubRepoChoice,
-  type SetupStatus,
-} from "@/lib/setup";
+import { useSetupStore } from "@/stores/setup";
+import { useNodesStore } from "@/stores/nodes";
 
-const CREATE_NEW_REPO_VALUE = "__create_new_repo__";
+function isSetupComplete(
+  loading: boolean,
+  repoReady: boolean,
+  nodesCount: number
+): boolean {
+  return !loading && repoReady && nodesCount > 0;
+}
 
 export function HomePage() {
-  const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
-  const { user, isLoading, isAuthenticated, login } = useAuth();
-  const [status, setStatus] = useState<SetupStatus | null>(null);
-  const [repos, setRepos] = useState<GithubRepoChoice[]>([]);
-  const [loadingStatus, setLoadingStatus] = useState(false);
-  const [loadingRepos, setLoadingRepos] = useState(false);
-  const [newRepoName, setNewRepoName] = useState("");
-  const [selectedRepoValue, setSelectedRepoValue] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-  const manageRepos = searchParams.get("manageRepos") === "1";
-
-  const navigateToRackDestination = useCallback(
-    async (next: SetupStatus) => {
-      if (!next.repo_ready) return;
-      if (!next.rack_ready) {
-        navigate("/rack/create", { replace: true });
-        return;
-      }
-      const racks = await listRacks();
-      navigate(racks[0] ? `/rack/view/${racks[0].id}` : "/rack/create", { replace: true });
-    },
-    [navigate]
-  );
-
-  const refreshStatus = useCallback(async (navigateWhenReady = !manageRepos) => {
-    setLoadingStatus(true);
-    try {
-      const next = await getSetupStatus();
-      setStatus(next);
-      if (navigateWhenReady && next.repo_ready) {
-        await navigateToRackDestination(next);
-      }
-      return next;
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to load workspace");
-      return null;
-    } finally {
-      setLoadingStatus(false);
-    }
-  }, [manageRepos, navigateToRackDestination]);
-
-  const loadRepos = useCallback(async () => {
-    setLoadingRepos(true);
-    try {
-      const next = await listGithubRepos();
-      setRepos(next);
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to load repositories");
-    } finally {
-      setLoadingRepos(false);
-    }
-  }, []);
+  const { isLoading: authLoading, isAuthenticated } = useAuth();
+  const loading = useSetupStore((s) => s.loading);
+  const status = useSetupStore((s) => s.status);
+  const loadSetup = useSetupStore((s) => s.load);
+  const nodes = useNodesStore((s) => s.nodes);
+  const loadNodes = useNodesStore((s) => s.load);
 
   useEffect(() => {
-    if (!isAuthenticated) {
-      setStatus(null);
-      return;
+    if (isAuthenticated) {
+      void loadSetup();
+      void loadNodes();
     }
-    void refreshStatus();
-  }, [isAuthenticated, refreshStatus]);
+  }, [isAuthenticated, loadSetup, loadNodes]);
 
-  useEffect(() => {
-    if (!isAuthenticated || (!manageRepos && status?.repo_ready)) return;
-    void loadRepos();
-  }, [isAuthenticated, loadRepos, manageRepos, status?.repo_ready]);
-
-  useEffect(() => {
-    if (repos.length === 0) {
-      setSelectedRepoValue(CREATE_NEW_REPO_VALUE);
-      return;
-    }
-    const activeRepoValue = status?.repo ? `repo:${status.repo.owner}/${status.repo.repo}` : "";
-    setSelectedRepoValue((current) => {
-      if (current && (current === CREATE_NEW_REPO_VALUE || repos.some((repo) => `repo:${repo.owner}/${repo.name}` === current))) {
-        return current;
-      }
-      if (activeRepoValue) return activeRepoValue;
-      const [firstRepo] = repos;
-      return firstRepo ? `repo:${firstRepo.owner}/${firstRepo.name}` : CREATE_NEW_REPO_VALUE;
-    });
-  }, [repos, status?.repo]);
-
-  const selectedExistingRepo = useMemo(() => {
-    if (!selectedRepoValue.startsWith("repo:")) return null;
-    const fullName = selectedRepoValue.slice("repo:".length);
-    return repos.find((repo) => `${repo.owner}/${repo.name}` === fullName) ?? null;
-  }, [repos, selectedRepoValue]);
-
-  if (isLoading || (isAuthenticated && loadingStatus && !status)) {
+  if (authLoading) {
     return (
       <div className="flex-1 flex items-center justify-center">
         <p className="text-zinc-500 text-sm">Loading...</p>
@@ -124,155 +40,57 @@ export function HomePage() {
 
   if (!isAuthenticated) {
     return (
-      <div className="flex-1 flex items-center justify-center py-12 overflow-auto">
-        <div className="max-w-xl w-full mx-4 space-y-8">
-          <div className="space-y-3 text-center">
-            <h1 className="text-3xl font-bold text-zinc-100">RACKSMITH</h1>
-            <p className="text-sm text-zinc-500">
-              Rack builder, SSH terminal, and code workspace backed by your locally cloned GitHub repo.
-            </p>
-          </div>
-
-          <Card className="border-zinc-800 bg-zinc-900/40">
-            <CardHeader>
-              <CardTitle>Get started</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <p className="text-zinc-400 text-sm">
-                Sign in with GitHub, choose or create a repo, then create your first rack.
-              </p>
-              <Button onClick={login}>Login with GitHub</Button>
-            </CardContent>
-          </Card>
-        </div>
-      </div>
-    );
-  }
-
-  if (!status?.repo_ready || manageRepos) {
-    return (
-      <div className="flex-1 overflow-auto p-6">
-        <div className="max-w-3xl mx-auto space-y-6">
-          <div className="space-y-1">
-            <h1 className="text-zinc-100 text-xl font-semibold">
-              {manageRepos ? "Manage repos" : "Choose a repo for your racks"}
+      <div className="flex-1 flex items-center justify-center py-16 overflow-auto">
+        <div className="max-w-2xl w-full mx-6 space-y-12">
+          <div className="space-y-4 text-center">
+            <h1 className="text-4xl font-bold text-zinc-100 tracking-tight">
+              RACKSMITH
             </h1>
-            <p className="text-sm text-zinc-500">
-              Signed in as {user?.login}. Repositories are cloned locally and can contain multiple racks.
+            <p className="text-lg text-zinc-400 max-w-xl mx-auto">
+              Infrastructure as code, backed by Git. Define your hardware, run
+              Ansible playbooks, and manage nodes from a single GitOps repo.
             </p>
           </div>
 
-          <Card className="border-zinc-800 bg-zinc-900/40">
-            <CardHeader className="space-y-3">
-              <CardTitle>Repo</CardTitle>
-              <p className="text-xs text-zinc-500">
-                Import an existing repo with `.racksmith`, or use the final option to create a new one.
-              </p>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {loadingRepos ? (
-                <p className="text-zinc-500 text-sm">Loading repositories...</p>
-              ) : (
-                <>
-                  <Select
-                    disabled={submitting}
-                    value={selectedRepoValue}
-                    onValueChange={setSelectedRepoValue}
-                  >
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Select a repo" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {repos.map((repo) => (
-                        <SelectItem key={repo.id} value={`repo:${repo.owner}/${repo.name}`}>
-                          {repo.full_name}
-                        </SelectItem>
-                      ))}
-                      <SelectItem value={CREATE_NEW_REPO_VALUE}>Create new repo</SelectItem>
-                    </SelectContent>
-                  </Select>
-
-                  {selectedRepoValue === CREATE_NEW_REPO_VALUE ? (
-                    <>
-                      <p className="text-sm text-zinc-500">
-                        {repos.length === 0
-                          ? "No importable repositories found. Create a new one to continue."
-                          : "Create a fresh GitHub repo and make it the active local repo."}
-                      </p>
-                      <Input
-                        value={newRepoName}
-                        onChange={(event) => setNewRepoName(event.target.value)}
-                        placeholder="rack-office"
-                      />
-                      <Button
-                        disabled={submitting || !newRepoName.trim()}
-                        onClick={async () => {
-                          setSubmitting(true);
-                          try {
-                            await createGithubRepo(newRepoName.trim(), true);
-                            await refreshStatus(true);
-                            toast.success(`Created ${newRepoName.trim()}`);
-                          } catch (error) {
-                            toast.error(
-                              error instanceof Error ? error.message : "Failed to create repo"
-                            );
-                          } finally {
-                            setSubmitting(false);
-                          }
-                        }}
-                      >
-                        Create and use repo
-                      </Button>
-                    </>
-                  ) : selectedExistingRepo ? (
-                    <>
-                      <p className="text-sm text-zinc-500">
-                        {selectedExistingRepo.private
-                          ? "Private repo"
-                          : "Public repo"}{" "}
-                        ready to import.
-                      </p>
-                      <Button
-                        disabled={submitting}
-                        onClick={async () => {
-                          setSubmitting(true);
-                          try {
-                            await selectGithubRepo(
-                              selectedExistingRepo.owner,
-                              selectedExistingRepo.name
-                            );
-                            await refreshStatus(true);
-                            toast.success(`Using ${selectedExistingRepo.full_name}`);
-                          } catch (error) {
-                            toast.error(
-                              error instanceof Error ? error.message : "Failed to select repo"
-                            );
-                          } finally {
-                            setSubmitting(false);
-                          }
-                        }}
-                      >
-                        Use repo
-                      </Button>
-                    </>
-                  ) : (
-                    <p className="text-zinc-500 text-sm">Select a repo to continue.</p>
-                  )}
-                </>
-              )}
-            </CardContent>
-          </Card>
-          {manageRepos ? (
-            <div className="flex justify-end">
-              <Button variant="outline" onClick={() => void refreshStatus(true)}>
-                Back to app
-              </Button>
+          <div className="space-y-6 text-zinc-500 text-sm max-w-lg mx-auto">
+            <div className="space-y-2">
+              <h2 className="text-zinc-300 font-medium">What it does</h2>
+              <ul className="space-y-1.5 list-disc list-inside">
+                <li>
+                  Rack builder — define servers, network gear, and topology in
+                  YAML
+                </li>
+                <li>SSH terminal — connect to nodes with one click</li>
+                <li>
+                  Code workspace — edit playbooks and inventory in the browser
+                </li>
+                <li>Ansible integration — run playbooks and track runs</li>
+              </ul>
             </div>
-          ) : null}
+            <p>
+              Racksmith plugs into any Git repo. Connect your GitHub account,
+              pick a repo, and start defining your infra. Everything lives in
+              version control.
+            </p>
+          </div>
+
+          <div className="flex justify-center gap-3">
+            <Button size="lg" asChild>
+              <Link to="/setup">Get started</Link>
+            </Button>
+          </div>
         </div>
       </div>
     );
   }
 
-  return null;
+  if (!isSetupComplete(loading, status?.repo_ready ?? false, nodes.length)) {
+    return <Navigate to="/setup" replace />;
+  }
+
+  return (
+    <AppShell title="Home">
+      <HomeDashboard />
+    </AppShell>
+  );
 }

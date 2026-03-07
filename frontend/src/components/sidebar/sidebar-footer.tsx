@@ -10,7 +10,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useSetupStore } from "@/stores/setup";
-import { useRackStore } from "@/stores/racks";
+import { useNodesStore } from "@/stores/nodes";
 import { useCodeStore } from "@/stores/code";
 
 export const MANAGE_REPOS_VALUE = "__manage_repos__";
@@ -36,18 +36,17 @@ export function SidebarFooter({ onLogout }: SidebarFooterProps) {
   const handleRepoChange = async (value: string) => {
     if (!value || switchingRepo) return;
     if (value === MANAGE_REPOS_VALUE) {
-      navigate("/?manageRepos=1");
+      navigate("/repos");
       return;
     }
     const [owner, repo] = value.split("/", 2);
     if (!owner || !repo) return;
     await switchRepo(owner, repo);
     const newStatus = useSetupStore.getState().status;
-    const newRackEntries = useRackStore.getState().rackEntries;
-    const path =
-      newStatus?.rack_ready && newRackEntries[0]
-        ? `/rack/view/${newRackEntries[0].rack.id}`
-        : "/rack/create";
+    const newNodes = useNodesStore.getState().nodes;
+    const path = newStatus?.nodes_ready && newNodes[0]
+      ? `/nodes/${newNodes[0].slug}`
+      : "/nodes";
     navigate(path, { replace: true });
   };
 

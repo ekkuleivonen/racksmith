@@ -9,7 +9,7 @@ import {
 } from "@/components/ui/accordion";
 import { useRackStore } from "@/stores/racks";
 import { usePingStore } from "@/stores/ping";
-import { itemStatusKey } from "@/lib/ssh";
+import { nodeStatusKey } from "@/lib/ssh";
 
 export function SidebarRacksSection() {
   const location = useLocation();
@@ -18,9 +18,8 @@ export function SidebarRacksSection() {
   const rackEntries = useRackStore((s) => s.rackEntries);
   const pingStatuses = usePingStore((s) => s.statuses);
 
-  const racksHref =
-    rackEntries[0] ? `/rack/view/${rackEntries[0].rack.id}` : "/rack/create";
-  const defaultExpanded = rackEntries.map(({ rack }) => rack.id);
+  const racksHref = "/racks";
+  const defaultExpanded = rackEntries.map(({ rack }) => rack.slug);
 
   return (
     <div className="space-y-1">
@@ -30,7 +29,7 @@ export function SidebarRacksSection() {
           className={({ isActive }) =>
             cn(
               "text-[11px] uppercase tracking-wide",
-              isActive || pathname.startsWith("/rack/")
+              isActive || pathname === "/racks" || pathname.startsWith("/rack/")
                 ? "text-zinc-100"
                 : "text-zinc-400 hover:text-zinc-200",
             )
@@ -55,10 +54,10 @@ export function SidebarRacksSection() {
             defaultValue={defaultExpanded}
             className="w-full border-0"
           >
-            {rackEntries.map(({ rack, items }) => (
+            {rackEntries.map(({ rack, nodes }) => (
               <AccordionItem
-                key={rack.id}
-                value={rack.id}
+                key={rack.slug}
+                value={rack.slug}
                 className="border-0"
               >
                 <AccordionTrigger hideIcon className="py-0.5 pl-0.5 pr-1.5 hover:no-underline font-normal rounded text-zinc-400 hover:bg-zinc-800/50 hover:text-zinc-300 flex items-center gap-1.5 group">
@@ -70,7 +69,7 @@ export function SidebarRacksSection() {
                     <ChevronRight className="size-3.5" />
                   </button>
                   <NavLink
-                    to={`/rack/view/${rack.id}`}
+                    to={`/rack/view/${rack.slug}`}
                     onClick={(e) => e.stopPropagation()}
                     className={({ isActive }) =>
                       cn(
@@ -86,19 +85,18 @@ export function SidebarRacksSection() {
                 </AccordionTrigger>
                 <AccordionContent className="pt-0 !pb-0 !h-auto [&_a]:no-underline">
                   <div className="space-y-0.5 border-l border-zinc-800 ml-2 pl-2">
-                    {items.length === 0 ? (
+                    {nodes.length === 0 ? (
                       <p className="px-2 py-0.5 text-[10px] text-zinc-600">
                         No hardware yet
                       </p>
                     ) : (
-                      items.map((item) => {
-                        const itemStatus =
-                          pingStatuses[itemStatusKey(rack.id, item.id)] ??
-                          "unknown";
+                      nodes.map((node) => {
+                        const nodeStatus =
+                          pingStatuses[nodeStatusKey(node.slug)] ?? "unknown";
                         return (
                           <NavLink
-                            key={item.id}
-                            to={`/rack/${rack.id}/item/${item.id}`}
+                            key={node.slug}
+                            to={`/nodes/${node.slug}`}
                             className={({ isActive }) =>
                               cn(
                                 "flex items-center gap-1.5 rounded py-0.5 px-1.5 text-xs no-underline",
@@ -111,20 +109,20 @@ export function SidebarRacksSection() {
                             <span
                               className={cn(
                                 "size-1 shrink-0 rounded-full",
-                                itemStatus === "online" && "bg-emerald-400",
-                                itemStatus === "offline" && "bg-red-500",
-                                itemStatus === "unknown" && "bg-zinc-700",
+                                nodeStatus === "online" && "bg-emerald-400",
+                                nodeStatus === "offline" && "bg-red-500",
+                                nodeStatus === "unknown" && "bg-zinc-700",
                               )}
                               title={
-                                itemStatus === "online"
+                                nodeStatus === "online"
                                   ? "Online"
-                                  : itemStatus === "offline"
+                                  : nodeStatus === "offline"
                                     ? "Offline"
                                     : "Unknown"
                               }
                             />
                             <span className="truncate">
-                              {item.name || item.host || item.id}
+                              {node.name || node.host || node.slug}
                             </span>
                           </NavLink>
                         );

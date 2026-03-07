@@ -1,14 +1,20 @@
 import { create } from "zustand";
 import { toast } from "sonner";
-import { getRack, listRacks } from "@/lib/racks";
-import type { RackNavEntry } from "@/lib/racks";
+import { listRacks, getRackLayout } from "@/lib/racks";
+import type { RackSummary } from "@/lib/racks";
+import type { Node } from "@/lib/nodes";
 
-type RackStore = {
+export type RackNavEntry = {
+  rack: RackSummary;
+  nodes: Node[];
+};
+
+type RacksStore = {
   rackEntries: RackNavEntry[];
   load: () => Promise<void>;
 };
 
-export const useRackStore = create<RackStore>((set) => ({
+export const useRackStore = create<RacksStore>((set) => ({
   rackEntries: [],
 
   load: async () => {
@@ -16,8 +22,11 @@ export const useRackStore = create<RackStore>((set) => ({
       const nextRacks = await listRacks().catch(() => []);
       const nextRackEntries = await Promise.all(
         nextRacks.map(async (rack) => {
-          const detail = await getRack(rack.id);
-          return { rack, items: detail.items.filter((item) => item.managed) };
+          const { layout } = await getRackLayout(rack.slug);
+          return {
+            rack,
+            nodes: layout.nodes.filter((n) => n.managed),
+          };
         }),
       );
       set({ rackEntries: nextRackEntries });

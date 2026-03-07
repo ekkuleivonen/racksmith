@@ -10,14 +10,13 @@ from pydantic import BaseModel
 class CommandHistoryEntry(BaseModel):
     command: str
     created_at: str
-    item_id: str
-    item_name: str
+    node_slug: str
+    node_name: str
     host: str
 
 
 class PingStatusTarget(BaseModel):
-    rack_id: str
-    item_id: str
+    node_slug: str
 
 
 class PingStatusRequest(BaseModel):
@@ -25,6 +24,5 @@ class PingStatusRequest(BaseModel):
 
 
 class PingStatusEntry(BaseModel):
-    rack_id: str
-    item_id: str
+    node_slug: str
     status: Literal["online", "offline", "unknown"]

@@ -1,12 +1,31 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
-  <!-- House roof -->
-  <path d="M16 3L4 13h24L16 3z" fill="#a1a1aa" />
-  <!-- Data layers -->
-  <ellipse cx="16" cy="17" rx="12" ry="3.5" fill="#3f3f46" stroke="#71717a" stroke-width="0.8"/>
-  <ellipse cx="16" cy="21" rx="12" ry="3.5" fill="#3f3f46" stroke="#71717a" stroke-width="0.8"/>
-  <ellipse cx="16" cy="25" rx="12" ry="3.5" fill="#3f3f46" stroke="#71717a" stroke-width="0.8"/>
-  <!-- Top highlight on each layer -->
-  <ellipse cx="16" cy="17" rx="12" ry="3.5" fill="none" stroke="#a1a1aa" stroke-width="0.5" opacity="0.5"/>
-  <ellipse cx="16" cy="21" rx="12" ry="3.5" fill="none" stroke="#a1a1aa" stroke-width="0.5" opacity="0.5"/>
-  <ellipse cx="16" cy="25" rx="12" ry="3.5" fill="none" stroke="#a1a1aa" stroke-width="0.5" opacity="0.5"/>
+<svg
+  width="512"
+  height="512"
+  viewBox="0 0 512 512"
+  fill="none"
+  xmlns="http://www.w3.org/2000/svg"
+>
+  <defs>
+    <style>
+      .stroke { stroke: var(--color-foreground, #f5f5f5); }
+      .soft { stroke: var(--color-border, #2a2a2a); }
+      .fill { fill: var(--color-foreground, #f5f5f5); }
+      .muted { fill: var(--color-muted, #1a1a1a); }
+      .bg { fill: var(--color-card, #111111); }
+    </style>
+  </defs>
+
+  <rect x="104" y="72" width="304" height="368" rx="32" class="bg soft" stroke-width="2"/>
+  <rect x="144" y="112" width="224" height="288" rx="20" class="muted soft" stroke-width="2"/>
+
+  <path d="M184 150H328" class="stroke" stroke-width="14" stroke-linecap="round" opacity="0.18"/>
+  <path d="M184 210H328" class="stroke" stroke-width="14" stroke-linecap="round" opacity="0.18"/>
+  <path d="M184 270H328" class="stroke" stroke-width="14" stroke-linecap="round" opacity="0.18"/>
+  <path d="M184 330H328" class="stroke" stroke-width="14" stroke-linecap="round" opacity="0.18"/>
+
+  <path d="M256 128V384" class="stroke" stroke-width="18" stroke-linecap="round"/>
+  <circle cx="256" cy="150" r="8" class="bg"/>
+  <circle cx="256" cy="210" r="8" class="bg"/>
+  <circle cx="256" cy="270" r="8" class="bg"/>
+  <circle cx="256" cy="330" r="8" class="bg"/>
 </svg>

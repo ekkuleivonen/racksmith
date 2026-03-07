@@ -26,7 +26,8 @@ async def callback(
     redirect_uri = f"{str(request.base_url).rstrip('/')}/api/auth/callback"
     session_id = await auth_manager.handle_callback(code, state, redirect_uri)
 
-    response = RedirectResponse(url=settings.APP_URL, status_code=302)
+    redirect_url = f"{settings.APP_URL.rstrip('/')}/setup"
+    response = RedirectResponse(url=redirect_url, status_code=302)
     if not session_id:
         return response
 

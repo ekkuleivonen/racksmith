@@ -9,12 +9,20 @@ import { CodePage } from "@/pages/CodePage";
 import { DiffCommitPage } from "@/pages/DiffCommitPage";
 import { DiffReviewPage } from "@/pages/DiffReviewPage";
 import { HomePage } from "@/pages/HomePage";
+import { ReposPage } from "@/pages/ReposPage";
+import { SetupPage } from "@/pages/SetupPage";
 import { PlaybookCreatePage } from "@/pages/PlaybookCreatePage";
 import { PlaybookDetailPage } from "@/pages/PlaybookDetailPage";
 import { PlaybooksPage } from "@/pages/PlaybooksPage";
 import { RackPage } from "@/pages/RackDetailPage";
-import { RackItemPage } from "@/pages/RackItemPage";
+import { NodePage } from "@/pages/NodePage";
+import { GroupsPage } from "@/pages/GroupsPage";
+import { GroupDetailPage } from "@/pages/GroupDetailPage";
+import { GroupCreatePage } from "@/pages/GroupCreatePage";
 import { RackOnboardingPage } from "@/pages/RackOnboardingPage";
+import { RacksPage } from "@/pages/RacksPage";
+import { NodesPage } from "@/pages/NodesPage";
+import { NodeCreatePage } from "@/pages/NodeCreatePage";
 
 class ErrorBoundary extends Component<
   { children: ReactNode },
@@ -69,11 +77,32 @@ function AppRoutes() {
         <ErrorBoundary>
           <Routes>
             <Route path="/" element={<HomePage />} />
+            <Route path="/setup" element={<SetupPage />} />
+            <Route
+              path="/repos"
+              element={
+                <ProtectedRoute>
+                  <AppShell title="Repos">
+                    <ReposPage />
+                  </AppShell>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/racks"
+              element={
+                <ProtectedRoute>
+                  <AppShell title="Racks">
+                    <RacksPage />
+                  </AppShell>
+                </ProtectedRoute>
+              }
+            />
             <Route
               path="/rack"
               element={
                 <ProtectedRoute>
-                  <Navigate to="/rack/create" replace />
+                  <Navigate to="/racks" replace />
                 </ProtectedRoute>
               }
             />
@@ -88,7 +117,7 @@ function AppRoutes() {
               }
             />
             <Route
-              path="/rack/view/:rackId"
+              path="/rack/view/:rackSlug"
               element={
                 <ProtectedRoute>
                   <AppShell title="Racks">
@@ -98,15 +127,69 @@ function AppRoutes() {
               }
             />
             <Route
-              path="/rack/edit/:rackId"
+              path="/rack/edit/:rackSlug"
               element={<NavigateLegacyEditRack />}
             />
             <Route
               path="/rack/:rackId/item/:itemId"
+              element={<NavigateLegacyItemToNode />}
+            />
+            <Route
+              path="/nodes"
               element={
                 <ProtectedRoute>
-                  <AppShell title="Hardware">
-                    <RackItemPage />
+                  <AppShell title="Nodes">
+                    <NodesPage />
+                  </AppShell>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/nodes/create"
+              element={
+                <ProtectedRoute>
+                  <AppShell title="Nodes">
+                    <NodeCreatePage />
+                  </AppShell>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/nodes/:slug"
+              element={
+                <ProtectedRoute>
+                  <AppShell title="Nodes">
+                    <NodePage />
+                  </AppShell>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/groups"
+              element={
+                <ProtectedRoute>
+                  <AppShell title="Groups">
+                    <GroupsPage />
+                  </AppShell>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/groups/create"
+              element={
+                <ProtectedRoute>
+                  <AppShell title="Groups">
+                    <GroupCreatePage />
+                  </AppShell>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/groups/:slug"
+              element={
+                <ProtectedRoute>
+                  <AppShell title="Groups">
+                    <GroupDetailPage />
                   </AppShell>
                 </ProtectedRoute>
               }
@@ -190,8 +273,13 @@ function AppRoutes() {
 }
 
 function NavigateLegacyEditRack() {
-  const { rackId = "" } = useParams();
-  return <Navigate to={`/rack/view/${rackId}`} replace />;
+  const { rackSlug = "" } = useParams();
+  return <Navigate to={`/rack/view/${rackSlug}`} replace />;
+}
+
+function NavigateLegacyItemToNode() {
+  const { itemId = "" } = useParams();
+  return <Navigate to={`/nodes/${itemId}`} replace />;
 }
 
 export function App() {

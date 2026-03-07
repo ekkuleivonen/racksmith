@@ -201,6 +201,12 @@ def read_active_repo(user_id: str) -> ActiveRepoBinding | None:
     return binding
 
 
+def clear_active_repo(user_id: str) -> None:
+    path = user_binding_path(user_id)
+    if path.exists():
+        path.unlink()
+
+
 def resolve_active_repo_path(user_id: str) -> Path:
     binding = read_active_repo(user_id)
     if not binding:

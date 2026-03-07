@@ -8,6 +8,9 @@ from _utils.logging import configure_logging, get_logger
 from dotenv import load_dotenv
 from code.router import router as code_router
 from fastapi import FastAPI
+from groups.router import router as groups_router
+from nodes.router import router as nodes_router
+from schema.router import router as schema_router
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from github.router import auth_router
@@ -59,6 +62,9 @@ if static_dir.exists():
 app.include_router(auth_router, prefix="/api/auth", tags=["auth"])
 app.include_router(setup_router, prefix="/api/setup", tags=["setup"])
 app.include_router(racks_router, prefix="/api/racks", tags=["racks"])
+app.include_router(nodes_router, prefix="/api/nodes", tags=["nodes"])
+app.include_router(groups_router, prefix="/api/groups", tags=["groups"])
+app.include_router(schema_router, prefix="/api/schema", tags=["schema"])
 app.include_router(playbooks_router, prefix="/api/playbooks", tags=["playbooks"])
 app.include_router(code_router, prefix="/api/code", tags=["code"])
 app.include_router(ssh_router, prefix="/api/ssh", tags=["ssh"])

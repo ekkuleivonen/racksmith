@@ -1,4 +1,4 @@
-import { apiGet, apiPost } from "@/lib/api";
+import { apiDelete, apiGet, apiPost } from "@/lib/api";
 
 export type ActiveRepo = {
   owner: string;
@@ -19,7 +19,7 @@ export type SetupStatus = {
     avatar_url: string | null;
   };
   repo_ready: boolean;
-  rack_ready: boolean;
+  nodes_ready: boolean;
   repo: ActiveRepo | null;
 };
 
@@ -51,6 +51,10 @@ export async function selectGithubRepo(owner: string, repo: string) {
 
 export async function activateLocalRepo(owner: string, repo: string) {
   return apiPost<{ repo: ActiveRepo }>("/setup/local-repos/activate", { owner, repo });
+}
+
+export async function dropLocalRepo(owner: string, repo: string) {
+  return apiDelete(`/setup/local-repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`);
 }
 
 export async function createGithubRepo(name: string, isPrivate = true) {
