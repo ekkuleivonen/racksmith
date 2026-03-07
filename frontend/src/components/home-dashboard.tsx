@@ -1,6 +1,5 @@
 import { useEffect } from "react";
 import { Link } from "react-router-dom";
-import { Folder, Layout, Layers, Server, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useNodesStore } from "@/stores/nodes";
 import { useRackStore } from "@/stores/racks";
