@@ -20,10 +20,12 @@ while true; do
 
   if [ -n "$BEFORE" ] && [ -n "$AFTER" ] && [ "$BEFORE" != "$AFTER" ]; then
     echo "[$(date)] Changes detected ($BEFORE -> $AFTER). Rebuilding stack..."
-    # Use a one-off container so we're not stopped by 'docker compose down'
+    # Use a one-off container so we're not stopped by 'docker compose down'.
+    # HOST_WORKSPACE must be the real host path (set via env in docker-compose.yml)
+    # because Docker resolves volume paths on the host, not inside this container.
     if docker run --rm \
       -v /var/run/docker.sock:/var/run/docker.sock \
-      -v /workspace:/workspace \
+      -v "${HOST_WORKSPACE}:/workspace" \
       -w /workspace \
       docker:25 \
       sh -c "docker compose down && docker compose up -d --build"

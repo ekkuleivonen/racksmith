@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { Layers, Pencil, Power, RefreshCw, Trash2 } from "lucide-react";
+import { Layers, Pencil, Plus, Power, RefreshCw, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { SshTerminal } from "@/components/ssh/ssh-terminal";
 import { Badge } from "@/components/ui/badge";
@@ -40,6 +40,11 @@ export function NodePage() {
     ssh_port: 22,
   });
   const [savingConnection, setSavingConnection] = useState(false);
+  const [editingLabels, setEditingLabels] = useState(false);
+  const [labelsDraft, setLabelsDraft] = useState<string[]>([]);
+  const [newLabelInput, setNewLabelInput] = useState("");
+  const [savingLabels, setSavingLabels] = useState(false);
+  const newLabelInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (node) {
@@ -48,6 +53,7 @@ export function NodePage() {
         ssh_user: node.ssh_user ?? "",
         ssh_port: node.ssh_port ?? 22,
       });
+      setLabelsDraft(node.labels ?? []);
       if (!node.host || !node.ssh_user) {
         setEditingConnection(true);
       }
@@ -424,6 +430,142 @@ export function NodePage() {
             <p className="text-xs text-zinc-500">
               MAC: {node.mac_address || "Not discovered"}
             </p>
+          </div>
+
+          <Separator />
+
+          <div className="space-y-3">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-[11px] text-zinc-500 font-medium uppercase tracking-wider">
+                Labels
+              </p>
+              {!editingLabels ? (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-7 gap-1.5 text-zinc-400 hover:text-zinc-200"
+                  onClick={() => {
+                    setLabelsDraft(node.labels ?? []);
+                    setNewLabelInput("");
+                    setEditingLabels(true);
+                  }}
+                >
+                  <Pencil className="size-3" />
+                  Edit
+                </Button>
+              ) : null}
+            </div>
+            {editingLabels ? (
+              <div className="space-y-2">
+                <div className="flex flex-wrap gap-1 min-h-[24px]">
+                  {labelsDraft.map((label) => (
+                    <span
+                      key={label}
+                      className="inline-flex items-center gap-1 rounded border border-zinc-700 bg-zinc-800 px-2 py-0.5 text-xs text-zinc-300"
+                    >
+                      {label}
+                      <button
+                        type="button"
+                        className="text-zinc-500 hover:text-zinc-200"
+                        onClick={() =>
+                          setLabelsDraft((d) => d.filter((l) => l !== label))
+                        }
+                      >
+                        <X className="size-3" />
+                      </button>
+                    </span>
+                  ))}
+                  {labelsDraft.length === 0 && (
+                    <p className="text-xs text-zinc-600">No labels</p>
+                  )}
+                </div>
+                <form
+                  className="flex gap-2"
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    const val = newLabelInput.trim();
+                    if (val && !labelsDraft.includes(val)) {
+                      setLabelsDraft((d) => [...d, val]);
+                    }
+                    setNewLabelInput("");
+                    newLabelInputRef.current?.focus();
+                  }}
+                >
+                  <Input
+                    ref={newLabelInputRef}
+                    className="h-8 text-xs flex-1"
+                    value={newLabelInput}
+                    onChange={(e) => setNewLabelInput(e.target.value)}
+                    placeholder="Add label"
+                  />
+                  <Button
+                    type="submit"
+                    size="sm"
+                    variant="outline"
+                    className="h-8 gap-1"
+                    disabled={!newLabelInput.trim()}
+                  >
+                    <Plus className="size-3" />
+                    Add
+                  </Button>
+                </form>
+                <div className="flex gap-2">
+                  <Button
+                    size="sm"
+                    disabled={savingLabels}
+                    onClick={async () => {
+                      setSavingLabels(true);
+                      try {
+                        await updateNode(node.slug, {
+                          name: node.name ?? "",
+                          host: node.host ?? "",
+                          ssh_user: node.ssh_user ?? "",
+                          ssh_port: node.ssh_port ?? 22,
+                          labels: labelsDraft,
+                          groups: node.groups ?? [],
+                        });
+                        await loadNode();
+                        setEditingLabels(false);
+                        toast.success("Labels updated");
+                      } catch (error) {
+                        toast.error(
+                          error instanceof Error
+                            ? error.message
+                            : "Failed to update labels",
+                        );
+                      } finally {
+                        setSavingLabels(false);
+                      }
+                    }}
+                  >
+                    {savingLabels ? "Saving..." : "Save"}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      setLabelsDraft(node.labels ?? []);
+                      setNewLabelInput("");
+                      setEditingLabels(false);
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex flex-wrap gap-1 min-h-[24px]">
+                {(node.labels ?? []).length > 0 ? (
+                  (node.labels ?? []).map((label) => (
+                    <Badge key={label} variant="outline">
+                      {label}
+                    </Badge>
+                  ))
+                ) : (
+                  <p className="text-xs text-zinc-600">No labels</p>
+                )}
+              </div>
+            )}
           </div>
         </section>
 

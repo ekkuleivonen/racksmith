@@ -56,6 +56,8 @@ services:
 
   auto-update:
     image: docker:25
+    environment:
+      - HOST_WORKSPACE=${PWD}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - .:/workspace

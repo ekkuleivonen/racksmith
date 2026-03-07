@@ -16,6 +16,7 @@ import { Input } from "@/components/ui/input";
 import { formatRelativeTime } from "@/lib/format";
 import { useStackStore } from "@/stores/stacks";
 import { useRackStore } from "@/stores/racks";
+import { useCodeStore } from "@/stores/code";
 import { useGroupsStore } from "@/stores/groups";
 import { useNodesStore } from "@/stores/nodes";
 import {
@@ -513,6 +514,7 @@ export function StackDetailPage() {
                   await Promise.all([
                     useStackStore.getState().load(),
                     useRackStore.getState().load(),
+                    useCodeStore.getState().refreshStatuses(),
                   ]);
                   if (result.stack.id !== stackId) {
                     navigate(`/stacks/${result.stack.id}`, { replace: true });
@@ -532,6 +534,7 @@ export function StackDetailPage() {
                   await Promise.all([
                     useStackStore.getState().load(),
                     useRackStore.getState().load(),
+                    useCodeStore.getState().refreshStatuses(),
                   ]);
                   toast.success("Stack deleted");
                   navigate("/stacks", { replace: true });
