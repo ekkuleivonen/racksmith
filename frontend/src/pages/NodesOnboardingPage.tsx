@@ -105,7 +105,7 @@ export function NodesOnboardingPage() {
         <div className="space-y-1">
           <h1 className="text-zinc-100 font-semibold">Add your hardware</h1>
           <p className="text-sm text-zinc-500">
-            Add one or more nodes. Each node is a machine you can SSH into and run playbooks on.
+            Add one or more nodes. Each node is a machine you can SSH into and run stacks on.
             You can add more anytime from the Nodes page.
           </p>
         </div>

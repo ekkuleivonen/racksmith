@@ -84,6 +84,17 @@ async def create_repo(
     return {"repo": repo}
 
 
+@router.post("/sync")
+async def sync_repo(session=Depends(auth_manager.get_current_session)):
+    try:
+        repos_manager.sync_repo(session)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"status": "ok"}
+
+
 @router.get("/repo")
 async def get_active_repo(session=Depends(auth_manager.get_current_session)):
     binding = repos_manager.current_repo(session)

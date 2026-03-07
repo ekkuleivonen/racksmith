@@ -20,7 +20,7 @@ export function GroupsPage() {
             <div>
               <h1 className="text-zinc-100 font-semibold">Groups</h1>
               <p className="text-xs text-zinc-500 mt-0.5">
-                Organize nodes into groups for playbook targeting.
+                Organize nodes into groups for stack targeting.
               </p>
             </div>
             <NavLink
@@ -38,7 +38,7 @@ export function GroupsPage() {
             <div className="border border-zinc-800 bg-zinc-900/30 p-6 text-center">
               <p className="text-zinc-500 text-sm">No groups yet</p>
               <p className="text-xs text-zinc-600 mt-1">
-                Create a group to organize nodes for playbook runs.
+                Create a group to organize nodes for stack runs.
               </p>
             </div>
           ) : (

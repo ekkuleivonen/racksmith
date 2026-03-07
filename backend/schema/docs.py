@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from schema.models import GroupConfig, NodeConfig, RackConfig
+from schema.models import ActionConfig, ActionInputConfig, GroupConfig, NodeConfig, RackConfig
 
 
 def _model_to_markdown(name: str, model: type) -> str:
@@ -39,5 +39,7 @@ def generate_docs() -> str:
         _model_to_markdown("Node (nodes/<slug>.yaml)", NodeConfig),
         _model_to_markdown("Group (groups/<slug>.yaml)", GroupConfig),
         _model_to_markdown("Rack (racks/<slug>.yaml)", RackConfig),
+        _model_to_markdown("Action (actions/<slug>/action.yaml)", ActionConfig),
+        _model_to_markdown("Action Input", ActionInputConfig),
     ]
     return "\n".join(sections)

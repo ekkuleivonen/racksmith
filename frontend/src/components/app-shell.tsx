@@ -22,7 +22,7 @@ import { useAuth } from "@/context/auth-context";
 import { useSetupStore } from "@/stores/setup";
 import { useRackStore } from "@/stores/racks";
 import { useNodesStore } from "@/stores/nodes";
-import { usePlaybookStore } from "@/stores/playbooks";
+import { useStackStore } from "@/stores/stacks";
 import { useGroupsStore } from "@/stores/groups";
 import { usePingStore } from "@/stores/ping";
 
@@ -43,7 +43,7 @@ export function AppShell({ children }: AppShellProps) {
   const loadSetup = useSetupStore((s) => s.load);
   const loadRacks = useRackStore((s) => s.load);
   const loadNodes = useNodesStore((s) => s.load);
-  const loadPlaybooks = usePlaybookStore((s) => s.load);
+  const loadStacks = useStackStore((s) => s.load);
   const loadGroups = useGroupsStore((s) => s.load);
 
   const nodes = useNodesStore((s) => s.nodes);
@@ -51,8 +51,8 @@ export function AppShell({ children }: AppShellProps) {
   const stopPolling = usePingStore((s) => s.stopPolling);
 
   useEffect(() => {
-    void Promise.all([loadSetup(), loadRacks(), loadNodes(), loadPlaybooks(), loadGroups()]);
-  }, [location.pathname, loadSetup, loadRacks, loadNodes, loadPlaybooks, loadGroups]);
+    void Promise.all([loadSetup(), loadRacks(), loadNodes(), loadStacks(), loadGroups()]);
+  }, [location.pathname, loadSetup, loadRacks, loadNodes, loadStacks, loadGroups]);
 
   useEffect(() => {
     if (!status?.repo_ready || nodes.length === 0) {

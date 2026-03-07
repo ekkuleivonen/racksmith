@@ -5,26 +5,30 @@ import {
   dropLocalRepo,
   getSetupStatus,
   listLocalRepos,
+  syncRepo as syncRepoApi,
   type LocalRepo,
   type SetupStatus,
 } from "@/lib/setup";
 import { fetchMachinePublicKey } from "@/lib/ssh";
+import { useCodeStore } from "./code";
 import { useRackStore } from "./racks";
 import { useNodesStore } from "./nodes";
 import { useGroupsStore } from "./groups";
-import { usePlaybookStore } from "./playbooks";
+import { useStackStore } from "./stacks";
 
 type SetupStore = {
   status: SetupStatus | null;
   localRepos: LocalRepo[];
   loading: boolean;
   switchingRepo: boolean;
+  syncing: boolean;
   publicKey: string;
   loadingPublicKey: boolean;
   publicKeyOpen: boolean;
   load: () => Promise<void>;
   switchRepo: (owner: string, repo: string) => Promise<void>;
   dropRepo: (owner: string, repo: string) => Promise<void>;
+  syncRepo: () => Promise<void>;
   openPublicKey: () => Promise<void>;
   setPublicKeyOpen: (open: boolean) => void;
 };
@@ -34,6 +38,7 @@ export const useSetupStore = create<SetupStore>((set, get) => ({
   localRepos: [],
   loading: true,
   switchingRepo: false,
+  syncing: false,
   publicKey: "",
   loadingPublicKey: false,
   publicKeyOpen: false,
@@ -65,7 +70,7 @@ export const useSetupStore = create<SetupStore>((set, get) => ({
         useRackStore.getState().load(),
         useNodesStore.getState().load(),
         useGroupsStore.getState().load(),
-        usePlaybookStore.getState().load(),
+        useStackStore.getState().load(),
       ]);
       toast.success(`Switched to ${owner}/${repo}`);
     } catch (error) {
@@ -74,6 +79,32 @@ export const useSetupStore = create<SetupStore>((set, get) => ({
       );
     } finally {
       set({ switchingRepo: false });
+    }
+  },
+
+  syncRepo: async () => {
+    set({ syncing: true });
+    try {
+      await syncRepoApi();
+      const [nextStatus, nextLocalRepos] = await Promise.all([
+        getSetupStatus(),
+        listLocalRepos().catch(() => []),
+      ]);
+      set({ status: nextStatus, localRepos: nextLocalRepos });
+      await Promise.all([
+        useRackStore.getState().load(),
+        useNodesStore.getState().load(),
+        useGroupsStore.getState().load(),
+        useStackStore.getState().load(),
+        useCodeStore.getState().loadTree(),
+      ]);
+      toast.success("Repo synced");
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Failed to sync repo",
+      );
+    } finally {
+      set({ syncing: false });
     }
   },
 
@@ -89,7 +120,7 @@ export const useSetupStore = create<SetupStore>((set, get) => ({
         useRackStore.getState().load(),
         useNodesStore.getState().load(),
         useGroupsStore.getState().load(),
-        usePlaybookStore.getState().load(),
+        useStackStore.getState().load(),
       ]);
       toast.success(`Dropped ${owner}/${repo}`);
     } catch (error) {

@@ -1,0 +1,14 @@
+---
+- name: Normalize requested service name
+  ansible.builtin.set_fact:
+    racksmith_service_name: "{{ service_name | default('ssh') }}"
+
+- name: Gather service facts
+  ansible.builtin.service_facts:
+
+- name: Print requested service status
+  ansible.builtin.debug:
+    msg:
+      - "Service: {{ racksmith_service_name }}"
+      - "State: {{ ansible_facts.services[racksmith_service_name ~ '.service'].state if (racksmith_service_name ~ '.service') in ansible_facts.services else 'not found' }}"
+      - "Status: {{ ansible_facts.services[racksmith_service_name ~ '.service'].status if (racksmith_service_name ~ '.service') in ansible_facts.services else 'not found' }}"

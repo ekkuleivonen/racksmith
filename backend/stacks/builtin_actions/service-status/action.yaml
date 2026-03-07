@@ -1,0 +1,14 @@
+slug: service-status
+name: Service status
+description: Inspect the active state of a systemd service.
+executor: ansible
+source: builtin
+inputs:
+  - key: service_name
+    label: Service name
+    type: string
+    placeholder: ssh
+    default: ssh
+    required: false
+compatibility:
+  os_family: []

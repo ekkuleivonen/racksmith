@@ -1,0 +1,9 @@
+---
+- name: Collect memory usage
+  ansible.builtin.command: free -h
+  register: racksmith_memory_usage_result
+  changed_when: false
+
+- name: Print memory usage
+  ansible.builtin.debug:
+    var: racksmith_memory_usage_result.stdout_lines

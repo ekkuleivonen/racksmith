@@ -21,7 +21,7 @@ export function HomeDashboard() {
         <div className="space-y-2">
           <h1 className="text-2xl font-semibold text-zinc-100">Welcome to Racksmith</h1>
           <p className="text-zinc-400 text-sm">
-            Your infrastructure is ready. Manage nodes, racks, and playbooks from the sidebar.
+            Your infrastructure is ready. Manage nodes, racks, and stacks from the sidebar.
           </p>
         </div>
 

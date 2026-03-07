@@ -1,0 +1,9 @@
+---
+- name: Collect root filesystem usage
+  ansible.builtin.command: df -h /
+  register: racksmith_disk_usage_result
+  changed_when: false
+
+- name: Print root filesystem usage
+  ansible.builtin.debug:
+    var: racksmith_disk_usage_result.stdout_lines

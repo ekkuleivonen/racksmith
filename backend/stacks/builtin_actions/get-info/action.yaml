@@ -1,0 +1,8 @@
+slug: get-info
+name: Get info
+description: Gather facts and print a short system summary.
+executor: ansible
+source: builtin
+inputs: []
+compatibility:
+  os_family: []

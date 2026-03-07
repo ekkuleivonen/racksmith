@@ -1,0 +1,8 @@
+slug: memory-usage
+name: Memory usage
+description: Show memory usage with a human-readable summary.
+executor: ansible
+source: builtin
+inputs: []
+compatibility:
+  os_family: []

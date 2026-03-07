@@ -2,7 +2,7 @@ import { SidebarHeader } from "./sidebar-header";
 import { SidebarNodesSection } from "./sidebar-nodes-section";
 import { SidebarRacksSection } from "./sidebar-racks-section";
 import { SidebarGroupsSection } from "./sidebar-groups-section";
-import { SidebarPlaybooksSection } from "./sidebar-playbooks-section";
+import { SidebarStacksSection } from "./sidebar-stacks-section";
 import { SidebarCodeSection } from "./sidebar-code-section";
 import { SidebarFooter } from "./sidebar-footer";
 
@@ -18,7 +18,7 @@ export function Sidebar({ onLogout }: SidebarProps) {
         <SidebarNodesSection />
         <SidebarRacksSection />
         <SidebarGroupsSection />
-        <SidebarPlaybooksSection />
+        <SidebarStacksSection />
         <SidebarCodeSection />
       </nav>
       <SidebarFooter onLogout={onLogout} />

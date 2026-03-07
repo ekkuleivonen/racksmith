@@ -16,14 +16,13 @@ from github.misc import (
     read_active_repo,
     resolve_active_repo_path,
     run_git,
+    sync_racksmith_branch,
     user_login,
     user_repo_dir,
     user_storage_id,
     user_workspace_path,
     write_active_repo,
 )
-from repos.migration import migrate_legacy_structure
-
 GITHUB_REMOTE_RE = re.compile(
     r"github\.com[:/](?P<owner>[^/]+)/(?P<repo>[^/]+?)(?:\.git)?$"
 )
@@ -86,7 +85,6 @@ class ReposManager:
         if not repo_path.exists():
             repo_path = user_repo_dir(user_id, owner, repo)
         ensure_racksmith_branch(repo_path)
-        migrate_legacy_structure(repo_path)
         binding = write_active_repo(
             ActiveRepoBinding(user_id=user_id, owner=owner, repo=repo)
         )
@@ -98,7 +96,6 @@ class ReposManager:
         if not repo_path.is_dir():
             raise FileNotFoundError("Local repo is missing on disk")
         ensure_racksmith_branch(repo_path)
-        migrate_legacy_structure(repo_path)
         binding = write_active_repo(
             ActiveRepoBinding(user_id=user_id, owner=owner, repo=repo)
         )
@@ -160,6 +157,11 @@ class ReposManager:
         if active and active.owner == owner and active.repo == repo:
             clear_active_repo(user_id)
         shutil.rmtree(repo_path)
+
+    def sync_repo(self, session) -> None:
+        """Rebase racksmith branch on top of the base branch (e.g. main)."""
+        repo_path = self.active_repo_path(session)
+        sync_racksmith_branch(repo_path)
 
     def status(self, session, *, nodes_ready: bool) -> dict:
         binding = self.current_repo(session)

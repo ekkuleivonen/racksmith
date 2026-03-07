@@ -1,5 +1,5 @@
 import { Component, type ErrorInfo, type ReactNode } from "react";
-import { BrowserRouter, Navigate, Route, Routes, useParams } from "react-router-dom";
+import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { AppShell } from "@/components/app-shell";
 import { ProtectedRoute } from "@/components/protected-route";
 import { ThemeProvider } from "@/components/theme-provider";
@@ -11,9 +11,9 @@ import { DiffReviewPage } from "@/pages/DiffReviewPage";
 import { HomePage } from "@/pages/HomePage";
 import { ReposPage } from "@/pages/ReposPage";
 import { SetupPage } from "@/pages/SetupPage";
-import { PlaybookCreatePage } from "@/pages/PlaybookCreatePage";
-import { PlaybookDetailPage } from "@/pages/PlaybookDetailPage";
-import { PlaybooksPage } from "@/pages/PlaybooksPage";
+import { StackCreatePage } from "@/pages/StackCreatePage";
+import { StackDetailPage } from "@/pages/StackDetailPage";
+import { StacksPage } from "@/pages/StacksPage";
 import { RackPage } from "@/pages/RackDetailPage";
 import { NodePage } from "@/pages/NodePage";
 import { GroupsPage } from "@/pages/GroupsPage";
@@ -127,14 +127,6 @@ function AppRoutes() {
               }
             />
             <Route
-              path="/rack/edit/:rackSlug"
-              element={<NavigateLegacyEditRack />}
-            />
-            <Route
-              path="/rack/:rackId/item/:itemId"
-              element={<NavigateLegacyItemToNode />}
-            />
-            <Route
               path="/nodes"
               element={
                 <ProtectedRoute>
@@ -215,31 +207,31 @@ function AppRoutes() {
               }
             />
             <Route
-              path="/playbooks"
+              path="/stacks"
               element={
                 <ProtectedRoute>
-                  <AppShell title="Playbooks">
-                    <PlaybooksPage />
+                  <AppShell title="Stacks">
+                    <StacksPage />
                   </AppShell>
                 </ProtectedRoute>
               }
             />
             <Route
-              path="/playbooks/create"
+              path="/stacks/create"
               element={
                 <ProtectedRoute>
-                  <AppShell title="Playbooks">
-                    <PlaybookCreatePage />
+                  <AppShell title="Stacks">
+                    <StackCreatePage />
                   </AppShell>
                 </ProtectedRoute>
               }
             />
             <Route
-              path="/playbooks/:playbookId"
+              path="/stacks/:stackId"
               element={
                 <ProtectedRoute>
-                  <AppShell title="Playbooks">
-                    <PlaybookDetailPage />
+                  <AppShell title="Stacks">
+                    <StackDetailPage />
                   </AppShell>
                 </ProtectedRoute>
               }
@@ -270,16 +262,6 @@ function AppRoutes() {
       </div>
     </div>
   );
-}
-
-function NavigateLegacyEditRack() {
-  const { rackSlug = "" } = useParams();
-  return <Navigate to={`/rack/view/${rackSlug}`} replace />;
-}
-
-function NavigateLegacyItemToNode() {
-  const { itemId = "" } = useParams();
-  return <Navigate to={`/nodes/${itemId}`} replace />;
 }
 
 export function App() {

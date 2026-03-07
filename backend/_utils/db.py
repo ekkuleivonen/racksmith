@@ -11,7 +11,7 @@ import aiosqlite
 import settings
 
 if TYPE_CHECKING:
-    from playbooks.schemas import PlaybookRun
+    from stacks.schemas import StackRun
 
 _db: aiosqlite.Connection | None = None
 
@@ -27,8 +27,8 @@ async def init_db() -> None:
         CREATE TABLE IF NOT EXISTS runs (
             id          TEXT PRIMARY KEY,
             user_id     TEXT NOT NULL,
-            playbook_id TEXT NOT NULL,
-            playbook_name TEXT NOT NULL,
+            stack_id    TEXT NOT NULL,
+            stack_name  TEXT NOT NULL,
             status      TEXT NOT NULL,
             created_at  TEXT NOT NULL,
             started_at  TEXT,
@@ -46,6 +46,13 @@ async def init_db() -> None:
         await _db.commit()
     except Exception:
         await _db.rollback()
+    # Migration: rename playbook_id/playbook_name to stack_id/stack_name
+    for old_name, new_name in [("playbook_id", "stack_id"), ("playbook_name", "stack_name")]:
+        try:
+            await _db.execute(f"ALTER TABLE runs RENAME COLUMN {old_name} TO {new_name}")
+            await _db.commit()
+        except Exception:
+            await _db.rollback()
 
 
 async def close_db() -> None:
@@ -62,16 +69,16 @@ def _get_db() -> aiosqlite.Connection:
     return _db
 
 
-def row_to_playbook_run(row: aiosqlite.Row) -> PlaybookRun:
-    """Convert a database row to a PlaybookRun schema."""
-    from playbooks.schemas import PlaybookRun
+def row_to_stack_run(row: aiosqlite.Row) -> StackRun:
+    """Convert a database row to a StackRun schema."""
+    from stacks.schemas import StackRun
 
     hosts = json.loads(row["hosts"]) if isinstance(row["hosts"], str) else row["hosts"]
     commit_sha = row["commit_sha"] if "commit_sha" in row.keys() else None
-    return PlaybookRun(
+    return StackRun(
         id=row["id"],
-        playbook_id=row["playbook_id"],
-        playbook_name=row["playbook_name"],
+        stack_id=row["stack_id"],
+        stack_name=row["stack_name"],
         status=row["status"],
         created_at=row["created_at"],
         started_at=row["started_at"],

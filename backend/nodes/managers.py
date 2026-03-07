@@ -180,8 +180,12 @@ class NodeManager:
         return _node_from_yaml(slug, data or {})
 
     def _next_slug(self, repo_path: Path, base: str) -> str:
-        candidate = base
-        suffix = 2
+        if base == "node":
+            candidate = "node-1"
+            suffix = 2
+        else:
+            candidate = base
+            suffix = 2
         while self._node_file(repo_path, candidate).exists():
             candidate = f"{base}-{suffix}"
             suffix += 1

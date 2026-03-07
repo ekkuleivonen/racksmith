@@ -63,3 +63,7 @@ export async function createGithubRepo(name: string, isPrivate = true) {
     private: isPrivate,
   });
 }
+
+export async function syncRepo() {
+  return apiPost<{ status: string }>("/repos/sync");
+}

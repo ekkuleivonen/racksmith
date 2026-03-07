@@ -1,0 +1,8 @@
+slug: ping
+name: Ping
+description: Verify that Ansible can connect to the selected hosts.
+executor: ansible
+source: builtin
+inputs: []
+compatibility:
+  os_family: []

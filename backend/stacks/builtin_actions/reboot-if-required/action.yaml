@@ -1,0 +1,8 @@
+slug: reboot-if-required
+name: Reboot if required
+description: Reboot Debian or RedHat hosts only when the system reports it is needed. Requires become.
+executor: ansible
+source: builtin
+inputs: []
+compatibility:
+  os_family: []

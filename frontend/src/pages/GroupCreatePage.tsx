@@ -40,7 +40,7 @@ export function GroupCreatePage() {
         <section className="border border-zinc-800 bg-zinc-900/30 p-4">
           <h1 className="text-zinc-100 font-semibold">Create group</h1>
           <p className="text-xs text-zinc-500 mt-0.5">
-            Groups organize nodes for playbook targeting.
+            Groups organize nodes for stack targeting.
           </p>
         </section>
 

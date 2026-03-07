@@ -1,5 +1,5 @@
 import { useNavigate } from "react-router-dom";
-import { GitBranch, KeyRound, LogOut } from "lucide-react";
+import { GitBranch, KeyRound, LogOut, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -24,6 +24,8 @@ export function SidebarFooter({ onLogout }: SidebarFooterProps) {
 
   const status = useSetupStore((s) => s.status);
   const openPublicKey = useSetupStore((s) => s.openPublicKey);
+  const syncRepo = useSetupStore((s) => s.syncRepo);
+  const syncing = useSetupStore((s) => s.syncing);
   const localRepos = useSetupStore((s) => s.localRepos);
   const switchingRepo = useSetupStore((s) => s.switchingRepo);
   const switchRepo = useSetupStore((s) => s.switchRepo);
@@ -78,6 +80,19 @@ export function SidebarFooter({ onLogout }: SidebarFooterProps) {
             </SelectItem>
           </SelectContent>
         </Select>
+        <Button
+          variant="outline"
+          size="icon"
+          className="size-7 shrink-0"
+          disabled={!status?.repo_ready || syncing}
+          onClick={() => void syncRepo()}
+          aria-label="Sync repo"
+          title="Rebase racksmith branch on main"
+        >
+          <RefreshCw
+            className={`size-3 ${syncing ? "animate-spin" : ""}`}
+          />
+        </Button>
         <div className="relative shrink-0 overflow-visible">
           <Button
             variant="outline"

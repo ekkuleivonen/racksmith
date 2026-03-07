@@ -442,7 +442,7 @@ export function SetupPage() {
           <div className="space-y-1">
             <h1 className="text-zinc-100 text-xl font-semibold">Step 3 — Add hardware</h1>
             <p className="text-sm text-zinc-500">
-              Add at least one node. Each node is a machine you can SSH into and run playbooks on.
+              Add at least one node. Each node is a machine you can SSH into and run stacks on.
             </p>
           </div>
 

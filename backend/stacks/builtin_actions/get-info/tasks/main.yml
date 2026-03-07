@@ -1,0 +1,11 @@
+---
+- name: Gather setup facts
+  ansible.builtin.setup:
+
+- name: Print host summary
+  ansible.builtin.debug:
+    msg:
+      - "Host: {{ inventory_hostname }}"
+      - "OS: {{ ansible_facts['distribution'] }} {{ ansible_facts['distribution_version'] }}"
+      - "Kernel: {{ ansible_facts['kernel'] }}"
+      - "Arch: {{ ansible_facts['architecture'] }}"

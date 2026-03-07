@@ -14,7 +14,7 @@ from schema.router import router as schema_router
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from github.router import auth_router
-from playbooks.router import router as playbooks_router
+from stacks.router import router as stacks_router
 from racks.router import router as racks_router
 from repos.router import router as repos_router
 from ssh.router import router as ssh_router
@@ -29,12 +29,12 @@ async def lifespan(app: FastAPI):
     from _utils.db import close_db, init_db
     from arq import create_pool
     from arq.connections import RedisSettings
-    from playbooks.managers import playbook_manager
+    from stacks.managers import stack_manager
 
     configure_logging()
     await init_db()
     arq_pool = await create_pool(RedisSettings.from_dsn(settings.REDIS_URL))
-    playbook_manager.set_arq_pool(arq_pool)
+    stack_manager.set_arq_pool(arq_pool)
     try:
         yield
     finally:
@@ -65,7 +65,7 @@ app.include_router(racks_router, prefix="/api/racks", tags=["racks"])
 app.include_router(nodes_router, prefix="/api/nodes", tags=["nodes"])
 app.include_router(groups_router, prefix="/api/groups", tags=["groups"])
 app.include_router(schema_router, prefix="/api/schema", tags=["schema"])
-app.include_router(playbooks_router, prefix="/api/playbooks", tags=["playbooks"])
+app.include_router(stacks_router, prefix="/api/stacks", tags=["stacks"])
 app.include_router(code_router, prefix="/api/code", tags=["code"])
 app.include_router(ssh_router, prefix="/api/ssh", tags=["ssh"])
 

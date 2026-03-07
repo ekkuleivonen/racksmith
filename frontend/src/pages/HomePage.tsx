@@ -48,7 +48,7 @@ export function HomePage() {
             </h1>
             <p className="text-lg text-zinc-400 max-w-xl mx-auto">
               Infrastructure as code, backed by Git. Define your hardware, run
-              Ansible playbooks, and manage nodes from a single GitOps repo.
+              Ansible stacks, and manage nodes from a single GitOps repo.
             </p>
           </div>
 
@@ -62,9 +62,9 @@ export function HomePage() {
                 </li>
                 <li>SSH terminal — connect to nodes with one click</li>
                 <li>
-                  Code workspace — edit playbooks and inventory in the browser
+                  Code workspace — edit stacks and inventory in the browser
                 </li>
-                <li>Ansible integration — run playbooks and track runs</li>
+                <li>Ansible integration — run stacks and track runs</li>
               </ul>
             </div>
             <p>

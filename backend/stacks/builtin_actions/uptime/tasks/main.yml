@@ -1,0 +1,9 @@
+---
+- name: Collect uptime
+  ansible.builtin.command: uptime
+  register: racksmith_uptime_result
+  changed_when: false
+
+- name: Print uptime
+  ansible.builtin.debug:
+    var: racksmith_uptime_result.stdout

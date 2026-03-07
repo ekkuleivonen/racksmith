@@ -372,6 +372,19 @@ def ensure_racksmith_branch(repo_path: Path) -> None:
         run_git(repo_path, ["checkout", "-b", RACKSMITH_BRANCH, f"origin/{base}"])
 
 
+def sync_racksmith_branch(repo_path: Path) -> None:
+    """Rebase the racksmith branch on top of the user's base branch (e.g. main)."""
+    run_git(repo_path, ["fetch", "origin"])
+    ensure_racksmith_branch(repo_path)
+    statuses = get_file_statuses(repo_path)
+    if statuses["modified"] or statuses["untracked"]:
+        raise RuntimeError(
+            "Cannot sync: you have uncommitted changes. Commit or discard them first."
+        )
+    base = detect_base_branch(repo_path)
+    run_git(repo_path, ["rebase", f"origin/{base}"])
+
+
 def _is_binary(path: Path) -> bool:
     try:
         data = path.read_bytes()

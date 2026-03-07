@@ -1,20 +1,23 @@
-"""arq job functions for playbook execution."""
+"""arq job functions for stack execution."""
 
 from __future__ import annotations
 
 import asyncio
 import json
 import os
+import tempfile
 from datetime import UTC, datetime
 from pathlib import Path
 
+import yaml
 import aiosqlite
 import settings
-from playbooks.managers import (
+from stacks.managers import (
+    ACTIONS_DIR,
     INVENTORY_DIR,
-    PLAYBOOKS_DIR,
-    ROLES_DIR,
+    STACKS_DIR,
     RUN_EVENTS_CHANNEL_PREFIX,
+    sync_builtin_actions,
 )
 
 
@@ -27,17 +30,29 @@ async def execute_run(
     *,
     run_id: str,
     repo_path: str,
-    playbook_id: str,
+    stack_id: str,
     hosts: list[str],
+    runtime_vars: dict | None = None,
+    become_password: str | None = None,
 ) -> None:
     """Execute ansible-playbook in worker process, publishing output via Redis pub/sub."""
     redis = ctx["redis"]
     channel = f"{RUN_EVENTS_CHANNEL_PREFIX}{run_id}:events"
 
     repo = Path(repo_path)
-    playbook_path = repo / PLAYBOOKS_DIR / f"{playbook_id}.yml"
+    stack_path = repo / STACKS_DIR / f"{stack_id}.yml"
     inventory_dir = repo / INVENTORY_DIR
-    roles_dir = repo / ROLES_DIR
+    actions_dir = (repo / ACTIONS_DIR).resolve()
+
+    sync_builtin_actions(repo)
+
+    # Write a minimal ansible.cfg that sets roles_path to our actions dir.
+    # This overrides any ansible.cfg in the repo (e.g. roles_path = .racksmith/actions).
+    with tempfile.NamedTemporaryFile(
+        mode="w", suffix=".cfg", delete=False, prefix="racksmith_ansible_"
+    ) as f:
+        f.write(f"[defaults]\nroles_path = {actions_dir}\n")
+        ansible_config_path = f.name
 
     async with aiosqlite.connect(settings.DB_PATH) as db:
         # Update status to running
@@ -51,22 +66,34 @@ async def execute_run(
 
     command = [
         "ansible-playbook",
-        str(playbook_path),
+        str(stack_path),
         "-i",
         str(inventory_dir),
         "--limit",
         ",".join(hosts),
     ]
-    command_line = f"$ {' '.join(command)}\n"
-    await redis.publish(channel, json.dumps({"type": "output", "data": command_line}))
 
+    extra: dict[str, str] = dict(runtime_vars or {})
+    if become_password:
+        extra["ansible_become_pass"] = become_password
+
+    tmp_vars_path: str | None = None
+    if extra:
+        tmp = Path(tempfile.mktemp(suffix=".yml"))
+        tmp.write_text(yaml.safe_dump(extra))
+        tmp_vars_path = str(tmp)
+        command += ["--extra-vars", f"@{tmp_vars_path}"]
+        command_line = f"$ {' '.join(command)} [runtime vars redacted]\n"
+    else:
+        command_line = f"$ {' '.join(command)}\n"
+
+    await redis.publish(channel, json.dumps({"type": "output", "data": command_line}))
     output = command_line
 
     try:
         env = os.environ.copy()
-        env["ANSIBLE_ROLES_PATH"] = os.pathsep.join(
-            [str(roles_dir), env.get("ANSIBLE_ROLES_PATH", "")],
-        ).strip(os.pathsep)
+        env["ANSIBLE_CONFIG"] = ansible_config_path
+        env["ANSIBLE_ROLES_PATH"] = str(actions_dir)
         if settings.SSH_DISABLE_HOST_KEY_CHECK:
             env["ANSIBLE_HOST_KEY_CHECKING"] = "False"
         env["ANSIBLE_FORCE_COLOR"] = "True"
@@ -117,3 +144,12 @@ async def execute_run(
 
     await redis.publish(channel, json.dumps({"type": "status", "status": status}))
     await redis.publish(channel, json.dumps({"type": "done"}))
+    try:
+        os.unlink(ansible_config_path)
+    except OSError:
+        pass
+    if tmp_vars_path:
+        try:
+            os.unlink(tmp_vars_path)
+        except OSError:
+            pass
