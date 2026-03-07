@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import type { ActionSummary } from "@/lib/actions";
 import { listActions } from "@/lib/actions";
 
@@ -10,6 +11,7 @@ export function ActionsPage() {
   const navigate = useNavigate();
   const [actions, setActions] = useState<ActionSummary[]>([]);
   const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -49,13 +51,32 @@ export function ActionsPage() {
               Create action
             </Button>
           </div>
+          {!loading && actions.length > 0 && (
+            <Input
+              placeholder="Search actions..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="h-8 text-sm bg-zinc-950/60 border-zinc-700"
+            />
+          )}
           {loading ? (
             <p className="text-zinc-500 text-sm">Loading actions...</p>
           ) : actions.length === 0 ? (
             <p className="text-zinc-500 text-sm">No actions yet.</p>
-          ) : (
+          ) : (() => {
+            const q = search.trim().toLowerCase();
+            const filtered = q
+              ? actions.filter(
+                  (a) =>
+                    a.name.toLowerCase().includes(q) ||
+                    (a.description ?? "").toLowerCase().includes(q),
+                )
+              : actions;
+            return filtered.length === 0 ? (
+              <p className="text-zinc-500 text-sm">No actions match your search.</p>
+            ) : (
             <div className="space-y-2">
-              {actions.map((action) => (
+              {filtered.map((action) => (
                 <button
                   key={action.slug}
                   type="button"
@@ -81,7 +102,8 @@ export function ActionsPage() {
                 </button>
               ))}
             </div>
-          )}
+            );
+          })()}
         </section>
 
         <div className="flex justify-end">

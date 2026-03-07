@@ -35,6 +35,7 @@ export function NodePage() {
   const [pingStatus, setPingStatus] = useState<PingStatus>("unknown");
   const [stacks, setStacks] = useState<StackSummary[]>([]);
   const [actions, setActions] = useState<ActionSummary[]>([]);
+  const [actionsExpanded, setActionsExpanded] = useState(false);
   const [editingConnection, setEditingConnection] = useState(false);
   const [connectionDraft, setConnectionDraft] = useState({
     host: "",
@@ -613,50 +614,75 @@ export function NodePage() {
                 Create one
               </button>
             </p>
-          ) : (
-            <ul className="space-y-2">
-              {actions.map((action) => (
-                <li
-                  key={action.slug}
-                  className="flex items-center justify-between gap-3 rounded border border-zinc-800 bg-zinc-900/60 px-3 py-2"
-                >
-                  <div className="min-w-0 space-y-0.5">
-                    <p className="text-sm text-zinc-200 truncate">
-                      {action.name}
-                    </p>
-                    {action.description ? (
-                      <p className="text-xs text-zinc-500 truncate">
-                        {action.description}
-                      </p>
-                    ) : null}
-                    {action.source ? (
-                      <div className="flex flex-wrap gap-1 pt-0.5">
-                        <Badge
-                          variant="outline"
-                          className="text-[10px] border-zinc-700 text-zinc-400"
-                        >
-                          {action.source}
-                        </Badge>
+          ) : (() => {
+            const LIMIT = 5;
+            const visible = actionsExpanded ? actions : actions.slice(0, LIMIT);
+            const hidden = actions.length - LIMIT;
+            return (
+              <>
+                <ul className="space-y-2">
+                  {visible.map((action) => (
+                    <li
+                      key={action.slug}
+                      className="flex items-center justify-between gap-3 rounded border border-zinc-800 bg-zinc-900/60 px-3 py-2"
+                    >
+                      <div className="min-w-0 space-y-0.5">
+                        <p className="text-sm text-zinc-200 truncate">
+                          {action.name}
+                        </p>
+                        {action.description ? (
+                          <p className="text-xs text-zinc-500 truncate">
+                            {action.description}
+                          </p>
+                        ) : null}
+                        {action.source ? (
+                          <div className="flex flex-wrap gap-1 pt-0.5">
+                            <Badge
+                              variant="outline"
+                              className="text-[10px] border-zinc-700 text-zinc-400"
+                            >
+                              {action.source}
+                            </Badge>
+                          </div>
+                        ) : null}
                       </div>
-                    ) : null}
-                  </div>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="shrink-0 gap-1.5"
-                    onClick={() =>
-                      navigate(
-                        `/actions/${action.slug}?node=${encodeURIComponent(node.slug)}`,
-                      )
-                    }
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="shrink-0 gap-1.5"
+                        onClick={() =>
+                          navigate(
+                            `/actions/${action.slug}?node=${encodeURIComponent(node.slug)}`,
+                          )
+                        }
+                      >
+                        <Zap className="size-3" />
+                        Run
+                      </Button>
+                    </li>
+                  ))}
+                </ul>
+                {!actionsExpanded && hidden > 0 && (
+                  <button
+                    type="button"
+                    className="text-xs text-zinc-500 hover:text-zinc-300 underline underline-offset-2"
+                    onClick={() => setActionsExpanded(true)}
                   >
-                    <Zap className="size-3" />
-                    Run
-                  </Button>
-                </li>
-              ))}
-            </ul>
-          )}
+                    View {hidden} more action{hidden === 1 ? "" : "s"}
+                  </button>
+                )}
+                {actionsExpanded && actions.length > LIMIT && (
+                  <button
+                    type="button"
+                    className="text-xs text-zinc-500 hover:text-zinc-300 underline underline-offset-2"
+                    onClick={() => setActionsExpanded(false)}
+                  >
+                    Show less
+                  </button>
+                )}
+              </>
+            );
+          })()}
         </section>
 
         <section className="border border-zinc-800 bg-zinc-900/30 p-4 space-y-3">
@@ -732,69 +758,6 @@ export function NodePage() {
           )}
         </section>
 
-        <section className="border border-zinc-800 bg-zinc-900/30 p-4 space-y-3">
-          <div className="flex items-center gap-2">
-            <Zap className="size-4 text-zinc-400" />
-            <h2 className="text-sm font-medium text-zinc-200">
-              Available actions
-            </h2>
-          </div>
-          {actions.length === 0 ? (
-            <p className="text-xs text-zinc-500">
-              No actions defined yet.{" "}
-              <button
-                type="button"
-                className="underline underline-offset-2 hover:text-zinc-300"
-                onClick={() => navigate("/actions/new")}
-              >
-                Create one
-              </button>
-            </p>
-          ) : (
-            <ul className="space-y-2">
-              {actions.map((action) => (
-                <li
-                  key={action.slug}
-                  className="flex items-center justify-between gap-3 rounded border border-zinc-800 bg-zinc-900/60 px-3 py-2"
-                >
-                  <div className="min-w-0 space-y-0.5">
-                    <p className="text-sm text-zinc-200 truncate">
-                      {action.name}
-                    </p>
-                    {action.description ? (
-                      <p className="text-xs text-zinc-500 truncate">
-                        {action.description}
-                      </p>
-                    ) : null}
-                    {action.source ? (
-                      <div className="flex flex-wrap gap-1 pt-0.5">
-                        <Badge
-                          variant="outline"
-                          className="text-[10px] border-zinc-700 text-zinc-400"
-                        >
-                          {action.source}
-                        </Badge>
-                      </div>
-                    ) : null}
-                  </div>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="shrink-0 gap-1.5"
-                    onClick={() =>
-                      navigate(
-                        `/actions/${action.slug}?node=${encodeURIComponent(node.slug)}`,
-                      )
-                    }
-                  >
-                    <Zap className="size-3" />
-                    Run
-                  </Button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
       </div>
     </div>
   );
