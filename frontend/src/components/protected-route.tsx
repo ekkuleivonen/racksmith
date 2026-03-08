@@ -31,7 +31,15 @@ export function ProtectedRoute({ children }: { children: ReactNode }) {
     return <Navigate to="/setup" replace />;
   }
 
-  if (loading || !status?.repo_ready || nodes.length === 0) {
+  if (loading) {
+    return (
+      <div className="flex-1 flex items-center justify-center">
+        <p className="text-zinc-500 text-sm">Loading...</p>
+      </div>
+    );
+  }
+
+  if (!status?.repo_ready || nodes.length === 0) {
     return <Navigate to="/setup" replace />;
   }
 
