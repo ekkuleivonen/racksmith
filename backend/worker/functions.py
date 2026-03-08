@@ -13,7 +13,6 @@ import yaml
 import aiosqlite
 import settings
 from ssh.misc import _racksmith_ssh_dir
-from nodes.managers import ansible_safe_name
 from stacks.managers import (
     ACTIONS_DIR,
     INVENTORY_DIR,
@@ -84,7 +83,7 @@ async def execute_run(
         "-i",
         str(inventory_dir),
         "--limit",
-        ",".join(ansible_safe_name(h) for h in hosts),
+        ",".join(hosts),
     ]
 
     extra: dict[str, str] = dict(runtime_vars or {})
@@ -224,7 +223,7 @@ async def execute_action_run(
         "-i",
         str(inventory_dir),
         "--limit",
-        ",".join(ansible_safe_name(h) for h in hosts),
+        ",".join(hosts),
     ]
 
     extra: dict[str, str] = dict(runtime_vars or {})

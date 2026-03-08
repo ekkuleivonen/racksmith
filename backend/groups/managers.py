@@ -18,7 +18,7 @@ GROUP_FILE_EXTENSIONS = (".yml", ".yaml")
 
 def _generate_group_id(repo_path: Path) -> str:
     for _ in range(100):
-        candidate = f"g-{secrets.token_hex(3)}"
+        candidate = f"g_{secrets.token_hex(3)}"
         if not (repo_path / GROUPS_DIR / f"{candidate}.yaml").exists():
             return candidate
     raise RuntimeError("Failed to generate unique group ID")

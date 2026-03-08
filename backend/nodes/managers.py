@@ -19,10 +19,6 @@ INVENTORY_DIR = Path(".racksmith/inventory")
 NODE_FILE_EXTENSIONS = (".yml", ".yaml")
 
 
-def ansible_safe_name(name: str) -> str:
-    """Replace characters invalid in Ansible host/group names with underscores."""
-    return name.replace("-", "_")
-
 
 def _now_iso() -> str:
     return datetime.now(UTC).isoformat()
@@ -30,7 +26,7 @@ def _now_iso() -> str:
 
 def _generate_node_id(repo_path: Path) -> str:
     for _ in range(100):
-        candidate = f"n-{secrets.token_hex(3)}"
+        candidate = f"n_{secrets.token_hex(3)}"
         if not (repo_path / NODES_DIR / f"{candidate}.yaml").exists():
             return candidate
     raise RuntimeError("Failed to generate unique node ID")
@@ -137,27 +133,25 @@ class NodeManager:
         for node in nodes:
             if not node.managed or not node.ip_address or not node.ssh_user:
                 continue
-            host_name = ansible_safe_name(node.id)
-            hosts[host_name] = {
+            hosts[node.id] = {
                 "ansible_host": node.ip_address,
                 "ansible_user": node.ssh_user,
                 "ansible_port": node.ssh_port,
                 "ansible_python_interpreter": "auto_silent",
             }
             if settings.SSH_DISABLE_HOST_KEY_CHECK:
-                hosts[host_name]["ansible_ssh_common_args"] = (
+                hosts[node.id]["ansible_ssh_common_args"] = (
                     "-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
                 )
             if node.os_family:
-                hosts[host_name]["os_family"] = node.os_family
+                hosts[node.id]["os_family"] = node.os_family
             if node.labels:
-                hosts[host_name]["labels"] = node.labels
+                hosts[node.id]["labels"] = node.labels
 
             for group in node.groups:
-                group_name = ansible_safe_name(group)
-                if group_name not in children:
-                    children[group_name] = {"hosts": {}}
-                children[group_name]["hosts"][host_name] = {}
+                if group not in children:
+                    children[group] = {"hosts": {}}
+                children[group]["hosts"][node.id] = {}
 
         inventory = {"all": {"hosts": hosts}}
         if children:

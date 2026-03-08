@@ -23,7 +23,7 @@ def _now_iso() -> str:
 
 def _generate_rack_id(repo_path: Path) -> str:
     for _ in range(100):
-        candidate = f"r-{secrets.token_hex(3)}"
+        candidate = f"r_{secrets.token_hex(3)}"
         if not (repo_path / RACKS_DIR / f"{candidate}.yaml").exists():
             return candidate
     raise RuntimeError("Failed to generate unique rack ID")

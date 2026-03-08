@@ -41,7 +41,7 @@ RUN_EVENTS_CHANNEL_PREFIX = "racksmith:run:"
 
 def _generate_stack_id(repo_path: Path) -> str:
     for _ in range(100):
-        candidate = f"s-{secrets.token_hex(3)}"
+        candidate = f"s_{secrets.token_hex(3)}"
         if not (repo_path / STACKS_DIR / f"{candidate}.yml").exists():
             return candidate
     raise RuntimeError("Failed to generate unique stack ID")
