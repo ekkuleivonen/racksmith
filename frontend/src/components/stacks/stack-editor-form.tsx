@@ -120,7 +120,7 @@ function SortableRoleCard({
         </button>
         <div className="min-w-0 flex-1 [&>*]:w-full">
           <AccordionTrigger
-            className="w-full py-2.5 text-left hover:no-underline"
+            className="w-full items-center py-2.5 text-left hover:no-underline"
           >
             <div className="min-w-0 space-y-0.5">
               <p className="text-sm text-zinc-100">{action.name}</p>
