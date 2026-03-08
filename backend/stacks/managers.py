@@ -3,8 +3,7 @@
 from __future__ import annotations
 
 import json
-import os
-import re
+import secrets
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
@@ -38,7 +37,14 @@ INVENTORY_DIR = Path(".racksmith/inventory")
 
 RESERVED_DESCRIPTION_KEY = "racksmith_description"
 RUN_EVENTS_CHANNEL_PREFIX = "racksmith:run:"
-STACK_ID_RE = re.compile(r"^[a-zA-Z0-9._-]+$")
+
+
+def _generate_stack_id(repo_path: Path) -> str:
+    for _ in range(100):
+        candidate = f"s-{secrets.token_hex(3)}"
+        if not (repo_path / STACKS_DIR / f"{candidate}.yml").exists():
+            return candidate
+    raise RuntimeError("Failed to generate unique stack ID")
 
 
 def _now_iso() -> str:
@@ -67,32 +73,6 @@ class StackManager:
 
     def _stack_path(self, repo_path: Path, stack_id: str) -> Path:
         return self._stacks_dir(repo_path) / f"{stack_id}.yml"
-
-    def _normalize_stack_id(self, file_name: str) -> str:
-        normalized = file_name.strip()
-        if normalized.endswith(".yml"):
-            normalized = normalized[:-4]
-        elif normalized.endswith(".yaml"):
-            normalized = normalized[:-5]
-        if not normalized or not STACK_ID_RE.match(normalized):
-            raise ValueError("file_name must use only letters, numbers, dots, underscores, or dashes")
-        return normalized
-
-    def _slugify_name(self, name: str) -> str:
-        slug = re.sub(r"[^a-zA-Z0-9]+", "-", name.strip().lower()).strip("-")
-        return slug or "stack"
-
-    def _next_available_stack_id(
-        self, repo_path: Path, preferred_id: str, *, ignore_id: str | None = None
-    ) -> str:
-        candidate = preferred_id
-        suffix = 2
-        while True:
-            path = self._stack_path(repo_path, candidate)
-            if candidate == ignore_id or not path.exists():
-                return candidate
-            candidate = f"{preferred_id}-{suffix}"
-            suffix += 1
 
     def _load_action_catalog(self, repo_path: Path) -> dict[str, Action]:
         """Scan .racksmith/actions/ and parse all action.yaml files."""
@@ -192,7 +172,6 @@ class StackManager:
         stat = path.stat()
         summary = StackSummary(
             id=path.stem,
-            file_name=path.name,
             path=str(STACKS_DIR / path.name),
             name=str(play.get("name") or path.stem),
             description=description,
@@ -215,7 +194,7 @@ class StackManager:
             except (OSError, ValueError, yaml.YAMLError):
                 continue
             results.append(summary)
-        return sorted(results, key=lambda s: s.file_name.lower())
+        return sorted(results, key=lambda s: (s.name.lower(), s.id))
 
     def get_stack(self, session, stack_id: str) -> StackDetail:
         repo_path = repos_manager.active_repo_path(session)
@@ -234,17 +213,8 @@ class StackManager:
     def create_stack(self, session, body: StackUpsertRequest) -> StackDetail:
         repo_path = repos_manager.active_repo_path(session)
         action_catalog = self._load_action_catalog(repo_path)
-        stack_id = (
-            self._normalize_stack_id(body.file_name)
-            if body.file_name.strip()
-            else self._next_available_stack_id(
-                repo_path,
-                self._slugify_name(body.name),
-            )
-        )
+        stack_id = _generate_stack_id(repo_path)
         path = self._stack_path(repo_path, stack_id)
-        if path.exists():
-            raise ValueError("Stack already exists")
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(self._serialize_stack_yaml(body, action_catalog), encoding="utf-8")
         return self.get_stack(session, stack_id)
@@ -255,21 +225,9 @@ class StackManager:
         path = self._stack_path(repo_path, stack_id)
         if not path.is_file():
             raise FileNotFoundError("Stack not found")
-
-        next_id = (
-            self._normalize_stack_id(body.file_name)
-            if body.file_name.strip()
-            else stack_id
-        )
-        next_path = self._stack_path(repo_path, next_id)
-        if next_path != path and next_path.exists():
-            raise ValueError("Another stack already uses that file name")
-
-        next_path.parent.mkdir(parents=True, exist_ok=True)
-        next_path.write_text(self._serialize_stack_yaml(body, action_catalog), encoding="utf-8")
-        if next_path != path:
-            path.unlink(missing_ok=True)
-        return self.get_stack(session, next_id)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(self._serialize_stack_yaml(body, action_catalog), encoding="utf-8")
+        return self.get_stack(session, stack_id)
 
     def delete_stack(self, session, stack_id: str) -> None:
         repo_path = repos_manager.active_repo_path(session)

@@ -31,7 +31,7 @@ export const COLS_BY_WIDTH: Record<RackWidthInches, number> = {
 };
 
 export type RackSummary = {
-  slug: string;
+  id: string;
   name: string;
   rack_width_inches: RackWidthInches;
   rack_units: number;
@@ -40,7 +40,7 @@ export type RackSummary = {
 };
 
 export type RackDetail = {
-  slug: string;
+  id: string;
   name: string;
   rack_width_inches: RackWidthInches;
   rack_units: number;
@@ -71,12 +71,12 @@ export async function listRacks() {
   return data.racks;
 }
 
-export async function getRack(slug: string) {
-  return apiGet<{ rack: RackDetail }>(`/racks/${slug}`);
+export async function getRack(id: string) {
+  return apiGet<{ rack: RackDetail }>(`/racks/${id}`);
 }
 
-export async function getRackLayout(slug: string) {
-  return apiGet<{ layout: RackLayout }>(`/racks/${slug}/layout`);
+export async function getRackLayout(id: string) {
+  return apiGet<{ layout: RackLayout }>(`/racks/${id}/layout`);
 }
 
 export async function createRack(payload: {
@@ -85,13 +85,13 @@ export async function createRack(payload: {
   rack_units: number;
   rack_cols: number;
 }) {
-  const result = await apiPost<{ rack: RackDetail; rack_slug: string }>("/racks", payload);
+  const result = await apiPost<{ rack: RackDetail; rack_id: string }>("/racks", payload);
   invalidateAfterRackMutation();
   return result;
 }
 
 export async function updateRack(
-  slug: string,
+  id: string,
   payload: Partial<{
     name: string;
     rack_width_inches: RackWidthInches;
@@ -99,12 +99,12 @@ export async function updateRack(
     rack_cols: number;
   }>
 ) {
-  const result = await apiPatch<{ rack: RackDetail }>(`/racks/${slug}`, payload);
+  const result = await apiPatch<{ rack: RackDetail }>(`/racks/${id}`, payload);
   invalidateAfterRackMutation();
   return result;
 }
 
-export async function deleteRack(slug: string) {
-  await apiDelete(`/racks/${slug}`);
+export async function deleteRack(id: string) {
+  await apiDelete(`/racks/${id}`);
   invalidateAfterRackMutation();
 }

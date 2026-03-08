@@ -48,7 +48,7 @@ function makePendingNode(zone: ZoneSelection): PendingNode {
   };
 }
 
-function pendingToNodeInput(pending: PendingNode, rackSlug: string): NodeInput {
+function pendingToNodeInput(pending: PendingNode, rackId: string): NodeInput {
   return {
     name: pending.name,
     ip_address: pending.ip_address,
@@ -59,7 +59,7 @@ function pendingToNodeInput(pending: PendingNode, rackSlug: string): NodeInput {
     os_family: pending.os_family ?? null,
     notes: pending.notes,
     placement: {
-      rack: rackSlug,
+      rack: rackId,
       u_start: pending.position_u_start,
       u_height: pending.position_u_height,
       col_start: pending.position_col_start,
@@ -70,7 +70,7 @@ function pendingToNodeInput(pending: PendingNode, rackSlug: string): NodeInput {
 
 function layoutNodeToNodeInput(
   node: ReturnType<typeof nodeToRackLayoutNode>,
-  rackSlug: string
+  rackId: string
 ): NodeInput {
   return {
     name: node.name,
@@ -85,7 +85,7 @@ function layoutNodeToNodeInput(
     placement:
       node.placement === "rack"
         ? {
-            rack: rackSlug,
+            rack: rackId,
             u_start: node.position_u_start,
             u_height: node.position_u_height,
             col_start: node.position_col_start,
@@ -96,7 +96,7 @@ function layoutNodeToNodeInput(
 }
 
 export function RackPage() {
-  const { rackSlug = "" } = useParams();
+  const { rackId: rackIdParam = "" } = useParams();
   const location = useLocation();
   const navigate = useNavigate();
   const highlightedNodeId = new URLSearchParams(location.search).get("nodeId");
@@ -119,12 +119,12 @@ export function RackPage() {
   const rack = layout;
 
   const unplacedNodes = useMemo(() => {
-    if (!rackSlug) return [];
+    if (!rackIdParam) return [];
     return nodesFromStore.filter(
       (n) =>
-        isManagedNode(n) && (!n.placement || n.placement.rack !== rackSlug)
+        isManagedNode(n) && (!n.placement || n.placement.rack !== rackIdParam)
     );
-  }, [nodesFromStore, rackSlug]);
+  }, [nodesFromStore, rackIdParam]);
 
   const selectedItem = useMemo(
     () => layoutNodes.find((item) => item.id === selectedItemId) ?? null,
@@ -137,13 +137,13 @@ export function RackPage() {
   const unmanagedItemCount = layoutNodes.length - managedItemCount;
 
   const loadRack = useCallback(async (preserveId?: string) => {
-    if (!rackSlug) {
+    if (!rackIdParam) {
       setLayout(null);
       setLayoutNodes([]);
       return;
     }
 
-    const { layout: data } = await getRackLayout(rackSlug);
+    const { layout: data } = await getRackLayout(rackIdParam);
     setLayout(data);
     setRackNameDraft(data.name);
     setRackWidthDraft(data.rack_width_inches);
@@ -157,7 +157,7 @@ export function RackPage() {
       if (highlightedNodeId && nodes.some((n) => n.id === highlightedNodeId)) return highlightedNodeId;
       return null;
     });
-  }, [highlightedNodeId, rackSlug]);
+  }, [highlightedNodeId, rackIdParam]);
 
   useEffect(() => {
     let active = true;
@@ -190,9 +190,9 @@ export function RackPage() {
     navigate({ pathname: location.pathname, search: nextSearch ? `?${nextSearch}` : "" }, { replace: true });
   }, [location.pathname, location.search, navigate, selectedItemId]);
 
-  useEffect(() => setPending(null), [rackSlug]);
-  useEffect(() => setFrameControlsVisible(false), [rackSlug]);
-  useEffect(() => setEditingName(false), [rackSlug]);
+  useEffect(() => setPending(null), [rackIdParam]);
+  useEffect(() => setFrameControlsVisible(false), [rackIdParam]);
+  useEffect(() => setEditingName(false), [rackIdParam]);
 
   const ensureFrameDraftSaved = useCallback(async () => {
     if (!rack) return false;
@@ -203,7 +203,7 @@ export function RackPage() {
     if (!frameChanged) return true;
 
     try {
-      const result = await updateRack(rack.slug, {
+      const result = await updateRack(rack.id, {
         rack_width_inches: rackWidthDraft,
         rack_units: rackUnitsDraft,
         rack_cols: rackColsDraft,
@@ -226,7 +226,7 @@ export function RackPage() {
       if (!frameSaved) return;
       await Promise.all(
         nodesOnRack.map((node) => {
-          const input = layoutNodeToNodeInput(node, rackSlug);
+          const input = layoutNodeToNodeInput(node, rackIdParam);
           return updateNode(node.id, { ...input, placement: null });
         }),
       );
@@ -237,7 +237,7 @@ export function RackPage() {
     } finally {
       setSaving(false);
     }
-  }, [ensureFrameDraftSaved, layoutNodes, loadRack, rack, rackSlug]);
+  }, [ensureFrameDraftSaved, layoutNodes, loadRack, rack, rackIdParam]);
 
   const handlePlaceUnplacedNode = useCallback(
     async (
@@ -266,7 +266,7 @@ export function RackPage() {
           os_family: node.os_family ?? null,
           notes: node.notes ?? "",
           placement: {
-            rack: rackSlug,
+            rack: rackIdParam,
             u_start: position.position_u_start,
             u_height: position.position_u_height,
             col_start: position.position_col_start,
@@ -281,7 +281,7 @@ export function RackPage() {
         setSaving(false);
       }
     },
-    [ensureFrameDraftSaved, loadRack, rack, rackSlug],
+    [ensureFrameDraftSaved, loadRack, rack, rackIdParam],
   );
 
   const handleUnplaceNode = useCallback(
@@ -292,7 +292,7 @@ export function RackPage() {
       try {
         const frameSaved = await ensureFrameDraftSaved();
         if (!frameSaved) return;
-        const input = layoutNodeToNodeInput(existing, rackSlug);
+        const input = layoutNodeToNodeInput(existing, rackIdParam);
         await updateNode(nodeId, { ...input, placement: null });
         await loadRack();
         toast.success("Node unplaced");
@@ -302,7 +302,7 @@ export function RackPage() {
         setSaving(false);
       }
     },
-    [ensureFrameDraftSaved, layoutNodes, loadRack, rack, rackSlug],
+    [ensureFrameDraftSaved, layoutNodes, loadRack, rack, rackIdParam],
   );
 
   const onSelectZone = useCallback((zone: ZoneSelection) => {
@@ -312,7 +312,7 @@ export function RackPage() {
       return;
     }
     setPending(makePendingNode(zone));
-  }, [rackSlug]);
+  }, [rackIdParam]);
 
   const updateItemPosition = useCallback(
     async (
@@ -332,11 +332,11 @@ export function RackPage() {
       try {
         const frameSaved = await ensureFrameDraftSaved();
         if (!frameSaved) return;
-        const input = layoutNodeToNodeInput(existing, rackSlug);
+        const input = layoutNodeToNodeInput(existing, rackIdParam);
         await updateNode(itemId, {
           ...input,
           placement: {
-            rack: rackSlug,
+            rack: rackIdParam,
             u_start: position.position_u_start,
             u_height: position.position_u_height,
             col_start: position.position_col_start,
@@ -350,14 +350,14 @@ export function RackPage() {
         setSaving(false);
       }
     },
-    [ensureFrameDraftSaved, layoutNodes, loadRack, rack, rackSlug],
+    [ensureFrameDraftSaved, layoutNodes, loadRack, rack, rackIdParam],
   );
 
   const persistRackFrame = useCallback(
     async (nextWidth: 10 | 19, nextUnits: number, nextCols: number) => {
       if (!rack) return false;
       try {
-        const result = await updateRack(rack.slug, {
+        const result = await updateRack(rack.id, {
           rack_width_inches: nextWidth,
           rack_units: nextUnits,
           rack_cols: nextCols,
@@ -387,7 +387,7 @@ export function RackPage() {
 
     setSaving(true);
     try {
-      const result = await updateRack(rack.slug, { name: trimmedName });
+      const result = await updateRack(rack.id, { name: trimmedName });
       setLayout({ ...layout!, ...result.rack, nodes: layout!.nodes });
       setRackNameDraft(result.rack.name);
       return true;
@@ -489,11 +489,11 @@ export function RackPage() {
                 onClick={async () => {
                   setSaving(true);
                   try {
-                    await deleteRack(rack.slug);
+                    await deleteRack(rack.id);
                     const remaining = await listRacks();
                     toast.success("Rack deleted");
                     navigate(
-                      remaining[0] ? `/rack/view/${remaining[0].slug}` : "/rack/create",
+                      remaining[0] ? `/rack/view/${remaining[0].id}` : "/rack/create",
                       { replace: true },
                     );
                   } catch (error) {
@@ -626,7 +626,7 @@ export function RackPage() {
             try {
               const frameSaved = await ensureFrameDraftSaved();
               if (!frameSaved) return;
-              const { node } = await createNode(pendingToNodeInput(pending, rackSlug));
+              const { node } = await createNode(pendingToNodeInput(pending, rackIdParam));
               await loadRack(node.id);
               setPending(null);
               toast.success("Item added");
@@ -695,9 +695,9 @@ export function RackPage() {
             const idToKeep = selectedItem.id;
             setSaving(true);
             try {
-              const input = layoutNodeToNodeInput(selectedItem, rackSlug);
+              const input = layoutNodeToNodeInput(selectedItem, rackIdParam);
               const placement = selectedItem.placement === "rack" ? {
-                rack: rackSlug,
+                rack: rackIdParam,
                 u_start: selectedItem.position_u_start,
                 u_height: selectedItem.position_u_height,
                 col_start: selectedItem.position_col_start,

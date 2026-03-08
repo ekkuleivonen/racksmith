@@ -22,7 +22,7 @@ class RackUpdate(BaseModel):
 
 
 class Rack(BaseModel):
-    slug: str
+    id: str
     name: str
     rack_width_inches: int
     rack_units: int
@@ -32,7 +32,7 @@ class Rack(BaseModel):
 
 
 class RackSummary(BaseModel):
-    slug: str
+    id: str
     name: str
     rack_width_inches: int
     rack_units: int

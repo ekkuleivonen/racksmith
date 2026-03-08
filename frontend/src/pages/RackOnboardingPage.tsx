@@ -7,7 +7,7 @@ import { Slider } from "@/components/ui/slider";
 import { createRack, type RackWidthInches } from "@/lib/racks";
 
 type RackOnboardingPageProps = {
-  onCreated?: (rackSlug: string) => void;
+  onCreated?: (rackId: string) => void;
 };
 
 export function RackOnboardingPage({ onCreated }: RackOnboardingPageProps) {
@@ -35,9 +35,9 @@ export function RackOnboardingPage({ onCreated }: RackOnboardingPageProps) {
       });
       toast.success("Rack created");
       if (onCreated) {
-        onCreated(result.rack_slug);
+        onCreated(result.rack_id);
       } else {
-        navigate(`/rack/view/${result.rack_slug}`, { replace: true });
+        navigate(`/rack/view/${result.rack_id}`, { replace: true });
       }
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to create rack");

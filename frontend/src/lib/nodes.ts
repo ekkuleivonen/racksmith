@@ -48,6 +48,11 @@ export function nodeAlias(node: Node | NodeSummary): string {
   );
 }
 
+/** Display label for a node: name → hostname → ip_address → id */
+export function nodeDisplayLabel(node: Node | NodeSummary): string {
+  return node.name?.trim() || node.hostname || node.ip_address || node.id;
+}
+
 export function isReachableNode(node: { ip_address?: string; ssh_user?: string }): boolean {
   return !!node.ip_address && !!node.ssh_user;
 }

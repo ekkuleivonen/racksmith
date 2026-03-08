@@ -159,7 +159,7 @@ export function NodePage() {
     );
   }
 
-  const rackSlug = node.placement?.rack;
+  const rackId = node.placement?.rack;
 
   return (
     <div className="flex-1 min-h-0 overflow-auto p-6">
@@ -209,12 +209,12 @@ export function NodePage() {
               </div>
             </div>
             <div className="ml-auto flex items-center gap-2">
-              {rackSlug ? (
+              {rackId ? (
                 <Button
                   size="sm"
                   variant="outline"
                   onClick={() =>
-                    navigate(`/rack/view/${rackSlug}?nodeId=${node.id}`)
+                    navigate(`/rack/view/${rackId}?nodeId=${node.id}`)
                   }
                 >
                   View rack
@@ -285,7 +285,7 @@ export function NodePage() {
                   try {
                     await deleteNode(node.id);
                     toast.success("Node deleted");
-                    navigate(rackSlug ? `/rack/view/${rackSlug}` : "/nodes");
+                    navigate(rackId ? `/rack/view/${rackId}` : "/nodes");
                   } catch (error) {
                     toast.error(
                       error instanceof Error

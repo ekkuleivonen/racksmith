@@ -29,7 +29,7 @@ export function useRackEntries() {
       const racks = await listRacks().catch(() => [] as RackSummary[]);
       const entries: RackNavEntry[] = await Promise.all(
         racks.map(async (rack) => {
-          const { layout } = await getRackLayout(rack.slug);
+          const { layout } = await getRackLayout(rack.id);
           return { rack, nodes: layout.nodes.filter((n) => n.managed) };
         }),
       );

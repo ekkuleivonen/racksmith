@@ -8,18 +8,18 @@ import type { GroupWithMembers } from "@/lib/groups";
 import { NavLink } from "react-router-dom";
 
 export function GroupDetailPage() {
-  const { slug = "" } = useParams();
+  const { groupId = "" } = useParams();
   const navigate = useNavigate();
   const [group, setGroup] = useState<GroupWithMembers | null>(null);
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
-    if (!slug) {
+    if (!groupId) {
       setGroup(null);
       return;
     }
     try {
-      const data = await getGroup(slug);
+      const data = await getGroup(groupId);
       setGroup(data.group);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to load group");
@@ -27,7 +27,7 @@ export function GroupDetailPage() {
     } finally {
       setLoading(false);
     }
-  }, [slug]);
+  }, [groupId]);
 
   useEffect(() => {
     void load();

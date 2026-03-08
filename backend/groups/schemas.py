@@ -13,7 +13,7 @@ class GroupInput(BaseModel):
 
 
 class Group(GroupInput):
-    slug: str
+    id: str
 
 
 class GroupWithMembers(Group):

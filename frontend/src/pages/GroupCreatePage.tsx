@@ -26,7 +26,7 @@ export function GroupCreatePage() {
         description: description.trim() || undefined,
       });
       toast.success("Group created");
-      navigate(`/groups/${group.slug}`, { replace: true });
+      navigate(`/groups/${group.id}`, { replace: true });
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to create group");
     } finally {

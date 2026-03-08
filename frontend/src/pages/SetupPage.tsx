@@ -606,8 +606,8 @@ export function SetupPage() {
             </p>
           </div>
           <RackOnboardingPage
-            onCreated={(rackSlug) => {
-              navigate(`/rack/view/${rackSlug}`, { replace: true });
+            onCreated={(rackId) => {
+              navigate(`/rack/view/${rackId}`, { replace: true });
             }}
           />
           <div className="flex justify-end">

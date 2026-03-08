@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import re
+import secrets
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -21,9 +21,12 @@ def _now_iso() -> str:
     return datetime.now(UTC).isoformat()
 
 
-def _slugify(name: str) -> str:
-    slug = re.sub(r"[^a-z0-9]+", "-", name.strip().lower()).strip("-")
-    return slug or "rack"
+def _generate_rack_id(repo_path: Path) -> str:
+    for _ in range(100):
+        candidate = f"r-{secrets.token_hex(3)}"
+        if not (repo_path / RACKS_DIR / f"{candidate}.yaml").exists():
+            return candidate
+    raise RuntimeError("Failed to generate unique rack ID")
 
 
 class RackManager:
@@ -32,8 +35,8 @@ class RackManager:
     def _rack_dir(self, repo_path: Path) -> Path:
         return repo_path / RACKS_DIR
 
-    def _rack_file(self, repo_path: Path, slug: str) -> Path:
-        return self._rack_dir(repo_path) / f"{slug}.yaml"
+    def _rack_file(self, repo_path: Path, rack_id: str) -> Path:
+        return self._rack_dir(repo_path) / f"{rack_id}.yaml"
 
     def _iter_rack_files(self, repo_path: Path) -> list[Path]:
         rack_dir = self._rack_dir(repo_path)
@@ -44,9 +47,9 @@ class RackManager:
             files.extend(sorted(rack_dir.glob(f"*{ext}")))
         return files
 
-    def _rack_from_yaml(self, slug: str, data: dict) -> Rack:
+    def _rack_from_yaml(self, rack_id: str, data: dict) -> Rack:
         return Rack(
-            slug=slug,
+            id=rack_id,
             name=data.get("name", ""),
             rack_width_inches=data.get("rack_width_inches", 19),
             rack_units=data.get("rack_units", 12),
@@ -54,14 +57,6 @@ class RackManager:
             created_at=data.get("created_at", _now_iso()),
             updated_at=data.get("updated_at", _now_iso()),
         )
-
-    def _next_slug(self, repo_path: Path, base: str) -> str:
-        candidate = base
-        suffix = 2
-        while self._rack_file(repo_path, candidate).exists():
-            candidate = f"{base}-{suffix}"
-            suffix += 1
-        return candidate
 
     def list_racks(self, session) -> list[RackSummary]:
         try:
@@ -72,11 +67,11 @@ class RackManager:
         for path in self._iter_rack_files(repo_path):
             try:
                 data = yaml.safe_load(path.read_text(encoding="utf-8"))
-                slug = data.get("slug") or path.stem
-                rack = self._rack_from_yaml(slug, data or {})
+                rack_id = data.get("id") or path.stem
+                rack = self._rack_from_yaml(rack_id, data or {})
                 summaries.append(
                     RackSummary(
-                        slug=rack.slug,
+                        id=rack.id,
                         name=rack.name,
                         rack_width_inches=rack.rack_width_inches,
                         rack_units=rack.rack_units,
@@ -86,23 +81,23 @@ class RackManager:
                 )
             except (OSError, yaml.YAMLError):
                 continue
-        return sorted(summaries, key=lambda r: (r.name.lower(), r.created_at, r.slug))
+        return sorted(summaries, key=lambda r: (r.name.lower(), r.created_at, r.id))
 
-    def get_rack(self, session, slug: str) -> Rack:
+    def get_rack(self, session, rack_id: str) -> Rack:
         repo_path = repos_manager.active_repo_path(session)
-        path = self._rack_file(repo_path, slug)
+        path = self._rack_file(repo_path, rack_id)
         if not path.is_file():
-            raise KeyError(f"Rack {slug} not found")
+            raise KeyError(f"Rack {rack_id} not found")
         data = yaml.safe_load(path.read_text(encoding="utf-8"))
-        slug_val = data.get("slug") or path.stem
-        return self._rack_from_yaml(slug_val, data or {})
+        rid = data.get("id") or path.stem
+        return self._rack_from_yaml(rid, data or {})
 
-    def get_layout(self, session, slug: str) -> RackLayout:
-        rack = self.get_rack(session, slug)
+    def get_layout(self, session, rack_id: str) -> RackLayout:
+        rack = self.get_rack(session, rack_id)
         all_nodes = node_manager.list_nodes(session)
         nodes_in_rack = [
             n for n in all_nodes
-            if n.placement and n.placement.rack == slug
+            if n.placement and n.placement.rack == rack_id
         ]
         return RackLayout(**rack.model_dump(), nodes=nodes_in_rack)
 
@@ -113,11 +108,10 @@ class RackManager:
         if rack_cols < 1 or rack_cols > 48:
             raise ValueError("rack_cols must be between 1 and 48")
 
-        base_slug = _slugify(data.name) or "rack"
-        slug = self._next_slug(repo_path, base_slug)
+        rack_id = _generate_rack_id(repo_path)
         now = _now_iso()
         rack = Rack(
-            slug=slug,
+            id=rack_id,
             name=data.name.strip(),
             rack_width_inches=data.rack_width_inches,
             rack_units=data.rack_units,
@@ -127,14 +121,14 @@ class RackManager:
         )
         rack_dir = self._rack_dir(repo_path)
         rack_dir.mkdir(parents=True, exist_ok=True)
-        self._rack_file(repo_path, slug).write_text(
+        self._rack_file(repo_path, rack_id).write_text(
             yaml.safe_dump(rack.model_dump(), sort_keys=False), encoding="utf-8"
         )
         return rack
 
-    def update_rack(self, session, slug: str, data: RackUpdate) -> Rack:
+    def update_rack(self, session, rack_id: str, data: RackUpdate) -> Rack:
         repo_path = repos_manager.active_repo_path(session)
-        rack = self.get_rack(session, slug)
+        rack = self.get_rack(session, rack_id)
         if data.name:
             rack.name = data.name.strip()
         if data.rack_width_inches > 0:
@@ -146,16 +140,16 @@ class RackManager:
             rack.rack_cols = data.rack_cols
         rack.rack_cols = cols_for_width(rack.rack_width_inches, rack.rack_cols)
         rack.updated_at = _now_iso()
-        self._rack_file(repo_path, slug).write_text(
+        self._rack_file(repo_path, rack_id).write_text(
             yaml.safe_dump(rack.model_dump(), sort_keys=False), encoding="utf-8"
         )
         return rack
 
-    def delete_rack(self, session, slug: str) -> None:
+    def delete_rack(self, session, rack_id: str) -> None:
         repo_path = repos_manager.active_repo_path(session)
-        path = self._rack_file(repo_path, slug)
+        path = self._rack_file(repo_path, rack_id)
         if not path.is_file():
-            raise KeyError(f"Rack {slug} not found")
+            raise KeyError(f"Rack {rack_id} not found")
         path.unlink(missing_ok=True)
 
     def has_rack_for_session(self, session) -> bool:
@@ -171,7 +165,7 @@ class RackManager:
     def has_ready_rack_for_session(self, session) -> bool:
         try:
             layouts = [
-                self.get_layout(session, s.slug)
+                self.get_layout(session, s.id)
                 for s in self.list_racks(session)
             ]
         except FileNotFoundError:

@@ -34,7 +34,6 @@ class StackRoleInput(BaseModel):
 
 
 class StackUpsertRequest(BaseModel):
-    file_name: str = Field(default="", max_length=120)
     name: str = Field(min_length=1, max_length=160)
     description: str = Field(default="", max_length=500)
     become: bool = False
@@ -43,7 +42,6 @@ class StackUpsertRequest(BaseModel):
 
 class StackSummary(BaseModel):
     id: str
-    file_name: str
     path: str
     name: str
     description: str = ""

@@ -27,7 +27,6 @@ export type StackRoleEntry = {
 
 export type StackSummary = {
   id: string;
-  file_name: string;
   path: string;
   name: string;
   description: string;
@@ -49,7 +48,6 @@ export type StackTargetSelection = {
 };
 
 export type StackUpsertRequest = {
-  file_name?: string;
   name: string;
   description: string;
   become: boolean;

@@ -19,7 +19,7 @@ export function SidebarRacksSection() {
   const pingStatuses = usePingStore((s) => s.statuses);
 
   const racksHref = "/racks";
-  const defaultExpanded = rackEntries.map(({ rack }) => rack.slug);
+  const defaultExpanded = rackEntries.map(({ rack }) => rack.id);
 
   return (
     <div className="space-y-1">
@@ -57,8 +57,8 @@ export function SidebarRacksSection() {
           >
             {rackEntries.map(({ rack, nodes }) => (
               <AccordionItem
-                key={rack.slug}
-                value={rack.slug}
+                key={rack.id}
+                value={rack.id}
                 className="border-0"
               >
                 <AccordionTrigger hideIcon className="py-0.5 pl-0.5 pr-1.5 hover:no-underline font-normal rounded text-zinc-400 hover:bg-zinc-800/50 hover:text-zinc-300 flex items-center gap-1.5 group">
@@ -70,7 +70,7 @@ export function SidebarRacksSection() {
                     <ChevronRight className="size-3.5" />
                   </button>
                   <NavLink
-                    to={`/rack/view/${rack.slug}`}
+                    to={`/rack/view/${rack.id}`}
                     onClick={(e) => e.stopPropagation()}
                     className={({ isActive }) =>
                       cn(

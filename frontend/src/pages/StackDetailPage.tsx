@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { formatRelativeTime } from "@/lib/format";
+import { nodeDisplayLabel } from "@/lib/nodes";
 import { useGroups, useNodes } from "@/hooks/queries";
 import {
   createStackRun,
@@ -148,6 +149,14 @@ export function StackDetailPage() {
   const { data: groups = [] } = useGroups();
   const { data: nodes = [] } = useNodes();
 
+  const hostIdToDisplayLabel = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const node of nodes) {
+      map.set(node.id, nodeDisplayLabel(node));
+    }
+    return map;
+  }, [nodes]);
+
   const load = useCallback(async () => {
     if (!stackId) return;
     setLoading(true);
@@ -193,7 +202,7 @@ export function StackDetailPage() {
   const groupFilterOptions = useMemo(
     () =>
       groups.map((g) => ({
-        value: g.slug,
+        value: g.id,
         label: g.name,
       })),
     [groups],
@@ -338,9 +347,9 @@ export function StackDetailPage() {
                     <p className="text-xs text-zinc-500">No hosts matched the current selection.</p>
                   ) : (
                     <div className="flex flex-wrap gap-1">
-                      {resolvedHosts.map((host) => (
-                        <Badge key={host} variant="outline">
-                          {host}
+                      {resolvedHosts.map((hostId) => (
+                        <Badge key={hostId} variant="outline" title={hostId}>
+                          {hostIdToDisplayLabel.get(hostId) ?? hostId}
                         </Badge>
                       ))}
                     </div>
@@ -505,9 +514,6 @@ export function StackDetailPage() {
                     roles: result.stack.role_entries,
                   });
                   setActions(result.stack.actions);
-                  if (result.stack.id !== stackId) {
-                    navigate(`/stacks/${result.stack.id}`, { replace: true });
-                  }
                   toast.success("Stack saved");
                 } catch (error) {
                   toast.error(error instanceof Error ? error.message : "Failed to save stack");

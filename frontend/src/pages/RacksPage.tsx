@@ -45,8 +45,8 @@ export function RacksPage() {
             <div className="space-y-1">
               {rackEntries.map(({ rack }) => (
                 <NavLink
-                  key={rack.slug}
-                  to={`/rack/view/${rack.slug}`}
+                  key={rack.id}
+                  to={`/rack/view/${rack.id}`}
                   className={({ isActive }) =>
                     cn(
                       "flex items-center gap-3 border border-zinc-800 bg-zinc-900/30 p-4 transition-colors",

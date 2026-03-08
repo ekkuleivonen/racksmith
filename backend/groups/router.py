@@ -22,32 +22,32 @@ async def create_group(body: GroupInput, session=Depends(auth_manager.get_curren
         group = group_manager.create_group(session, body)
     except FileNotFoundError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
-    return {"group": group, "slug": group.slug}
+    return {"group": group, "group_id": group.id}
 
 
-@router.get("/{slug}")
-async def get_group(slug: str, session=Depends(auth_manager.get_current_session)):
+@router.get("/{group_id}")
+async def get_group(group_id: str, session=Depends(auth_manager.get_current_session)):
     try:
-        group = group_manager.get_group(session, slug)
+        group = group_manager.get_group(session, group_id)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     return {"group": group}
 
 
-@router.patch("/{slug}")
+@router.patch("/{group_id}")
 async def update_group(
-    slug: str, body: GroupInput, session=Depends(auth_manager.get_current_session)
+    group_id: str, body: GroupInput, session=Depends(auth_manager.get_current_session)
 ):
     try:
-        group = group_manager.update_group(session, slug, body)
-    except KeyError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
+        group = group_manager.update_group(session, group_id, body)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Group not found")
     return {"group": group}
 
 
-@router.delete("/{slug}", status_code=204)
-async def delete_group(slug: str, session=Depends(auth_manager.get_current_session)):
+@router.delete("/{group_id}", status_code=204)
+async def delete_group(group_id: str, session=Depends(auth_manager.get_current_session)):
     try:
-        group_manager.delete_group(session, slug)
-    except KeyError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
+        group_manager.delete_group(session, group_id)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Group not found")

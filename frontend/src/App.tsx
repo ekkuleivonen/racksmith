@@ -120,7 +120,7 @@ function AppRoutes() {
               }
             />
             <Route
-              path="/rack/view/:rackSlug"
+              path="/rack/view/:rackId"
               element={
                 <ProtectedRoute>
                   <AppShell title="Racks">
@@ -180,7 +180,7 @@ function AppRoutes() {
               }
             />
             <Route
-              path="/groups/:slug"
+              path="/groups/:groupId"
               element={
                 <ProtectedRoute>
                   <AppShell title="Groups">

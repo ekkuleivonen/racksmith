@@ -40,8 +40,8 @@ export function SidebarGroupsSection() {
           <div className="space-y-0.5">
             {groups.map((group) => (
               <NavLink
-                key={group.slug}
-                to={`/groups/${group.slug}`}
+                key={group.id}
+                to={`/groups/${group.id}`}
                 className={({ isActive }) =>
                   cn(
                     "block rounded py-0.5 px-1.5 text-[11px] no-underline",

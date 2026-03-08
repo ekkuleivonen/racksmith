@@ -39,8 +39,8 @@ export function GroupsPage() {
             <div className="space-y-1">
               {groups.map((group) => (
                 <NavLink
-                  key={group.slug}
-                  to={`/groups/${group.slug}`}
+                  key={group.id}
+                  to={`/groups/${group.id}`}
                   className={({ isActive }) =>
                     cn(
                       "block border border-zinc-800 bg-zinc-900/30 p-4 rounded-none transition-colors",

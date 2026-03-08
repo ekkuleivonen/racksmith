@@ -8,7 +8,7 @@ export type GroupInput = {
 };
 
 export type Group = GroupInput & {
-  slug: string;
+  id: string;
 };
 
 export type GroupWithMembers = Group & {
@@ -26,8 +26,8 @@ export async function listGroups() {
   return data.groups;
 }
 
-export async function getGroup(slug: string) {
-  return apiGet<{ group: GroupWithMembers }>(`/groups/${slug}`);
+export async function getGroup(id: string) {
+  return apiGet<{ group: GroupWithMembers }>(`/groups/${id}`);
 }
 
 export async function createGroup(payload: GroupInput) {
@@ -36,13 +36,13 @@ export async function createGroup(payload: GroupInput) {
   return result;
 }
 
-export async function updateGroup(slug: string, payload: GroupInput) {
-  const result = await apiPatch<{ group: Group }>(`/groups/${slug}`, payload);
+export async function updateGroup(id: string, payload: GroupInput) {
+  const result = await apiPatch<{ group: Group }>(`/groups/${id}`, payload);
   invalidateAfterGroupMutation();
   return result;
 }
 
-export async function deleteGroup(slug: string) {
-  await apiDelete(`/groups/${slug}`);
+export async function deleteGroup(id: string) {
+  await apiDelete(`/groups/${id}`);
   invalidateAfterGroupMutation();
 }
