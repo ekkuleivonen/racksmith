@@ -15,7 +15,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { formatRelativeTime } from "@/lib/format";
 import { nodeDisplayLabel } from "@/lib/nodes";
-import { useGroups, useNodes } from "@/hooks/queries";
+import { useGroups, useNodes, useRackEntries } from "@/hooks/queries";
 import {
   createStackRun,
   deleteStack,
@@ -52,6 +52,7 @@ const EMPTY_TARGETS: StackTargetSelection = {
   groups: [],
   labels: [],
   nodes: [],
+  racks: [],
 };
 
 function toggleValue(values: string[], value: string): string[] {
@@ -135,7 +136,9 @@ export function StackDetailPage() {
   const [draft, setDraft] = useState<StackUpsertRequest | null>(null);
   const [actions, setActions] = useState<Action[]>([]);
   const [targets, setTargets] = useState<StackTargetSelection>(
-    prefilledNode ? { groups: [], labels: [], nodes: [prefilledNode] } : EMPTY_TARGETS,
+    prefilledNode
+      ? { groups: [], labels: [], nodes: [prefilledNode], racks: [] }
+      : EMPTY_TARGETS,
   );
   const [resolvedHosts, setResolvedHosts] = useState<string[]>([]);
   const [runs, setRuns] = useState<StackRun[]>([]);
@@ -148,6 +151,7 @@ export function StackDetailPage() {
 
   const { data: groups = [] } = useGroups();
   const { data: nodes = [] } = useNodes();
+  const { data: rackEntries = [] } = useRackEntries();
 
   const hostIdToDisplayLabel = useMemo(() => {
     const map = new Map<string, string>();
@@ -206,6 +210,15 @@ export function StackDetailPage() {
         label: g.name,
       })),
     [groups],
+  );
+
+  const rackFilterOptions = useMemo(
+    () =>
+      rackEntries.map(({ rack }) => ({
+        value: rack.id,
+        label: rack.name,
+      })),
+    [rackEntries],
   );
 
   const nodeFilterOptions = useMemo(
@@ -317,7 +330,19 @@ export function StackDetailPage() {
                   </p>
                 </div>
 
-                <div className="grid gap-3 xl:grid-cols-3">
+                <div className="grid gap-3 xl:grid-cols-4">
+                  <SearchableFilterDropdown
+                    label="Racks"
+                    placeholder="Search racks..."
+                    options={rackFilterOptions}
+                    values={targets.racks}
+                    onToggle={(value) =>
+                      setTargets((current) => ({
+                        ...current,
+                        racks: toggleValue(current.racks, value),
+                      }))
+                    }
+                  />
                   <SearchableFilterDropdown
                     label="Groups"
                     placeholder="Search groups..."
@@ -362,7 +387,7 @@ export function StackDetailPage() {
                     {resolving ? <LoaderCircle className="size-4 animate-spin text-zinc-400" /> : null}
                   </div>
                   <p className="text-xs text-zinc-500">
-                    Active filters: {targets.groups.length} group, {targets.labels.length} label, {targets.nodes.length} node
+                    Active filters: {targets.racks.length} rack, {targets.groups.length} group, {targets.labels.length} label, {targets.nodes.length} node
                   </p>
                   {resolvedHosts.length === 0 ? (
                     <p className="text-xs text-zinc-500">No hosts matched the current selection.</p>

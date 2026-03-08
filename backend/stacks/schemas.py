@@ -60,6 +60,7 @@ class StackTargetSelection(BaseModel):
     groups: list[str] = Field(default_factory=list)
     labels: list[str] = Field(default_factory=list)
     nodes: list[str] = Field(default_factory=list)
+    racks: list[str] = Field(default_factory=list)
 
 
 class StackResolveTargetsRequest(BaseModel):

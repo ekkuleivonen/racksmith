@@ -45,6 +45,7 @@ export type StackTargetSelection = {
   groups: string[];
   labels: string[];
   nodes: string[];
+  racks: string[];
 };
 
 export type StackUpsertRequest = {

@@ -265,6 +265,13 @@ class StackManager:
         if wanted_nodes:
             filtered = [n for n in filtered if n.id in wanted_nodes]
 
+        wanted_racks = {r.strip() for r in targets.racks if r.strip()}
+        if wanted_racks:
+            filtered = [
+                n for n in filtered
+                if n.placement and n.placement.rack in wanted_racks
+            ]
+
         hosts = sorted({n.id for n in filtered})
         return StackResolveTargetsResponse(hosts=hosts)
 
