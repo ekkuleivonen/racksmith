@@ -24,12 +24,7 @@ import { useNodes } from "@/hooks/queries";
 import { usePingStore } from "@/stores/ping";
 import { isManagedNode } from "@/lib/nodes";
 
-type AppShellProps = {
-  children: ReactNode;
-  title: string;
-};
-
-export function AppShell({ children }: AppShellProps) {
+function useAppShellState() {
   const loading = useSetupStore((s) => s.loading);
   const status = useSetupStore((s) => s.status);
   const publicKeyOpen = useSetupStore((s) => s.publicKeyOpen);
@@ -67,7 +62,7 @@ export function AppShell({ children }: AppShellProps) {
     stopPolling,
   ]);
 
-  const copyPublicKey = async () => {
+  const copyPublicKey = useCallback(async () => {
     if (!publicKey) return;
     try {
       await navigator.clipboard.writeText(publicKey);
@@ -75,7 +70,7 @@ export function AppShell({ children }: AppShellProps) {
     } catch {
       toast.error("Failed to copy public key");
     }
-  };
+  }, [publicKey]);
 
   const navigate = useNavigate();
   const { logout } = useAuth();
@@ -84,20 +79,7 @@ export function AppShell({ children }: AppShellProps) {
     navigate("/");
   }, [logout, navigate]);
 
-  if (loading) {
-    return (
-      <div className="flex-1 flex items-center justify-center">
-        <p className="text-zinc-500 text-sm">Loading workspace...</p>
-      </div>
-    );
-  }
-
-  const isOnboarding =
-    location.pathname.startsWith("/nodes/create") ||
-    location.pathname === "/racks/create" ||
-    location.pathname === "/racks";
-
-  const alertDialog = (
+  const publicKeyDialog = (
     <AlertDialog open={publicKeyOpen} onOpenChange={setPublicKeyOpen}>
       <AlertDialogContent size="md">
         <AlertDialogHeader className="items-start text-left">
@@ -152,11 +134,44 @@ export function AppShell({ children }: AppShellProps) {
     </AlertDialog>
   );
 
-  if (isOnboarding) {
+  return { loading, publicKeyDialog, handleLogout };
+}
+
+type AppShellProps = {
+  children: ReactNode;
+  title: string;
+};
+
+type OnboardingShellProps = {
+  children: ReactNode;
+};
+
+export function OnboardingShell({ children }: OnboardingShellProps) {
+  const { loading, publicKeyDialog } = useAppShellState();
+
+  if (loading) {
     return (
-      <div className="h-screen bg-zinc-950 flex overflow-hidden">
-        <main className="h-full flex-1 min-w-0 overflow-auto">{children}</main>
-        {alertDialog}
+      <div className="flex-1 flex items-center justify-center">
+        <p className="text-zinc-500 text-sm">Loading workspace...</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="h-screen bg-zinc-950 flex overflow-hidden">
+      <main className="h-full flex-1 min-w-0 overflow-auto">{children}</main>
+      {publicKeyDialog}
+    </div>
+  );
+}
+
+export function AppShell({ children }: AppShellProps) {
+  const { loading, publicKeyDialog, handleLogout } = useAppShellState();
+
+  if (loading) {
+    return (
+      <div className="flex-1 flex items-center justify-center">
+        <p className="text-zinc-500 text-sm">Loading workspace...</p>
       </div>
     );
   }
@@ -179,7 +194,7 @@ export function AppShell({ children }: AppShellProps) {
           </main>
         </ResizablePanel>
       </ResizablePanelGroup>
-      {alertDialog}
+      {publicKeyDialog}
     </div>
   );
 }

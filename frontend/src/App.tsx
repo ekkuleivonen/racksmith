@@ -1,7 +1,7 @@
 import { Component, type ErrorInfo, type ReactNode } from "react";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { QueryClientProvider } from "@tanstack/react-query";
-import { AppShell } from "@/components/app-shell";
+import { AppShell, OnboardingShell } from "@/components/app-shell";
 import { ProtectedRoute } from "@/components/protected-route";
 import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
@@ -115,9 +115,9 @@ function AppRoutes() {
               path="/racks/create"
               element={
                 <ProtectedRoute>
-                  <AppShell title="Racks">
+                  <OnboardingShell>
                     <RackOnboardingPage />
-                  </AppShell>
+                  </OnboardingShell>
                 </ProtectedRoute>
               }
             />
@@ -145,9 +145,9 @@ function AppRoutes() {
               path="/nodes/create"
               element={
                 <ProtectedRoute>
-                  <AppShell title="Nodes">
+                  <OnboardingShell>
                     <NodeCreatePage />
-                  </AppShell>
+                  </OnboardingShell>
                 </ProtectedRoute>
               }
             />
