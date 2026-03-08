@@ -272,9 +272,30 @@ export function StackDetailPage() {
                 <p className="text-xs text-zinc-500">{draft.description}</p>
               ) : null}
             </div>
-            <div className="flex flex-wrap gap-1">
+            <div className="flex flex-wrap items-center gap-2">
               <Badge variant="outline">{draft.roles.length} roles</Badge>
               <Badge variant="outline">{draft.become ? "become" : "no become"}</Badge>
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={saving}
+                className="text-red-400 hover:text-red-300 hover:bg-red-500/10"
+                onClick={async () => {
+                  if (!window.confirm("Delete this stack? Run history will be lost.")) return;
+                  setSaving(true);
+                  try {
+                    await deleteStack(stackId);
+                    toast.success("Stack deleted");
+                    navigate("/stacks", { replace: true });
+                  } catch (error) {
+                    toast.error(error instanceof Error ? error.message : "Failed to delete stack");
+                  } finally {
+                    setSaving(false);
+                  }
+                }}
+              >
+                Delete stack
+              </Button>
             </div>
           </div>
         </section>
@@ -517,19 +538,6 @@ export function StackDetailPage() {
                   toast.success("Stack saved");
                 } catch (error) {
                   toast.error(error instanceof Error ? error.message : "Failed to save stack");
-                } finally {
-                  setSaving(false);
-                }
-              }}
-              onDelete={async () => {
-                if (!window.confirm("Delete this stack?")) return;
-                setSaving(true);
-                try {
-                  await deleteStack(stackId);
-                  toast.success("Stack deleted");
-                  navigate("/stacks", { replace: true });
-                } catch (error) {
-                  toast.error(error instanceof Error ? error.message : "Failed to delete stack");
                 } finally {
                   setSaving(false);
                 }

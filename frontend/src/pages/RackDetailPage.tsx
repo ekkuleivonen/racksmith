@@ -27,6 +27,7 @@ import {
   type NodeInput,
 } from "@/lib/nodes";
 import { useNodes } from "@/hooks/queries";
+import { listGroups } from "@/lib/groups";
 import { listRacks } from "@/lib/racks";
 
 function makePendingNode(zone: ZoneSelection): PendingNode {
@@ -113,8 +114,17 @@ export function RackPage() {
   const [rackColsDraft, setRackColsDraft] = useState(12);
   const [frameControlsVisible, setFrameControlsVisible] = useState(false);
   const [editingName, setEditingName] = useState(false);
+  const [groups, setGroups] = useState<Array<{ id: string; name: string }>>([]);
 
   const { data: nodesFromStore = [] } = useNodes();
+
+  useEffect(() => {
+    listGroups()
+      .then((list) =>
+        setGroups(list.map((g) => ({ id: g.id, name: g.name || g.id }))),
+      )
+      .catch(() => setGroups([]));
+  }, []);
 
   const rack = layout;
 
@@ -521,6 +531,7 @@ export function RackPage() {
           title=""
           description=""
           showLeftPanel={false}
+          availableGroups={groups}
           showFrameControls={frameControlsVisible}
           rackWidth={rackWidthDraft}
           rackUnits={rackUnitsDraft}

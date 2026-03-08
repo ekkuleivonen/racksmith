@@ -1,9 +1,17 @@
 import { useCallback, useMemo, useState, type ReactNode } from "react";
+import { X } from "lucide-react";
 import { ItemHardwareFields } from "@/components/racks/item-hardware-fields";
 import { RackCanvas } from "@/components/racks/rack-canvas";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { Slider } from "@/components/ui/slider";
 import {
@@ -39,6 +47,7 @@ type RackBuilderProps = {
   saving?: boolean;
   actionSlot?: ReactNode;
   selectedItemActionSlot?: ReactNode;
+  availableGroups?: Array<{ id: string; name: string }>;
   showSaveSelected?: boolean;
   deleteSelectedLabel?: string;
   onRackWidthChange: (width: RackWidthInches, cols: number) => void;
@@ -77,6 +86,7 @@ export function RackBuilder({
   saving = false,
   actionSlot,
   selectedItemActionSlot,
+  availableGroups = [],
   showSaveSelected = true,
   deleteSelectedLabel = "Delete",
   onRackWidthChange,
@@ -391,6 +401,77 @@ export function RackBuilder({
                   })
                 }
               />
+              {availableGroups.length > 0 ? (
+                <>
+                  <Separator />
+                  <div className="space-y-2">
+                    <p className="text-[11px] text-zinc-500 font-medium uppercase tracking-wider">
+                      Groups
+                    </p>
+                    <div className="flex flex-wrap gap-1 min-h-[24px]">
+                      {(selectedItem.groups ?? []).map((gid) => {
+                        const g = availableGroups.find((x) => x.id === gid);
+                        return (
+                          <span
+                            key={gid}
+                            className="inline-flex items-center gap-1 rounded border border-zinc-700 bg-zinc-800 px-2 py-0.5 text-xs text-zinc-300"
+                          >
+                            {g?.name ?? gid}
+                            <button
+                              type="button"
+                              className="text-zinc-500 hover:text-zinc-200"
+                              onClick={() =>
+                                onSelectedItemChange({
+                                  groups: (selectedItem.groups ?? []).filter(
+                                    (id) => id !== gid,
+                                  ),
+                                })
+                              }
+                            >
+                              <X className="size-3" />
+                            </button>
+                          </span>
+                        );
+                      })}
+                    </div>
+                    <Select
+                      value=""
+                      onValueChange={(value) => {
+                        if (
+                          value &&
+                          !(selectedItem.groups ?? []).includes(value)
+                        ) {
+                          onSelectedItemChange({
+                            groups: [...(selectedItem.groups ?? []), value],
+                          });
+                        }
+                      }}
+                    >
+                      <SelectTrigger size="sm" className="h-8 text-xs w-[180px]">
+                        <SelectValue placeholder="Add group" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {availableGroups
+                          .filter(
+                            (g) => !(selectedItem.groups ?? []).includes(g.id),
+                          )
+                          .map((g) => (
+                            <SelectItem key={g.id} value={g.id}>
+                              {g.name || g.id}
+                            </SelectItem>
+                          ))}
+                        {availableGroups.filter(
+                          (g) => !(selectedItem.groups ?? []).includes(g.id),
+                        ).length === 0 ? (
+                          <div className="px-2 py-4 text-xs text-zinc-500">
+                            No more groups to add
+                          </div>
+                        ) : null}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </>
+              ) : null}
               <div className="flex flex-wrap items-center gap-2">
                 {showSaveSelected ? (
                   <Button size="sm" disabled={saving} onClick={() => void onSaveSelected()}>

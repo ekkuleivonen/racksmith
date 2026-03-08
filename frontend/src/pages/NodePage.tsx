@@ -6,6 +6,13 @@ import { SshTerminal } from "@/components/ssh/ssh-terminal";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import {
   deleteNode,
@@ -20,6 +27,7 @@ import {
   rebootNode as rebootNodeApi,
   type PingStatus,
 } from "@/lib/ssh";
+import { listGroups, type Group } from "@/lib/groups";
 import { listStacks, type StackSummary } from "@/lib/stacks";
 import { cn } from "@/lib/utils";
 
@@ -48,6 +56,10 @@ export function NodePage() {
   const [editingName, setEditingName] = useState(false);
   const [nameDraft, setNameDraft] = useState("");
   const [savingName, setSavingName] = useState(false);
+  const [editingGroups, setEditingGroups] = useState(false);
+  const [groupsDraft, setGroupsDraft] = useState<string[]>([]);
+  const [savingGroups, setSavingGroups] = useState(false);
+  const [allGroups, setAllGroups] = useState<Group[]>([]);
 
   useEffect(() => {
     if (node) {
@@ -58,6 +70,7 @@ export function NodePage() {
       });
       setLabelsDraft(node.labels ?? []);
       setNameDraft(node.name ?? "");
+      setGroupsDraft(node.groups ?? []);
       if (!node.ip_address || !node.ssh_user) {
         setEditingConnection(true);
       }
@@ -97,6 +110,12 @@ export function NodePage() {
       .then((data) => setStacks(data.stacks))
       .catch(() => setStacks([]));
   }, [nodeId]);
+
+  useEffect(() => {
+    listGroups()
+      .then(setAllGroups)
+      .catch(() => setAllGroups([]));
+  }, []);
 
   useEffect(() => {
     if (!nodeId || !node?.ip_address) {
@@ -647,6 +666,145 @@ export function NodePage() {
                   ))
                 ) : (
                   <p className="text-xs text-zinc-600">No labels</p>
+                )}
+              </div>
+            )}
+          </div>
+
+          <Separator />
+
+          <div className="space-y-3">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-[11px] text-zinc-500 font-medium uppercase tracking-wider">
+                Groups
+              </p>
+              {!editingGroups ? (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-7 gap-1.5 text-zinc-400 hover:text-zinc-200"
+                  onClick={() => {
+                    setGroupsDraft(node.groups ?? []);
+                    setEditingGroups(true);
+                  }}
+                >
+                  <Pencil className="size-3" />
+                  Edit
+                </Button>
+              ) : null}
+            </div>
+            {editingGroups ? (
+              <div className="space-y-2">
+                <div className="flex flex-wrap gap-1 min-h-[24px]">
+                  {groupsDraft.map((gid) => {
+                    const g = allGroups.find((x) => x.id === gid);
+                    return (
+                      <span
+                        key={gid}
+                        className="inline-flex items-center gap-1 rounded border border-zinc-700 bg-zinc-800 px-2 py-0.5 text-xs text-zinc-300"
+                      >
+                        {g?.name ?? gid}
+                        <button
+                          type="button"
+                          className="text-zinc-500 hover:text-zinc-200"
+                          onClick={() =>
+                            setGroupsDraft((d) => d.filter((id) => id !== gid))
+                          }
+                        >
+                          <X className="size-3" />
+                        </button>
+                      </span>
+                    );
+                  })}
+                  {groupsDraft.length === 0 && (
+                    <p className="text-xs text-zinc-600">No groups</p>
+                  )}
+                </div>
+                <div className="flex gap-2">
+                  <Select
+                    value=""
+                    onValueChange={(value) => {
+                      if (value && !groupsDraft.includes(value)) {
+                        setGroupsDraft((d) => [...d, value]);
+                      }
+                    }}
+                  >
+                    <SelectTrigger size="sm" className="h-8 text-xs w-[180px]">
+                      <SelectValue placeholder="Add group" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {allGroups
+                        .filter((g) => !groupsDraft.includes(g.id))
+                        .map((g) => (
+                          <SelectItem key={g.id} value={g.id}>
+                            {g.name || g.id}
+                          </SelectItem>
+                        ))}
+                      {allGroups.filter((g) => !groupsDraft.includes(g.id))
+                        .length === 0 ? (
+                        <div className="px-2 py-4 text-xs text-zinc-500">
+                          No more groups to add
+                        </div>
+                      ) : null}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    size="sm"
+                    disabled={savingGroups}
+                    onClick={async () => {
+                      setSavingGroups(true);
+                      try {
+                        await updateNode(node.id, {
+                          name: node.name ?? "",
+                          ip_address: node.ip_address ?? "",
+                          ssh_user: node.ssh_user ?? "",
+                          ssh_port: node.ssh_port ?? 22,
+                          labels: node.labels ?? [],
+                          groups: groupsDraft,
+                        });
+                        await loadNode();
+                        setEditingGroups(false);
+                        toast.success("Groups updated");
+                      } catch (error) {
+                        toast.error(
+                          error instanceof Error
+                            ? error.message
+                            : "Failed to update groups",
+                        );
+                      } finally {
+                        setSavingGroups(false);
+                      }
+                    }}
+                  >
+                    {savingGroups ? "Saving..." : "Save"}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      setGroupsDraft(node.groups ?? []);
+                      setEditingGroups(false);
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex flex-wrap gap-1 min-h-[24px]">
+                {(node.groups ?? []).length > 0 ? (
+                  (node.groups ?? []).map((gid) => {
+                    const g = allGroups.find((x) => x.id === gid);
+                    return (
+                      <Badge key={gid} variant="outline">
+                        {g?.name ?? gid}
+                      </Badge>
+                    );
+                  })
+                ) : (
+                  <p className="text-xs text-zinc-600">No groups</p>
                 )}
               </div>
             )}
