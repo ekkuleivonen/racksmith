@@ -20,7 +20,7 @@ async def list_nodes(session=Depends(auth_manager.get_current_session)):
 @router.post("", status_code=201)
 async def create_node(body: NodeInput, session=Depends(auth_manager.get_current_session)):
     try:
-        node = node_manager.create_node(session, body)
+        node = await node_manager.create_node(session, body)
     except FileNotFoundError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     return {"node": node.model_dump()}

@@ -192,7 +192,7 @@ class NodeManager:
         data = yaml.safe_load(path.read_text(encoding="utf-8"))
         return _node_from_yaml(node_id, data or {})
 
-    def create_node(self, session, data: NodeInput) -> Node:
+    async def create_node(self, session, data: NodeInput) -> Node:
         repo_path = repos_manager.active_repo_path(session)
         node_id = _generate_node_id(repo_path)
 
@@ -217,6 +217,13 @@ class NodeManager:
             yaml.safe_dump(_node_to_yaml(node), sort_keys=False), encoding="utf-8"
         )
         self._regenerate_inventory(repo_path)
+
+        if node.managed and node.ip_address and node.ssh_user:
+            try:
+                node = await self.probe_node(session, node_id)
+            except Exception:
+                pass
+
         return node
 
     def update_node(self, session, node_id: str, data: NodeInput) -> Node:
