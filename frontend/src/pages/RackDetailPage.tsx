@@ -28,7 +28,6 @@ import {
 } from "@/lib/nodes";
 import { useNodes } from "@/hooks/queries";
 import { listGroups } from "@/lib/groups";
-import { listRacks } from "@/lib/racks";
 
 function makePendingNode(zone: ZoneSelection): PendingNode {
   const bottomU = zone.startU - zone.heightU + 1;
