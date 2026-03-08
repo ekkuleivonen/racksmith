@@ -5,7 +5,7 @@ import { AppShell } from "@/components/app-shell";
 import { HomeDashboard } from "@/components/home-dashboard";
 import { useAuth } from "@/context/auth-context";
 import { useSetupStore } from "@/stores/setup";
-import { useNodesStore } from "@/stores/nodes";
+import { useNodes } from "@/hooks/queries";
 
 function isSetupComplete(
   loading: boolean,
@@ -20,15 +20,13 @@ export function HomePage() {
   const loading = useSetupStore((s) => s.loading);
   const status = useSetupStore((s) => s.status);
   const loadSetup = useSetupStore((s) => s.load);
-  const nodes = useNodesStore((s) => s.nodes);
-  const loadNodes = useNodesStore((s) => s.load);
+  const { data: nodes = [] } = useNodes();
 
   useEffect(() => {
     if (isAuthenticated) {
       void loadSetup();
-      void loadNodes();
     }
-  }, [isAuthenticated, loadSetup, loadNodes]);
+  }, [isAuthenticated, loadSetup]);
 
   if (authLoading) {
     return (

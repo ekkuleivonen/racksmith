@@ -1,4 +1,5 @@
 import { apiDelete, apiGet, apiPatch, apiPost } from "@/lib/api";
+import { queryClient, queryKeys } from "@/lib/queryClient";
 import type { Node } from "@/lib/nodes";
 
 export type RackWidthInches = 10 | 19;
@@ -59,6 +60,12 @@ export type ZoneSelection = {
   colCount: number;
 };
 
+function invalidateAfterRackMutation() {
+  void queryClient.invalidateQueries({ queryKey: queryKeys.racks });
+  void queryClient.invalidateQueries({ queryKey: queryKeys.codeStatuses });
+  void queryClient.invalidateQueries({ queryKey: queryKeys.codeTree });
+}
+
 export async function listRacks() {
   const data = await apiGet<{ racks: RackSummary[] }>("/racks");
   return data.racks;
@@ -78,7 +85,9 @@ export async function createRack(payload: {
   rack_units: number;
   rack_cols: number;
 }) {
-  return apiPost<{ rack: RackDetail; rack_slug: string }>("/racks", payload);
+  const result = await apiPost<{ rack: RackDetail; rack_slug: string }>("/racks", payload);
+  invalidateAfterRackMutation();
+  return result;
 }
 
 export async function updateRack(
@@ -90,9 +99,12 @@ export async function updateRack(
     rack_cols: number;
   }>
 ) {
-  return apiPatch<{ rack: RackDetail }>(`/racks/${slug}`, payload);
+  const result = await apiPatch<{ rack: RackDetail }>(`/racks/${slug}`, payload);
+  invalidateAfterRackMutation();
+  return result;
 }
 
 export async function deleteRack(slug: string) {
-  return apiDelete(`/racks/${slug}`);
+  await apiDelete(`/racks/${slug}`);
+  invalidateAfterRackMutation();
 }

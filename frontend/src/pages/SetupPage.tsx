@@ -27,8 +27,7 @@ import {
 } from "@/lib/setup";
 import { fetchMachinePublicKey, generateMachineKey } from "@/lib/ssh";
 import { useSetupStore } from "@/stores/setup";
-import { useNodesStore } from "@/stores/nodes";
-import { useRackStore } from "@/stores/racks";
+import { useNodes, useRackEntries } from "@/hooks/queries";
 import { RackOnboardingPage } from "@/pages/RackOnboardingPage";
 import { SetupNodesStep } from "@/components/setup/setup-nodes-step";
 
@@ -78,10 +77,8 @@ export function SetupPage() {
   const { isLoading: authLoading, isAuthenticated, login } = useAuth();
   const status = useSetupStore((s) => s.status);
   const loadSetup = useSetupStore((s) => s.load);
-  const nodes = useNodesStore((s) => s.nodes);
-  const loadNodes = useNodesStore((s) => s.load);
-  const rackEntries = useRackStore((s) => s.rackEntries);
-  const loadRacks = useRackStore((s) => s.load);
+  const { data: nodes = [] } = useNodes();
+  const { data: rackEntries = [] } = useRackEntries();
 
   const [wantsRack, setWantsRackState] = useState<boolean | null>(getWantsRackFromStorage);
   const setWantsRack = useCallback((value: boolean) => {
@@ -135,9 +132,7 @@ export function SetupPage() {
 
   useEffect(() => {
     void loadSetup();
-    void loadNodes();
-    void loadRacks();
-  }, [loadSetup, loadNodes, loadRacks]);
+  }, [loadSetup]);
 
   const fetchSetupPublicKey = useCallback(() => {
     setSetupPublicKeyLoading(true);

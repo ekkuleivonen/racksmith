@@ -5,7 +5,7 @@ import {
   discardChanges as apiDiscardChanges,
   getDiffs,
 } from "@/lib/diff";
-import { useCodeStore } from "./code";
+import { queryClient, queryKeys } from "@/lib/queryClient";
 
 export const useDiffStore = create<{
   files: DiffFile[];
@@ -38,7 +38,7 @@ export const useDiffStore = create<{
     try {
       const res = await apiCommitAndPush(message);
       await get().loadDiffs();
-      await useCodeStore.getState().refreshStatuses();
+      void queryClient.invalidateQueries({ queryKey: queryKeys.codeStatuses });
       return { pr_url: res.pr_url };
     } finally {
       set({ committing: false });
@@ -50,7 +50,8 @@ export const useDiffStore = create<{
     try {
       await apiDiscardChanges();
       await get().loadDiffs();
-      await useCodeStore.getState().refreshStatuses();
+      void queryClient.invalidateQueries({ queryKey: queryKeys.codeStatuses });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.codeTree });
     } finally {
       set({ discarding: false });
     }

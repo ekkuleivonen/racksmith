@@ -7,7 +7,7 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
-import { useRackStore } from "@/stores/racks";
+import { useRackEntries } from "@/hooks/queries";
 import { usePingStore } from "@/stores/ping";
 import { nodeStatusKey } from "@/lib/ssh";
 
@@ -15,7 +15,7 @@ export function SidebarRacksSection() {
   const location = useLocation();
   const pathname = location.pathname;
 
-  const rackEntries = useRackStore((s) => s.rackEntries);
+  const { data: rackEntries = [] } = useRackEntries();
   const pingStatuses = usePingStore((s) => s.statuses);
 
   const racksHref = "/racks";
@@ -123,7 +123,7 @@ export function SidebarRacksSection() {
                               }
                             />
                             <span className="truncate">
-                              {node.name || node.hostname || node.host || node.id}
+                              {node.name || node.hostname || node.ip_address || node.id}
                             </span>
                           </NavLink>
                         );

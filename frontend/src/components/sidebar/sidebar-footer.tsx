@@ -10,8 +10,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useSetupStore } from "@/stores/setup";
-import { useNodesStore } from "@/stores/nodes";
-import { useCodeStore } from "@/stores/code";
+import { useGitStatuses, useNodes } from "@/hooks/queries";
 
 export const MANAGE_REPOS_VALUE = "__manage_repos__";
 
@@ -29,8 +28,10 @@ export function SidebarFooter({ onLogout }: SidebarFooterProps) {
   const localRepos = useSetupStore((s) => s.localRepos);
   const switchingRepo = useSetupStore((s) => s.switchingRepo);
   const switchRepo = useSetupStore((s) => s.switchRepo);
-  const modifiedPaths = useCodeStore((s) => s.modifiedPaths);
-  const untrackedPaths = useCodeStore((s) => s.untrackedPaths);
+  const { data: gitData } = useGitStatuses();
+  const { data: nodes = [] } = useNodes();
+  const modifiedPaths = gitData?.modifiedPaths ?? {};
+  const untrackedPaths = gitData?.untrackedPaths ?? {};
 
   const changeCount =
     Object.keys(modifiedPaths).length + Object.keys(untrackedPaths).length;
@@ -45,9 +46,8 @@ export function SidebarFooter({ onLogout }: SidebarFooterProps) {
     if (!owner || !repo) return;
     await switchRepo(owner, repo);
     const newStatus = useSetupStore.getState().status;
-    const newNodes = useNodesStore.getState().nodes;
-    const path = newStatus?.nodes_ready && newNodes[0]
-      ? `/nodes/${newNodes[0].id}`
+    const path = newStatus?.nodes_ready && nodes[0]
+      ? `/nodes/${nodes[0].id}`
       : "/nodes";
     navigate(path, { replace: true });
   };

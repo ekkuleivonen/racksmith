@@ -3,7 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { getCodeViewForFile } from "@/components/code/get-code-view-for-file";
 import { apiGet, apiPut } from "@/lib/api";
-import { useCodeStore } from "@/stores/code";
+import { queryClient, queryKeys } from "@/lib/queryClient";
 
 const AUTOSAVE_DELAY_MS = 600;
 
@@ -16,7 +16,6 @@ export function CodePage() {
   const [codeValue, setCodeValue] = useState<string>("");
   const [contentLoading, setContentLoading] = useState(false);
 
-  const refreshStatuses = useCodeStore((s) => s.refreshStatuses);
   const saveTimeoutRef = useRef<number | null>(null);
 
   const loadFile = useCallback(
@@ -76,7 +75,7 @@ export function CodePage() {
             content,
           });
           setLoadedContent(content);
-          await refreshStatuses();
+          void queryClient.invalidateQueries({ queryKey: queryKeys.codeStatuses });
         } catch (error) {
           toast.error(
             error instanceof Error ? error.message : "Failed to save file",
@@ -84,7 +83,7 @@ export function CodePage() {
         }
       }, AUTOSAVE_DELAY_MS);
     },
-    [refreshStatuses],
+    [],
   );
 
   const handleChange = useCallback(

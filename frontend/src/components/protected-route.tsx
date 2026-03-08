@@ -2,22 +2,20 @@ import { type ReactNode, useEffect } from "react";
 import { Navigate } from "react-router-dom";
 import { useAuth } from "@/context/auth-context";
 import { useSetupStore } from "@/stores/setup";
-import { useNodesStore } from "@/stores/nodes";
+import { useNodes } from "@/hooks/queries";
 
 export function ProtectedRoute({ children }: { children: ReactNode }) {
   const { isAuthenticated, isLoading: authLoading } = useAuth();
   const loading = useSetupStore((s) => s.loading);
   const status = useSetupStore((s) => s.status);
   const loadSetup = useSetupStore((s) => s.load);
-  const loadNodes = useNodesStore((s) => s.load);
-  const nodes = useNodesStore((s) => s.nodes);
+  const { data: nodes = [] } = useNodes();
 
   useEffect(() => {
     if (isAuthenticated) {
       void loadSetup();
-      void loadNodes();
     }
-  }, [isAuthenticated, loadSetup, loadNodes]);
+  }, [isAuthenticated, loadSetup]);
 
   if (authLoading) {
     return (

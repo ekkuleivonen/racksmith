@@ -1,10 +1,12 @@
 import { Component, type ErrorInfo, type ReactNode } from "react";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
+import { QueryClientProvider } from "@tanstack/react-query";
 import { AppShell } from "@/components/app-shell";
 import { ProtectedRoute } from "@/components/protected-route";
 import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
 import { AuthProvider } from "@/context/auth-context";
+import { queryClient } from "@/lib/queryClient";
 import { CodePage } from "@/pages/CodePage";
 import { DiffCommitPage } from "@/pages/DiffCommitPage";
 import { DiffReviewPage } from "@/pages/DiffReviewPage";
@@ -277,14 +279,16 @@ function AppRoutes() {
 
 export function App() {
   return (
-    <ThemeProvider defaultTheme="dark" storageKey="lake-admin-theme">
-      <AuthProvider>
-        <BrowserRouter>
-          <AppRoutes />
-        </BrowserRouter>
-      </AuthProvider>
-      <Toaster position="bottom-right" />
-    </ThemeProvider>
+    <QueryClientProvider client={queryClient}>
+      <ThemeProvider defaultTheme="dark" storageKey="lake-admin-theme">
+        <AuthProvider>
+          <BrowserRouter>
+            <AppRoutes />
+          </BrowserRouter>
+        </AuthProvider>
+        <Toaster position="bottom-right" />
+      </ThemeProvider>
+    </QueryClientProvider>
   );
 }
 

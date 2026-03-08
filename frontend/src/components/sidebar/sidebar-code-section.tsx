@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useLocation, NavLink, useNavigate } from "react-router-dom";
 import { Code2, FilePlus, FolderPlus } from "lucide-react";
 import { toast } from "sonner";
@@ -9,12 +9,18 @@ import {
   type PendingInput,
 } from "@/components/code/file-tree";
 import { useSetupStore } from "@/stores/setup";
-import { useCodeStore } from "@/stores/code";
+import { useCodeTree, useGitStatuses } from "@/hooks/queries";
+import { queryClient, queryKeys } from "@/lib/queryClient";
 import { apiDelete, apiPatch, apiPost } from "@/lib/api";
 
 function parseSelectedPathFromPathname(pathname: string): string | null {
   const match = pathname.match(/^\/code\/[^/]+\/[^/]+\/(.+)$/);
   return match ? match[1] : null;
+}
+
+function invalidateCodeQueries() {
+  void queryClient.invalidateQueries({ queryKey: queryKeys.codeTree });
+  void queryClient.invalidateQueries({ queryKey: queryKeys.codeStatuses });
 }
 
 export function SidebarCodeSection() {
@@ -26,20 +32,12 @@ export function SidebarCodeSection() {
   const repoName = useSetupStore((s) => s.status?.repo?.repo);
   const repo = repoOwner && repoName ? { owner: repoOwner, repo: repoName } : null;
 
-  const entries = useCodeStore((s) => s.entries);
-  const modifiedPaths = useCodeStore((s) => s.modifiedPaths);
-  const untrackedPaths = useCodeStore((s) => s.untrackedPaths);
-  const loading = useCodeStore((s) => s.loading);
-  const loadTree = useCodeStore((s) => s.loadTree);
-  const refreshStatuses = useCodeStore((s) => s.refreshStatuses);
+  const { data: entries = [], isLoading: loading } = useCodeTree();
+  const { data: gitData } = useGitStatuses();
+  const modifiedPaths = gitData?.modifiedPaths ?? {};
+  const untrackedPaths = gitData?.untrackedPaths ?? {};
 
   const [pendingInput, setPendingInput] = useState<PendingInput | null>(null);
-
-  useEffect(() => {
-    if (repoOwner && repoName) {
-      void loadTree();
-    }
-  }, [repoOwner, repoName, loadTree]);
 
   const selectedPath = useMemo(
     () => parseSelectedPathFromPathname(pathname),
@@ -73,7 +71,7 @@ export function SidebarCodeSection() {
       if (!window.confirm(`Delete ${path}?`)) return;
       try {
         await apiDelete(`/code/file?path=${encodeURIComponent(path)}`);
-        await Promise.all([loadTree(), refreshStatuses()]);
+        invalidateCodeQueries();
         if (selectedPath === path) {
           navigate(codeHref);
         }
@@ -84,7 +82,7 @@ export function SidebarCodeSection() {
         );
       }
     },
-    [repo, selectedPath, codeHref, loadTree, refreshStatuses, navigate],
+    [repo, selectedPath, codeHref, navigate],
   );
 
   const handleCreateInDir = useCallback(
@@ -108,12 +106,12 @@ export function SidebarCodeSection() {
       try {
         if (pendingInput.type === "file") {
           await apiPost("/code/file", { path: fullPath, content: "" });
-          await Promise.all([loadTree(), refreshStatuses()]);
+          invalidateCodeQueries();
           navigate(`/code/${repo.owner}/${repo.repo}/${fullPath}`);
           toast.success("File created");
         } else {
           await apiPost("/code/folder", { path: fullPath });
-          await Promise.all([loadTree(), refreshStatuses()]);
+          invalidateCodeQueries();
           toast.success("Folder created");
         }
       } catch (error) {
@@ -122,7 +120,7 @@ export function SidebarCodeSection() {
         );
       }
     },
-    [pendingInput, repo, loadTree, refreshStatuses, navigate],
+    [pendingInput, repo, navigate],
   );
 
   const handleDeleteDir = useCallback(
@@ -132,7 +130,7 @@ export function SidebarCodeSection() {
         return;
       try {
         await apiDelete(`/code/folder?path=${encodeURIComponent(path)}`);
-        await Promise.all([loadTree(), refreshStatuses()]);
+        invalidateCodeQueries();
         toast.success("Folder deleted");
       } catch (error) {
         toast.error(
@@ -140,7 +138,7 @@ export function SidebarCodeSection() {
         );
       }
     },
-    [repo, loadTree, refreshStatuses],
+    [repo],
   );
 
   const handleMove = useCallback(
@@ -151,7 +149,7 @@ export function SidebarCodeSection() {
       if (dest === src) return;
       try {
         await apiPatch("/code/move", { src, dest });
-        await Promise.all([loadTree(), refreshStatuses()]);
+        invalidateCodeQueries();
         if (selectedPath === src) {
           navigate(`/code/${repo.owner}/${repo.repo}/${dest}`);
         }
@@ -162,7 +160,7 @@ export function SidebarCodeSection() {
         );
       }
     },
-    [repo, selectedPath, loadTree, refreshStatuses, navigate],
+    [repo, selectedPath, navigate],
   );
 
   return (

@@ -7,7 +7,7 @@ import { Switch } from "@/components/ui/switch";
 type ItemLike = {
   managed?: boolean;
   name: string;
-  host: string;
+  ip_address: string;
   ssh_user: string;
   ssh_port: number;
   labels?: string[];
@@ -110,9 +110,9 @@ function ConnectionSection({
       </p>
       <Input
         className="h-8 text-xs"
-        value={item.host}
-        onChange={(e) => onChange({ host: e.target.value })}
-        placeholder="Host or SSH alias"
+        value={item.ip_address}
+        onChange={(e) => onChange({ ip_address: e.target.value })}
+        placeholder="IP address"
       />
       <div className="flex gap-2">
         <Input
@@ -196,7 +196,7 @@ export function ItemHardwareFields({
             onCheckedChange={(checked) =>
               onChange({
                 managed: checked,
-                ...(!checked ? { host: "", ssh_user: "", ssh_port: 22 } : {}),
+                ...(!checked ? { ip_address: "", ssh_user: "", ssh_port: 22 } : {}),
               })
             }
           />

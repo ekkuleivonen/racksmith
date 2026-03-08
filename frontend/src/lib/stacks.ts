@@ -1,4 +1,5 @@
 import { apiDelete, apiGet, apiPost, apiPut } from "@/lib/api";
+import { queryClient, queryKeys } from "@/lib/queryClient";
 
 export type ActionInput = {
   key: string;
@@ -69,6 +70,12 @@ export type StackRun = {
   commit_sha: string | null;
 };
 
+function invalidateAfterStackMutation() {
+  void queryClient.invalidateQueries({ queryKey: queryKeys.stacks });
+  void queryClient.invalidateQueries({ queryKey: queryKeys.codeStatuses });
+  void queryClient.invalidateQueries({ queryKey: queryKeys.codeTree });
+}
+
 export async function listStacks(nodeSlug?: string) {
   const suffix = nodeSlug ? `?node=${encodeURIComponent(nodeSlug)}` : "";
   return apiGet<{ stacks: StackSummary[]; actions: Action[] }>(`/stacks${suffix}`);
@@ -79,15 +86,20 @@ export async function getStack(stackId: string) {
 }
 
 export async function createStack(payload: StackUpsertRequest) {
-  return apiPost<{ stack: StackDetail }>("/stacks", payload);
+  const result = await apiPost<{ stack: StackDetail }>("/stacks", payload);
+  invalidateAfterStackMutation();
+  return result;
 }
 
 export async function updateStack(stackId: string, payload: StackUpsertRequest) {
-  return apiPut<{ stack: StackDetail }>(`/stacks/${stackId}`, payload);
+  const result = await apiPut<{ stack: StackDetail }>(`/stacks/${stackId}`, payload);
+  invalidateAfterStackMutation();
+  return result;
 }
 
 export async function deleteStack(stackId: string) {
-  return apiDelete<void>(`/stacks/${stackId}`);
+  await apiDelete<void>(`/stacks/${stackId}`);
+  invalidateAfterStackMutation();
 }
 
 export async function resolveStackTargets(targets: StackTargetSelection) {

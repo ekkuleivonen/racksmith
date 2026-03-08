@@ -54,11 +54,12 @@ def _node_from_yaml(node_id: str, data: dict) -> Node:
             "col_start": data.get("position_col_start", 0),
             "col_count": data.get("position_col_count", 1),
         }
+    ip_address = data.get("ip_address") or data.get("host", "")
     return Node(
         id=node_id,
         hostname=data.get("hostname", ""),
         name=data.get("name", ""),
-        host=data.get("host", ""),
+        ip_address=ip_address,
         ssh_user=data.get("ssh_user", ""),
         ssh_port=data.get("ssh_port", 22),
         managed=data.get("managed", True),
@@ -77,7 +78,7 @@ def _node_to_yaml(node: Node) -> dict:
         "id": node.id,
         "hostname": node.hostname,
         "name": node.name,
-        "host": node.host,
+        "ip_address": node.ip_address,
         "ssh_user": node.ssh_user,
         "ssh_port": node.ssh_port,
         "managed": node.managed,
@@ -129,10 +130,10 @@ class NodeManager:
         children: dict[str, dict] = {}
 
         for node in nodes:
-            if not node.managed or not node.host or not node.ssh_user:
+            if not node.managed or not node.ip_address or not node.ssh_user:
                 continue
             hosts[node.id] = {
-                "ansible_host": node.host,
+                "ansible_host": node.ip_address,
                 "ansible_user": node.ssh_user,
                 "ansible_port": node.ssh_port,
                 "ansible_python_interpreter": "auto_silent",
@@ -177,7 +178,7 @@ class NodeManager:
         return sorted(
             nodes,
             key=lambda n: (
-                (n.name or n.hostname or n.host or n.id).lower(),
+                (n.name or n.hostname or n.ip_address or n.id).lower(),
                 n.id,
             ),
         )
@@ -198,7 +199,7 @@ class NodeManager:
             id=node_id,
             hostname="",
             name=data.name.strip(),
-            host=data.host.strip(),
+            ip_address=data.ip_address.strip(),
             ssh_user=data.ssh_user.strip(),
             ssh_port=data.ssh_port,
             managed=data.managed,
@@ -221,12 +222,12 @@ class NodeManager:
         repo_path = repos_manager.active_repo_path(session)
         existing = self.get_node(session, node_id)
         name = data.name.strip() if data.name and data.name.strip() else existing.name
-        host = data.host.strip() if data.host and data.host.strip() else existing.host
+        ip_address = data.ip_address.strip() if data.ip_address and data.ip_address.strip() else existing.ip_address
         node = Node(
             id=node_id,
             hostname=existing.hostname,
             name=name,
-            host=host,
+            ip_address=ip_address,
             ssh_user=data.ssh_user.strip(),
             ssh_port=data.ssh_port,
             managed=data.managed,
@@ -253,15 +254,15 @@ class NodeManager:
 
     async def probe_node(self, session, node_id: str) -> Node:
         node = self.get_node(session, node_id)
-        if not node.managed or not node.host or not node.ssh_user:
-            raise ValueError("Node is not managed or missing host/ssh_user")
-        probe = await probe_ssh_target(node.host, node.ssh_user, node.ssh_port)
+        if not node.managed or not node.ip_address or not node.ssh_user:
+            raise ValueError("Node is not managed or missing ip_address/ssh_user")
+        probe = await probe_ssh_target(node.ip_address, node.ssh_user, node.ssh_port)
         os_family = _os_to_family(probe.os) or node.os_family
         updated = Node(
             id=node.id,
             hostname=probe.name,
             name=node.name,
-            host=probe.host,
+            ip_address=probe.ip_address,
             ssh_user=node.ssh_user,
             ssh_port=node.ssh_port,
             managed=node.managed,
@@ -281,12 +282,12 @@ class NodeManager:
 
     async def preview_node(self, data: NodeInput) -> Node:
         """Probe without saving. Returns Node with id='preview'."""
-        if not data.managed or not data.host or not data.ssh_user:
+        if not data.managed or not data.ip_address or not data.ssh_user:
             return Node(
                 id="preview",
                 hostname="",
                 name=data.name,
-                host=data.host,
+                ip_address=data.ip_address,
                 ssh_user=data.ssh_user,
                 ssh_port=data.ssh_port,
                 managed=data.managed,
@@ -297,13 +298,13 @@ class NodeManager:
                 placement=data.placement,
                 mac_address="",
             )
-        probe = await probe_ssh_target(data.host, data.ssh_user, data.ssh_port)
+        probe = await probe_ssh_target(data.ip_address, data.ssh_user, data.ssh_port)
         os_family = _os_to_family(probe.os) or data.os_family
         return Node(
             id="preview",
             hostname=probe.name,
             name=data.name or probe.name,
-            host=probe.host,
+            ip_address=probe.ip_address,
             ssh_user=data.ssh_user,
             ssh_port=data.ssh_port,
             managed=data.managed,

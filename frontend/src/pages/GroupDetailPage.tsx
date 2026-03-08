@@ -90,9 +90,9 @@ export function GroupDetailPage() {
                   className="block border border-zinc-800 bg-zinc-900/30 p-3 hover:border-zinc-700 transition-colors"
                 >
                   <p className="text-zinc-100 font-medium">
-                    {node.name || node.hostname || node.host || node.id}
+                    {node.name || node.hostname || node.ip_address || node.id}
                   </p>
-                  <p className="text-xs text-zinc-500">{node.host}</p>
+                  <p className="text-xs text-zinc-500">{node.ip_address}</p>
                 </NavLink>
               ))}
             </div>

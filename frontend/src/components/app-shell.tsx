@@ -1,5 +1,5 @@
 import { type ReactNode, useCallback, useEffect } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { Copy, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -20,10 +20,7 @@ import {
 import { Sidebar } from "@/components/sidebar/sidebar";
 import { useAuth } from "@/context/auth-context";
 import { useSetupStore } from "@/stores/setup";
-import { useRackStore } from "@/stores/racks";
-import { useNodesStore } from "@/stores/nodes";
-import { useStackStore } from "@/stores/stacks";
-import { useGroupsStore } from "@/stores/groups";
+import { useNodes } from "@/hooks/queries";
 import { usePingStore } from "@/stores/ping";
 
 type AppShellProps = {
@@ -32,8 +29,6 @@ type AppShellProps = {
 };
 
 export function AppShell({ children }: AppShellProps) {
-  const location = useLocation();
-
   const loading = useSetupStore((s) => s.loading);
   const status = useSetupStore((s) => s.status);
   const publicKeyOpen = useSetupStore((s) => s.publicKeyOpen);
@@ -43,18 +38,14 @@ export function AppShell({ children }: AppShellProps) {
   const generateKey = useSetupStore((s) => s.generateKey);
   const generatingKey = useSetupStore((s) => s.generatingKey);
   const loadSetup = useSetupStore((s) => s.load);
-  const loadRacks = useRackStore((s) => s.load);
-  const loadNodes = useNodesStore((s) => s.load);
-  const loadStacks = useStackStore((s) => s.load);
-  const loadGroups = useGroupsStore((s) => s.load);
 
-  const nodes = useNodesStore((s) => s.nodes);
+  const { data: nodes = [] } = useNodes();
   const startPolling = usePingStore((s) => s.startPolling);
   const stopPolling = usePingStore((s) => s.stopPolling);
 
   useEffect(() => {
-    void Promise.all([loadSetup(), loadRacks(), loadNodes(), loadStacks(), loadGroups()]);
-  }, [location.pathname, loadSetup, loadRacks, loadNodes, loadStacks, loadGroups]);
+    void loadSetup();
+  }, [loadSetup]);
 
   useEffect(() => {
     if (!status?.repo_ready || nodes.length === 0) {

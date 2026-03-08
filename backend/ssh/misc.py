@@ -14,7 +14,7 @@ import settings
 
 @dataclass
 class SSHProbeResult:
-    host: str
+    ip_address: str
     name: str
     mac_address: str = ""
     os: str = ""
@@ -184,7 +184,7 @@ async def probe_ssh_target(host: str, username: str, port: int) -> SSHProbeResul
     os_name = _detect_os_name(os_release, hostnamectl_os, uname)
 
     return SSHProbeResult(
-        host=live_host,
+        ip_address=live_host,
         name=hostname or live_host,
         mac_address=mac_address,
         os=os_name,

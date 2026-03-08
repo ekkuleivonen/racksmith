@@ -35,7 +35,7 @@ export function NodePage() {
   const [stacks, setStacks] = useState<StackSummary[]>([]);
   const [editingConnection, setEditingConnection] = useState(false);
   const [connectionDraft, setConnectionDraft] = useState({
-    host: "",
+    ip_address: "",
     ssh_user: "",
     ssh_port: 22,
   });
@@ -52,13 +52,13 @@ export function NodePage() {
   useEffect(() => {
     if (node) {
       setConnectionDraft({
-        host: node.host ?? "",
+        ip_address: node.ip_address ?? "",
         ssh_user: node.ssh_user ?? "",
         ssh_port: node.ssh_port ?? 22,
       });
       setLabelsDraft(node.labels ?? []);
       setNameDraft(node.name ?? "");
-      if (!node.host || !node.ssh_user) {
+      if (!node.ip_address || !node.ssh_user) {
         setEditingConnection(true);
       }
     }
@@ -99,7 +99,7 @@ export function NodePage() {
   }, [nodeId]);
 
   useEffect(() => {
-    if (!nodeId || !node?.host) {
+    if (!nodeId || !node?.ip_address) {
       setPingStatus("unknown");
       return;
     }
@@ -129,7 +129,7 @@ export function NodePage() {
       active = false;
       if (timer !== null) window.clearTimeout(timer);
     };
-  }, [nodeId, node?.host]);
+  }, [nodeId, node?.ip_address]);
 
   if (loading) {
     return (
@@ -168,7 +168,7 @@ export function NodePage() {
           <div className="flex items-center justify-between gap-3">
             <div className="space-y-1">
               <h1 className="text-zinc-100 font-semibold">
-                {node.name || node.hostname || node.host || "Unassigned"}
+                {node.name || node.hostname || node.ip_address || "Unassigned"}
               </h1>
               <div className="flex flex-wrap items-center gap-2">
                 <p className="text-xs text-zinc-500">
@@ -357,7 +357,7 @@ export function NodePage() {
                       try {
                         await updateNode(node.id, {
                           name: nameDraft.trim() || "",
-                          host: node.host ?? "",
+                          ip_address: node.ip_address ?? "",
                           ssh_user: node.ssh_user ?? "",
                           ssh_port: node.ssh_port ?? 22,
                           labels: node.labels ?? [],
@@ -421,11 +421,11 @@ export function NodePage() {
               <div className="space-y-2">
                 <Input
                   className="h-8 text-xs"
-                  value={connectionDraft.host}
+                  value={connectionDraft.ip_address}
                   onChange={(e) =>
-                    setConnectionDraft((d) => ({ ...d, host: e.target.value }))
+                    setConnectionDraft((d) => ({ ...d, ip_address: e.target.value }))
                   }
-                  placeholder="Host or IP"
+                  placeholder="IP address"
                 />
                 <div className="flex gap-2">
                   <Input
@@ -460,7 +460,7 @@ export function NodePage() {
                       try {
                         await updateNode(node.id, {
                           name: node.name ?? "",
-                          host: connectionDraft.host,
+                          ip_address: connectionDraft.ip_address,
                           ssh_user: connectionDraft.ssh_user,
                           ssh_port: connectionDraft.ssh_port,
                           labels: node.labels ?? [],
@@ -487,7 +487,7 @@ export function NodePage() {
                     variant="outline"
                     onClick={() => {
                       setConnectionDraft({
-                        host: node.host ?? "",
+                        ip_address: node.ip_address ?? "",
                         ssh_user: node.ssh_user ?? "",
                         ssh_port: node.ssh_port ?? 22,
                       });
@@ -500,7 +500,7 @@ export function NodePage() {
               </div>
             ) : (
               <div className="space-y-1 text-sm text-zinc-300">
-                <p>Host: {node.host || "Not set"}</p>
+                <p>IP address: {node.ip_address || "Not set"}</p>
                 <p>User: {node.ssh_user || "Not set"}</p>
                 <p>Port: {node.ssh_port}</p>
               </div>
@@ -602,7 +602,7 @@ export function NodePage() {
                       try {
                         await updateNode(node.id, {
                           name: node.name ?? "",
-                          host: node.host ?? "",
+                          ip_address: node.ip_address ?? "",
                           ssh_user: node.ssh_user ?? "",
                           ssh_port: node.ssh_port ?? 22,
                           labels: labelsDraft,
@@ -664,7 +664,7 @@ export function NodePage() {
           ) : (
             <section className="border border-zinc-800 bg-zinc-900/30 p-4">
               <p className="text-zinc-500 text-sm">
-                Add host and SSH user above, then Save to enable SSH access.
+                Add IP address and SSH user above, then Save to enable SSH access.
               </p>
             </section>
           )}

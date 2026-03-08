@@ -5,7 +5,7 @@ export type CommandHistoryEntry = {
   created_at: string;
   node_id: string;
   node_name: string;
-  host: string;
+  ip_address: string;
 };
 
 export type PingStatus = "online" | "offline" | "unknown";

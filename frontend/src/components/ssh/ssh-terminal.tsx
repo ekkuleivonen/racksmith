@@ -46,7 +46,7 @@ export function SshTerminal({
     terminal.open(hostRef.current);
     fitAddon.fit();
     terminal.writeln(
-      `Opening SSH session to ${node.ssh_user}@${node.host}:${node.ssh_port}...`,
+      `Opening SSH session to ${node.ssh_user}@${node.ip_address}:${node.ssh_port}...`,
     );
 
     const socket = new WebSocket(sshTerminalUrl(nodeId));
@@ -87,7 +87,7 @@ export function SshTerminal({
         if (payload.type === "connected") {
           setConnected(true);
           terminal.writeln(
-            `[connected to ${payload.ssh_user}@${payload.host}:${payload.ssh_port}]`,
+            `[connected to ${payload.ssh_user}@${payload.ip_address}:${payload.ssh_port}]`,
           );
           sendResize();
           return;
@@ -128,7 +128,7 @@ export function SshTerminal({
       terminalRef.current = null;
       fitAddonRef.current = null;
     };
-  }, [enabled, node.host, node.id, node.ssh_port, node.ssh_user, nodeId]);
+  }, [enabled, node.ip_address, node.id, node.ssh_port, node.ssh_user, nodeId]);
 
   useEffect(() => {
     setEnabled(false);

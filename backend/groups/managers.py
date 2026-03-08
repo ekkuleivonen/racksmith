@@ -71,7 +71,7 @@ class GroupManager:
                 id=n.id,
                 name=n.name,
                 hostname=n.hostname,
-                host=n.host,
+                ip_address=n.ip_address,
                 managed=n.managed,
                 groups=n.groups,
                 labels=n.labels,

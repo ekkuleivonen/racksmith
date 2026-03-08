@@ -41,8 +41,8 @@ class SSHManager:
         node = self._find_node(session, node_id)
         if not node.managed:
             raise ValueError("Node is not managed")
-        if not node.host or not node.ssh_user:
-            raise ValueError("Node is missing host or ssh_user")
+        if not node.ip_address or not node.ssh_user:
+            raise ValueError("Node is missing IP address or ssh_user")
         return node
 
     async def _ping_host(self, host: str) -> bool:
@@ -91,8 +91,8 @@ class SSHManager:
                 command=normalized,
                 created_at=_now_iso(),
                 node_id=node.id,
-                node_name=node.name or node.hostname or node.host,
-                host=node.host,
+                node_name=node.name or node.hostname or node.ip_address,
+                ip_address=node.ip_address,
             )
         )
         payload = json.dumps([entry.model_dump() for entry in history[-HISTORY_LIMIT:]])
@@ -102,7 +102,7 @@ class SSHManager:
         node = self._require_ssh_node(session, node_id)
         self.record_command(session, node_id, "sudo reboot")
         conn = await asyncssh.connect(
-            **_connect_kwargs(node.host, node.ssh_user, node.ssh_port)
+            **_connect_kwargs(node.ip_address, node.ssh_user, node.ssh_port)
         )
         try:
             try:
@@ -139,7 +139,7 @@ class SSHManager:
                     status="unknown",
                 )
 
-            host = (node.host or "").strip()
+            host = (node.ip_address or "").strip()
             if not host:
                 return PingStatusEntry(
                     node_id=target.node_id,
@@ -161,7 +161,7 @@ class SSHManager:
     async def proxy_terminal(self, session, node_id: str, websocket) -> None:
         node = self._require_ssh_node(session, node_id)
         conn = await asyncssh.connect(
-            **_connect_kwargs(node.host, node.ssh_user, node.ssh_port)
+            **_connect_kwargs(node.ip_address, node.ssh_user, node.ssh_port)
         )
         process = await conn.create_process(term_type="xterm")
 
@@ -197,7 +197,7 @@ class SSHManager:
             await websocket.send_json(
                 {
                     "type": "connected",
-                    "host": node.host,
+                    "ip_address": node.ip_address,
                     "ssh_user": node.ssh_user,
                     "ssh_port": node.ssh_port,
                 }

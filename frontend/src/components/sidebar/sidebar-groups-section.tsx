@@ -1,12 +1,12 @@
 import { useLocation, NavLink } from "react-router-dom";
 import { Folder, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useGroupsStore } from "@/stores/groups";
+import { useGroups } from "@/hooks/queries";
 
 export function SidebarGroupsSection() {
   const location = useLocation();
   const pathname = location.pathname;
-  const groups = useGroupsStore((s) => s.groups);
+  const { data: groups = [] } = useGroups();
 
   return (
     <div className="space-y-1">

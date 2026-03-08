@@ -1,4 +1,5 @@
 import { apiDelete, apiGet, apiPatch, apiPost } from "@/lib/api";
+import { queryClient, queryKeys } from "@/lib/queryClient";
 
 export type NodePlacement = {
   rack: string;
@@ -10,7 +11,7 @@ export type NodePlacement = {
 
 export type NodeInput = {
   name: string;
-  host?: string;
+  ip_address?: string;
   ssh_user?: string;
   ssh_port?: number;
   managed?: boolean;
@@ -31,7 +32,7 @@ export type NodeSummary = {
   id: string;
   name: string;
   hostname: string;
-  host: string;
+  ip_address: string;
   managed: boolean;
   groups: string[];
   labels: string[];
@@ -42,17 +43,24 @@ export function nodeAlias(node: Node | NodeSummary): string {
   return (
     node.name?.trim().toLowerCase().replace(/\s+/g, "-") ||
     node.hostname ||
-    node.host ||
+    node.ip_address ||
     node.id
   );
 }
 
-export function isReachableNode(node: { host?: string; ssh_user?: string }): boolean {
-  return !!node.host && !!node.ssh_user;
+export function isReachableNode(node: { ip_address?: string; ssh_user?: string }): boolean {
+  return !!node.ip_address && !!node.ssh_user;
 }
 
 export function isManagedNode(node: Node | NodeSummary): boolean {
   return node.managed ?? false;
+}
+
+function invalidateAfterNodeMutation() {
+  void queryClient.invalidateQueries({ queryKey: queryKeys.nodes });
+  void queryClient.invalidateQueries({ queryKey: queryKeys.racks });
+  void queryClient.invalidateQueries({ queryKey: queryKeys.codeStatuses });
+  void queryClient.invalidateQueries({ queryKey: queryKeys.codeTree });
 }
 
 export async function listNodes() {
@@ -65,19 +73,26 @@ export async function getNode(id: string) {
 }
 
 export async function createNode(payload: NodeInput) {
-  return apiPost<{ node: Node }>("/nodes", payload);
+  const result = await apiPost<{ node: Node }>("/nodes", payload);
+  invalidateAfterNodeMutation();
+  return result;
 }
 
 export async function updateNode(id: string, payload: NodeInput) {
-  return apiPatch<{ node: Node }>(`/nodes/${id}`, payload);
+  const result = await apiPatch<{ node: Node }>(`/nodes/${id}`, payload);
+  invalidateAfterNodeMutation();
+  return result;
 }
 
 export async function deleteNode(id: string) {
-  return apiDelete(`/nodes/${id}`);
+  await apiDelete(`/nodes/${id}`);
+  invalidateAfterNodeMutation();
 }
 
 export async function refreshNode(id: string) {
-  return apiPost<{ node: Node }>(`/nodes/${id}/refresh`);
+  const result = await apiPost<{ node: Node }>(`/nodes/${id}/refresh`);
+  invalidateAfterNodeMutation();
+  return result;
 }
 
 export async function previewNode(payload: NodeInput) {

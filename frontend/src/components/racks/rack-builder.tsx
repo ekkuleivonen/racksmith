@@ -55,7 +55,7 @@ type RackBuilderProps = {
   onSelectedItemChange: (patch: Partial<RackLayoutNode>) => void;
   onSaveSelected: () => Promise<void>;
   onDeleteSelected: () => Promise<void>;
-  unplacedNodes?: Array<{ id: string; name: string; hostname?: string; host?: string }>;
+  unplacedNodes?: Array<{ id: string; name: string; hostname?: string; ip_address?: string }>;
   onPlaceUnplacedNode?: (nodeId: string, position: MovePosition) => void;
   onUnplaceNode?: (nodeId: string) => void;
 };
@@ -176,7 +176,7 @@ export function RackBuilder({
     return unplacedNodes.filter(
       (n) =>
         (n.name ?? "").toLowerCase().includes(q) ||
-        (n.host ?? "").toLowerCase().includes(q) ||
+        (n.ip_address ?? "").toLowerCase().includes(q) ||
         (n.id ?? "").toLowerCase().includes(q)
     );
   }, [unplacedNodes, unassignedSearch]);
@@ -184,7 +184,7 @@ export function RackBuilder({
   const itemToItemLike = (item: RackLayoutNode | PendingNode) => ({
     managed: item.managed ?? true,
     name: item.name,
-    host: item.host ?? "",
+    ip_address: item.ip_address ?? "",
     ssh_user: item.ssh_user ?? "",
     ssh_port: item.ssh_port ?? 22,
     labels: item.labels ?? [],
@@ -324,7 +324,7 @@ export function RackBuilder({
             <>
               <div className="space-y-1">
                 <p className="text-sm text-zinc-100">
-                  {pending.name || pending.host || "Pending details"}
+                  {pending.name || pending.ip_address || "Pending details"}
                 </p>
                 <p className="text-xs text-zinc-400">
                   {pending.position_u_height}U × {pending.position_col_count} col
@@ -332,7 +332,7 @@ export function RackBuilder({
                 </p>
               </div>
               <p className="text-xs text-zinc-400">
-                Place the item now. Add host details whenever you are ready.
+                Place the item now. Add IP address whenever you are ready.
               </p>
               <Separator />
               <ItemHardwareFields
@@ -367,7 +367,7 @@ export function RackBuilder({
             <>
               <div className="space-y-1">
                 <p className="text-sm text-zinc-100">
-                  {selectedItem.name || selectedItem.host || "Unassigned"}
+                  {selectedItem.name || selectedItem.ip_address || "Unassigned"}
                 </p>
                 <p className="text-[11px] text-zinc-500">
                   {selectedItem.position_u_height}U × {selectedItem.position_col_count} col
@@ -449,7 +449,7 @@ export function RackBuilder({
                         onDragStart={(e) => handleUnplacedNodeDragStart(e, node)}
                         className="border border-zinc-800 bg-zinc-950/60 px-2 py-1.5 text-left hover:border-zinc-700 cursor-grab active:cursor-grabbing text-xs truncate"
                       >
-                        {node.name || node.hostname || node.host || node.id}
+                        {node.name || node.hostname || node.ip_address || node.id}
                       </button>
                     ))}
                     {filteredUnplacedNodes.length === 0 && unassignedSearch.trim() ? (

@@ -1,14 +1,14 @@
 import { useLocation, NavLink } from "react-router-dom";
 import { Plus, Server } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useNodesStore } from "@/stores/nodes";
+import { useNodes } from "@/hooks/queries";
 import { usePingStore } from "@/stores/ping";
 import { nodeStatusKey } from "@/lib/ssh";
 
 export function SidebarNodesSection() {
   const location = useLocation();
   const pathname = location.pathname;
-  const allNodes = useNodesStore((s) => s.nodes);
+  const { data: allNodes = [] } = useNodes();
   const nodes = allNodes.filter((n) => !n.placement?.rack);
   const pingStatuses = usePingStore((s) => s.statuses);
 
@@ -76,7 +76,7 @@ export function SidebarNodesSection() {
                     }
                   />
                   <span className="truncate">
-                    {node.name || node.hostname || node.host || node.id}
+                    {node.name || node.hostname || node.ip_address || node.id}
                   </span>
                 </NavLink>
               );

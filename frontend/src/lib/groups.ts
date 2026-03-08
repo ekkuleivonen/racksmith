@@ -1,4 +1,5 @@
 import { apiDelete, apiGet, apiPatch, apiPost } from "@/lib/api";
+import { queryClient, queryKeys } from "@/lib/queryClient";
 import type { NodeSummary } from "@/lib/nodes";
 
 export type GroupInput = {
@@ -14,6 +15,12 @@ export type GroupWithMembers = Group & {
   nodes: NodeSummary[];
 };
 
+function invalidateAfterGroupMutation() {
+  void queryClient.invalidateQueries({ queryKey: queryKeys.groups });
+  void queryClient.invalidateQueries({ queryKey: queryKeys.codeStatuses });
+  void queryClient.invalidateQueries({ queryKey: queryKeys.codeTree });
+}
+
 export async function listGroups() {
   const data = await apiGet<{ groups: Group[] }>("/groups");
   return data.groups;
@@ -24,13 +31,18 @@ export async function getGroup(slug: string) {
 }
 
 export async function createGroup(payload: GroupInput) {
-  return apiPost<{ group: Group }>("/groups", payload);
+  const result = await apiPost<{ group: Group }>("/groups", payload);
+  invalidateAfterGroupMutation();
+  return result;
 }
 
 export async function updateGroup(slug: string, payload: GroupInput) {
-  return apiPatch<{ group: Group }>(`/groups/${slug}`, payload);
+  const result = await apiPatch<{ group: Group }>(`/groups/${slug}`, payload);
+  invalidateAfterGroupMutation();
+  return result;
 }
 
 export async function deleteGroup(slug: string) {
-  return apiDelete(`/groups/${slug}`);
+  await apiDelete(`/groups/${slug}`);
+  invalidateAfterGroupMutation();
 }

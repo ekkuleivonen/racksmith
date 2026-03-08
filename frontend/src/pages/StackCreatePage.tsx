@@ -4,9 +4,6 @@ import { toast } from "sonner";
 import { StackEditorForm } from "@/components/stacks/stack-editor-form";
 import type { Action, StackUpsertRequest } from "@/lib/stacks";
 import { createStack, listStacks } from "@/lib/stacks";
-import { useStackStore } from "@/stores/stacks";
-import { useRackStore } from "@/stores/racks";
-import { useCodeStore } from "@/stores/code";
 
 const EMPTY_DRAFT: StackUpsertRequest = {
   name: "",
@@ -67,11 +64,6 @@ export function StackCreatePage() {
             try {
               const result = await createStack(draft);
               toast.success("Stack created");
-              await Promise.all([
-                useStackStore.getState().load(),
-                useRackStore.getState().load(),
-                useCodeStore.getState().refreshStatuses(),
-              ]);
               navigate(`/stacks/${result.stack.id}`);
             } catch (error) {
               toast.error(error instanceof Error ? error.message : "Failed to create stack");

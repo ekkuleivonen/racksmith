@@ -1,16 +1,10 @@
-import { useEffect } from "react";
 import { NavLink } from "react-router-dom";
 import { Plus } from "lucide-react";
-import { useRackStore } from "@/stores/racks";
+import { useRackEntries } from "@/hooks/queries";
 import { cn } from "@/lib/utils";
 
 export function RacksPage() {
-  const rackEntries = useRackStore((s) => s.rackEntries);
-  const load = useRackStore((s) => s.load);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
+  const { data: rackEntries = [] } = useRackEntries();
 
   return (
     <div className="flex-1 min-h-0 overflow-auto p-6">

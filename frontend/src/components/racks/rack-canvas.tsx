@@ -622,7 +622,7 @@ export function RackCanvas({
                   }}
                 >
                   <p className="text-[11px] text-zinc-100 truncate">
-                    {item.name || item.hostname || item.host || (isPending ? "Pending details" : "Unassigned")}
+                    {item.name || item.hostname || item.ip_address || (isPending ? "Pending details" : "Unassigned")}
                   </p>
                 </div>
               </div>

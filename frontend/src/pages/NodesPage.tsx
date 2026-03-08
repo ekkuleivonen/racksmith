@@ -1,19 +1,13 @@
-import { useEffect } from "react";
 import { NavLink } from "react-router-dom";
 import { Plus } from "lucide-react";
-import { useNodesStore } from "@/stores/nodes";
+import { useNodes } from "@/hooks/queries";
 import { usePingStore } from "@/stores/ping";
 import { nodeStatusKey } from "@/lib/ssh";
 import { cn } from "@/lib/utils";
 
 export function NodesPage() {
-  const nodes = useNodesStore((s) => s.nodes);
-  const load = useNodesStore((s) => s.load);
+  const { data: nodes = [] } = useNodes();
   const pingStatuses = usePingStore((s) => s.statuses);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
 
   return (
     <div className="flex-1 min-h-0 overflow-auto p-6">
@@ -23,7 +17,7 @@ export function NodesPage() {
             <div>
               <h1 className="text-zinc-100 font-semibold">Nodes</h1>
               <p className="text-xs text-zinc-500 mt-0.5">
-                Hardware machines managed by Racksmith. Add host details for SSH and Ansible.
+                Hardware machines managed by Racksmith. Add IP address for SSH and Ansible.
               </p>
             </div>
             <NavLink
@@ -84,11 +78,11 @@ export function NodesPage() {
                     />
                     <div className="min-w-0 flex-1">
                       <p className="text-zinc-100 font-medium truncate">
-                        {node.name || node.hostname || node.host || node.id}
+                        {node.name || node.hostname || node.ip_address || node.id}
                       </p>
-                      {node.host ? (
+                      {node.ip_address ? (
                         <p className="text-xs text-zinc-500 truncate">
-                          {node.host}
+                          {node.ip_address}
                           {node.ssh_user ? ` (${node.ssh_user})` : ""}
                         </p>
                       ) : null}

@@ -25,8 +25,7 @@ import {
   updateNode,
   type NodeInput,
 } from "@/lib/nodes";
-import { useNodesStore } from "@/stores/nodes";
-import { useRackStore } from "@/stores/racks";
+import { useNodes } from "@/hooks/queries";
 import { listRacks } from "@/lib/racks";
 
 function makePendingNode(zone: ZoneSelection): PendingNode {
@@ -35,7 +34,7 @@ function makePendingNode(zone: ZoneSelection): PendingNode {
     id: `pending-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     hostname: "",
     name: "",
-    host: "",
+    ip_address: "",
     managed: true,
     placement: "rack",
     position_u_start: bottomU,
@@ -51,7 +50,7 @@ function makePendingNode(zone: ZoneSelection): PendingNode {
 function pendingToNodeInput(pending: PendingNode, rackSlug: string): NodeInput {
   return {
     name: pending.name,
-    host: pending.host,
+    ip_address: pending.ip_address,
     ssh_user: pending.ssh_user,
     ssh_port: pending.ssh_port,
     managed: pending.managed,
@@ -74,7 +73,7 @@ function layoutNodeToNodeInput(
 ): NodeInput {
   return {
     name: node.name,
-    host: node.host,
+    ip_address: node.ip_address,
     ssh_user: node.ssh_user,
     ssh_port: node.ssh_port,
     managed: node.managed,
@@ -114,9 +113,7 @@ export function RackPage() {
   const [frameControlsVisible, setFrameControlsVisible] = useState(false);
   const [editingName, setEditingName] = useState(false);
 
-  const nodesFromStore = useNodesStore((s) => s.nodes);
-  const loadNodes = useNodesStore((s) => s.load);
-  const loadRacks = useRackStore((s) => s.load);
+  const { data: nodesFromStore = [] } = useNodes();
 
   const rack = layout;
 
@@ -195,10 +192,6 @@ export function RackPage() {
   useEffect(() => setFrameControlsVisible(false), [rackSlug]);
   useEffect(() => setEditingName(false), [rackSlug]);
 
-  useEffect(() => {
-    if (rackSlug) void loadNodes();
-  }, [rackSlug, loadNodes]);
-
   const ensureFrameDraftSaved = useCallback(async () => {
     if (!rack) return false;
     const frameChanged =
@@ -236,15 +229,13 @@ export function RackPage() {
         }),
       );
       await loadRack();
-      await loadNodes();
-      await loadRacks();
       toast.success("Nodes unassigned. You can now change the rack frame.");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to unassign nodes");
     } finally {
       setSaving(false);
     }
-  }, [ensureFrameDraftSaved, layoutNodes, loadRack, loadNodes, loadRacks, rack, rackSlug]);
+  }, [ensureFrameDraftSaved, layoutNodes, loadRack, rack, rackSlug]);
 
   const handlePlaceUnplacedNode = useCallback(
     async (
@@ -264,7 +255,7 @@ export function RackPage() {
         const { node } = await getNode(nodeId);
         await updateNode(nodeId, {
           name: node.name ?? "",
-          host: node.host ?? "",
+          ip_address: node.ip_address ?? "",
           ssh_user: node.ssh_user ?? "",
           ssh_port: node.ssh_port ?? 22,
           managed: node.managed ?? true,
@@ -281,8 +272,6 @@ export function RackPage() {
           },
         });
         await loadRack();
-        await loadNodes();
-        await loadRacks();
         toast.success("Node placed on rack");
       } catch (error) {
         toast.error(error instanceof Error ? error.message : "Failed to place node");
@@ -290,7 +279,7 @@ export function RackPage() {
         setSaving(false);
       }
     },
-    [ensureFrameDraftSaved, loadRack, loadNodes, loadRacks, rack, rackSlug],
+    [ensureFrameDraftSaved, loadRack, rack, rackSlug],
   );
 
   const handleUnplaceNode = useCallback(
@@ -304,8 +293,6 @@ export function RackPage() {
         const input = layoutNodeToNodeInput(existing, rackSlug);
         await updateNode(nodeId, { ...input, placement: null });
         await loadRack();
-        await loadNodes();
-        await loadRacks();
         toast.success("Node unplaced");
       } catch (error) {
         toast.error(error instanceof Error ? error.message : "Failed to unplace node");
@@ -313,7 +300,7 @@ export function RackPage() {
         setSaving(false);
       }
     },
-    [ensureFrameDraftSaved, layoutNodes, loadRack, loadNodes, loadRacks, rack, rackSlug],
+    [ensureFrameDraftSaved, layoutNodes, loadRack, rack, rackSlug],
   );
 
   const onSelectZone = useCallback((zone: ZoneSelection) => {
@@ -355,14 +342,13 @@ export function RackPage() {
           },
         });
         await loadRack();
-        await loadRacks();
       } catch (error) {
         toast.error(error instanceof Error ? error.message : "Failed to update item");
       } finally {
         setSaving(false);
       }
     },
-    [ensureFrameDraftSaved, layoutNodes, loadRack, loadRacks, rack, rackSlug],
+    [ensureFrameDraftSaved, layoutNodes, loadRack, rack, rackSlug],
   );
 
   const persistRackFrame = useCallback(
@@ -640,7 +626,6 @@ export function RackPage() {
               if (!frameSaved) return;
               const { node } = await createNode(pendingToNodeInput(pending, rackSlug));
               await loadRack(node.id);
-              await loadRacks();
               setPending(null);
               toast.success("Item added");
             } catch (error) {
@@ -654,7 +639,7 @@ export function RackPage() {
             id: n.id,
             name: n.name ?? "",
             hostname: n.hostname ?? "",
-            host: n.host ?? "",
+            ip_address: n.ip_address ?? "",
           }))}
           onPlaceUnplacedNode={handlePlaceUnplacedNode}
           onUnplaceNode={handleUnplaceNode}
@@ -679,7 +664,6 @@ export function RackPage() {
                     try {
                       await refreshNode(selectedItem.id);
                       await loadRack();
-                      await loadRacks();
                       toast.success("Item rediscovered");
                     } catch (error) {
                       toast.error(error instanceof Error ? error.message : "Failed to rediscover item");
@@ -719,7 +703,6 @@ export function RackPage() {
               } : null;
               await updateNode(idToKeep, { ...input, placement });
               await loadRack(idToKeep);
-              await loadRacks();
               toast.success("Item updated");
             } catch (error) {
               toast.error(error instanceof Error ? error.message : "Failed to update item");
@@ -733,7 +716,6 @@ export function RackPage() {
             try {
               await deleteNode(selectedItem.id);
               await loadRack();
-              await loadRacks();
               setSelectedItemId(null);
               toast.success("Item deleted");
             } catch (error) {

@@ -11,7 +11,7 @@ class NodeConfig(BaseModel):
     id: str = Field(description="Stable machine-generated identifier, matches filename stem")
     hostname: str = Field(default="", description="Device hostname from SSH probe")
     name: str = Field(default="", description="Display name for the node")
-    host: str = Field(default="", description="IP or hostname for SSH/Ansible")
+    ip_address: str = Field(default="", description="IP address for SSH/Ansible")
     ssh_user: str = Field(default="", description="SSH username")
     ssh_port: int = Field(default=22, description="SSH port")
     managed: bool = Field(default=True, description="Whether this node is managed (SSH, Ansible)")

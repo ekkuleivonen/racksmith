@@ -7,7 +7,7 @@ function toItemLike(item: RackLayoutNode) {
   return {
     managed: item.managed ?? true,
     name: item.name,
-    host: item.host ?? "",
+    ip_address: item.ip_address ?? "",
     ssh_user: item.ssh_user ?? "",
     ssh_port: item.ssh_port ?? 22,
     labels: item.labels ?? [],
@@ -49,7 +49,7 @@ export function RackEditPanel({
             {pending.position_col_count > 1 ? "s" : ""}
           </p>
           <p className="text-[11px] text-zinc-500">
-            Place the item now. Add host details whenever you are ready.
+            Place the item now. Add IP address whenever you are ready.
           </p>
           <Separator />
           <ItemHardwareFields item={toItemLike(pending)} onChange={onPendingChange} />

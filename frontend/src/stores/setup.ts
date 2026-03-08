@@ -10,11 +10,7 @@ import {
   type SetupStatus,
 } from "@/lib/setup";
 import { fetchMachinePublicKey, generateMachineKey } from "@/lib/ssh";
-import { useCodeStore } from "./code";
-import { useRackStore } from "./racks";
-import { useNodesStore } from "./nodes";
-import { useGroupsStore } from "./groups";
-import { useStackStore } from "./stacks";
+import { queryClient } from "@/lib/queryClient";
 
 type SetupStore = {
   status: SetupStatus | null;
@@ -69,12 +65,7 @@ export const useSetupStore = create<SetupStore>((set, get) => ({
         listLocalRepos().catch(() => []),
       ]);
       set({ status: nextStatus, localRepos: nextLocalRepos });
-      await Promise.all([
-        useRackStore.getState().load(),
-        useNodesStore.getState().load(),
-        useGroupsStore.getState().load(),
-        useStackStore.getState().load(),
-      ]);
+      await queryClient.refetchQueries();
       toast.success(`Switched to ${owner}/${repo}`);
     } catch (error) {
       toast.error(
@@ -94,13 +85,7 @@ export const useSetupStore = create<SetupStore>((set, get) => ({
         listLocalRepos().catch(() => []),
       ]);
       set({ status: nextStatus, localRepos: nextLocalRepos });
-      await Promise.all([
-        useRackStore.getState().load(),
-        useNodesStore.getState().load(),
-        useGroupsStore.getState().load(),
-        useStackStore.getState().load(),
-        useCodeStore.getState().loadTree(),
-      ]);
+      await queryClient.refetchQueries();
       toast.success("Repo synced");
     } catch (error) {
       toast.error(
@@ -119,12 +104,7 @@ export const useSetupStore = create<SetupStore>((set, get) => ({
         listLocalRepos().catch(() => []),
       ]);
       set({ status: nextStatus, localRepos: nextLocalRepos });
-      await Promise.all([
-        useRackStore.getState().load(),
-        useNodesStore.getState().load(),
-        useGroupsStore.getState().load(),
-        useStackStore.getState().load(),
-      ]);
+      await queryClient.refetchQueries();
       toast.success(`Dropped ${owner}/${repo}`);
     } catch (error) {
       toast.error(

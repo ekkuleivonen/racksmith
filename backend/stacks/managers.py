@@ -286,7 +286,7 @@ class StackManager:
         except FileNotFoundError:
             return StackResolveTargetsResponse(hosts=[])
 
-        managed = [n for n in all_nodes if n.managed and n.host and n.ssh_user]
+        managed = [n for n in all_nodes if n.managed and n.ip_address and n.ssh_user]
         filtered = managed
 
         wanted_groups = {g.strip() for g in targets.groups if g.strip()}

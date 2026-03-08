@@ -6,14 +6,14 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { ItemHardwareFields } from "@/components/racks/item-hardware-fields";
 import { createNode, refreshNode, type NodeInput } from "@/lib/nodes";
-import { useNodesStore } from "@/stores/nodes";
+import { useNodes } from "@/hooks/queries";
 import { usePingStore } from "@/stores/ping";
 import { nodeStatusKey } from "@/lib/ssh";
 import { cn } from "@/lib/utils";
 
 const emptyForm: NodeInput = {
   name: "",
-  host: "",
+  ip_address: "",
   ssh_user: "",
   ssh_port: 22,
   managed: true,
@@ -28,8 +28,7 @@ export function NodesOnboardingPage() {
   const [saving, setSaving] = useState(false);
   const [showRackPrompt, setShowRackPrompt] = useState(false);
 
-  const nodes = useNodesStore((s) => s.nodes);
-  const loadNodes = useNodesStore((s) => s.load);
+  const { data: nodes = [] } = useNodes();
   const pingStatuses = usePingStore((s) => s.statuses);
 
   const resetForm = useCallback(() => {
@@ -51,16 +50,15 @@ export function NodesOnboardingPage() {
       } catch {
         // Node created; probe failed (e.g. SSH not ready). User can rediscover later.
       }
-      await loadNodes();
       const displayName =
-        result.node.name || result.node.hostname || result.node.host || result.node.id || "node";
+        result.node.name || result.node.hostname || result.node.ip_address || result.node.id || "node";
       toast.success(`Added ${displayName}`);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to add node");
     } finally {
       setSaving(false);
     }
-  }, [form, loadNodes, resetForm]);
+  }, [form, resetForm]);
 
   const handleDone = useCallback(() => {
     if (nodes.length === 0) {
@@ -140,7 +138,7 @@ export function NodesOnboardingPage() {
                       }
                     />
                     <span className="text-xs text-zinc-100 truncate min-w-0">
-                      {node.name || node.hostname || node.host || node.id}
+                      {node.name || node.hostname || node.ip_address || node.id}
                     </span>
                     {node.labels && node.labels.length > 0 && (
                       <div className="flex gap-1 shrink-0 ml-auto">
@@ -170,7 +168,7 @@ export function NodesOnboardingPage() {
             ...form,
             managed: true,
             labels: form.labels ?? [],
-            host: form.host ?? "",
+            ip_address: form.ip_address ?? "",
             ssh_user: form.ssh_user ?? "",
             ssh_port: form.ssh_port ?? 22,
           }}

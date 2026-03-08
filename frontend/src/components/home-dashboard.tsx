@@ -1,28 +1,12 @@
-import { useEffect } from "react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { useNodesStore } from "@/stores/nodes";
-import { useRackStore } from "@/stores/racks";
-import { useGroupsStore } from "@/stores/groups";
-import { useStackStore } from "@/stores/stacks";
-export function HomeDashboard() {
-  const nodes = useNodesStore((s) => s.nodes);
-  const rackEntries = useRackStore((s) => s.rackEntries);
-  const groups = useGroupsStore((s) => s.groups);
-  const stacks = useStackStore((s) => s.stacks);
-  const loadNodes = useNodesStore((s) => s.load);
-  const loadRacks = useRackStore((s) => s.load);
-  const loadGroups = useGroupsStore((s) => s.load);
-  const loadStacks = useStackStore((s) => s.load);
+import { useNodes, useRackEntries, useGroups, useStacks } from "@/hooks/queries";
 
-  useEffect(() => {
-    void Promise.all([
-      loadNodes(),
-      loadRacks(),
-      loadGroups(),
-      loadStacks(),
-    ]);
-  }, [loadNodes, loadRacks, loadGroups, loadStacks]);
+export function HomeDashboard() {
+  const { data: nodes = [] } = useNodes();
+  const { data: rackEntries = [] } = useRackEntries();
+  const { data: groups = [] } = useGroups();
+  const { data: stacks = [] } = useStacks();
 
   return (
     <div className="flex-1 min-h-0 overflow-auto p-6">

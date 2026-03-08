@@ -1,13 +1,13 @@
 import { useLocation, NavLink } from "react-router-dom";
 import { Layers, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useStackStore } from "@/stores/stacks";
+import { useStacks } from "@/hooks/queries";
 
 export function SidebarStacksSection() {
   const location = useLocation();
   const pathname = location.pathname;
 
-  const stacks = useStackStore((s) => s.stacks);
+  const { data: stacks = [] } = useStacks();
 
   return (
     <div className="space-y-1">

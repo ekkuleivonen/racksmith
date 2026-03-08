@@ -7,7 +7,7 @@ import { createNode, refreshNode, type NodeInput } from "@/lib/nodes";
 
 const defaultForm: NodeInput = {
   name: "",
-  host: "",
+  ip_address: "",
   ssh_user: "",
   ssh_port: 22,
   managed: true,
@@ -45,7 +45,7 @@ export function NodeCreatePage() {
   const itemLike = {
     managed: form.managed ?? true,
     name: form.name ?? "",
-    host: form.host ?? "",
+    ip_address: form.ip_address ?? "",
     ssh_user: form.ssh_user ?? "",
     ssh_port: form.ssh_port ?? 22,
     labels: form.labels ?? [],

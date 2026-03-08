@@ -1,16 +1,10 @@
-import { useEffect } from "react";
 import { NavLink } from "react-router-dom";
 import { Plus } from "lucide-react";
-import { useGroupsStore } from "@/stores/groups";
+import { useGroups } from "@/hooks/queries";
 import { cn } from "@/lib/utils";
 
 export function GroupsPage() {
-  const groups = useGroupsStore((s) => s.groups);
-  const load = useGroupsStore((s) => s.load);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
+  const { data: groups = [] } = useGroups();
 
   return (
     <div className="flex-1 min-h-0 overflow-auto p-6">

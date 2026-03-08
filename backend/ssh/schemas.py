@@ -12,7 +12,7 @@ class CommandHistoryEntry(BaseModel):
     created_at: str
     node_id: str
     node_name: str
-    host: str
+    ip_address: str
 
 
 class PingStatusTarget(BaseModel):

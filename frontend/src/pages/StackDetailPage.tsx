@@ -14,11 +14,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { formatRelativeTime } from "@/lib/format";
-import { useStackStore } from "@/stores/stacks";
-import { useRackStore } from "@/stores/racks";
-import { useCodeStore } from "@/stores/code";
-import { useGroupsStore } from "@/stores/groups";
-import { useNodesStore } from "@/stores/nodes";
+import { useGroups, useNodes } from "@/hooks/queries";
 import {
   createStackRun,
   deleteStack,
@@ -149,10 +145,8 @@ export function StackDetailPage() {
   const [running, setRunning] = useState(false);
   const [runtimeDialogOpen, setRuntimeDialogOpen] = useState(false);
 
-  const groups = useGroupsStore((s) => s.groups);
-  const nodes = useNodesStore((s) => s.nodes);
-  const loadGroups = useGroupsStore((s) => s.load);
-  const loadNodes = useNodesStore((s) => s.load);
+  const { data: groups = [] } = useGroups();
+  const { data: nodes = [] } = useNodes();
 
   const load = useCallback(async () => {
     if (!stackId) return;
@@ -176,13 +170,13 @@ export function StackDetailPage() {
       setViewingRunId(
         activeRun?.id ?? runsResult.runs[0]?.id ?? null,
       );
-      await Promise.all([loadGroups(), loadNodes()]);
+      // groups and nodes loaded by their query hooks
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to load stack");
     } finally {
       setLoading(false);
     }
-  }, [stackId, loadGroups, loadNodes]);
+  }, [stackId]);
 
   useEffect(() => {
     void load();
@@ -208,10 +202,10 @@ export function StackDetailPage() {
   const nodeFilterOptions = useMemo(
     () =>
       nodes
-        .filter((n) => n.managed && n.host && n.ssh_user)
+        .filter((n) => n.managed && n.ip_address && n.ssh_user)
         .map((n) => ({
           value: n.id,
-          label: n.name || n.hostname || n.host || n.id,
+          label: n.name || n.hostname || n.ip_address || n.id,
           group: (n.groups ?? [])[0],
         })),
     [nodes],
@@ -511,11 +505,6 @@ export function StackDetailPage() {
                     roles: result.stack.role_entries,
                   });
                   setActions(result.stack.actions);
-                  await Promise.all([
-                    useStackStore.getState().load(),
-                    useRackStore.getState().load(),
-                    useCodeStore.getState().refreshStatuses(),
-                  ]);
                   if (result.stack.id !== stackId) {
                     navigate(`/stacks/${result.stack.id}`, { replace: true });
                   }
@@ -531,11 +520,6 @@ export function StackDetailPage() {
                 setSaving(true);
                 try {
                   await deleteStack(stackId);
-                  await Promise.all([
-                    useStackStore.getState().load(),
-                    useRackStore.getState().load(),
-                    useCodeStore.getState().refreshStatuses(),
-                  ]);
                   toast.success("Stack deleted");
                   navigate("/stacks", { replace: true });
                 } catch (error) {

@@ -15,7 +15,7 @@ class NodePlacement(BaseModel):
 
 class NodeInput(BaseModel):
     name: str = ""
-    host: str = ""
+    ip_address: str = ""
     ssh_user: str = ""
     ssh_port: int = 22
     managed: bool = True
@@ -36,7 +36,7 @@ class NodeSummary(BaseModel):
     id: str
     name: str
     hostname: str = ""
-    host: str
+    ip_address: str
     managed: bool
     groups: list[str]
     labels: list[str]
