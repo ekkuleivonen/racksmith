@@ -19,7 +19,7 @@ type ItemLike = {
 interface ItemHardwareFieldsProps {
   item: ItemLike;
   onChange: (patch: Partial<ItemLike>) => void;
-  /** Onboarding mode: hide display name, force managed, labels after connection */
+  /** Onboarding mode: simplified layout, force managed, labels after connection */
   onboarding?: boolean;
 }
 
@@ -176,6 +176,12 @@ export function ItemHardwareFields({
   if (onboarding) {
     return (
       <div className="space-y-2">
+        <Input
+          className="h-8 text-xs"
+          value={item.name}
+          onChange={(e) => onChange({ name: e.target.value })}
+          placeholder="Optional display name"
+        />
         {connectionSection}
         {labelsSection}
       </div>
