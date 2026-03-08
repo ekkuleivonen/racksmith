@@ -12,6 +12,7 @@ from pathlib import Path
 import yaml
 import aiosqlite
 import settings
+from ssh.misc import _racksmith_ssh_dir
 from stacks.managers import (
     ACTIONS_DIR,
     INVENTORY_DIR,
@@ -23,6 +24,21 @@ from stacks.managers import (
 
 def _now_iso() -> str:
     return datetime.now(UTC).isoformat()
+
+
+def _ansible_env(ansible_config_path: str, actions_dir: Path) -> dict[str, str]:
+    env = os.environ.copy()
+    env["ANSIBLE_CONFIG"] = ansible_config_path
+    env["ANSIBLE_ROLES_PATH"] = str(actions_dir)
+    if settings.SSH_DISABLE_HOST_KEY_CHECK:
+        env["ANSIBLE_HOST_KEY_CHECKING"] = "False"
+    env["ANSIBLE_FORCE_COLOR"] = "True"
+    env["PY_COLORS"] = "1"
+    env["TERM"] = env.get("TERM") or "xterm-256color"
+    priv_key = _racksmith_ssh_dir() / "id_ed25519"
+    if priv_key.is_file():
+        env["ANSIBLE_PRIVATE_KEY_FILE"] = str(priv_key)
+    return env
 
 
 async def execute_run(
@@ -91,14 +107,7 @@ async def execute_run(
     output = command_line
 
     try:
-        env = os.environ.copy()
-        env["ANSIBLE_CONFIG"] = ansible_config_path
-        env["ANSIBLE_ROLES_PATH"] = str(actions_dir)
-        if settings.SSH_DISABLE_HOST_KEY_CHECK:
-            env["ANSIBLE_HOST_KEY_CHECKING"] = "False"
-        env["ANSIBLE_FORCE_COLOR"] = "True"
-        env["PY_COLORS"] = "1"
-        env["TERM"] = env.get("TERM") or "xterm-256color"
+        env = _ansible_env(ansible_config_path, actions_dir)
 
         process = await asyncio.create_subprocess_exec(
             *command,
@@ -240,14 +249,7 @@ async def execute_action_run(
     output = command_line
 
     try:
-        env = os.environ.copy()
-        env["ANSIBLE_CONFIG"] = ansible_config_path
-        env["ANSIBLE_ROLES_PATH"] = str(actions_dir)
-        if settings.SSH_DISABLE_HOST_KEY_CHECK:
-            env["ANSIBLE_HOST_KEY_CHECKING"] = "False"
-        env["ANSIBLE_FORCE_COLOR"] = "True"
-        env["PY_COLORS"] = "1"
-        env["TERM"] = env.get("TERM") or "xterm-256color"
+        env = _ansible_env(ansible_config_path, actions_dir)
 
         process = await asyncio.create_subprocess_exec(
             *command,
