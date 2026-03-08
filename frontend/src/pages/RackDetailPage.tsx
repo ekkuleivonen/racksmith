@@ -32,7 +32,8 @@ import { listRacks } from "@/lib/racks";
 function makePendingNode(zone: ZoneSelection): PendingNode {
   const bottomU = zone.startU - zone.heightU + 1;
   return {
-    slug: `pending-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    id: `pending-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    hostname: "",
     name: "",
     host: "",
     managed: true,
@@ -98,11 +99,11 @@ export function RackPage() {
   const { rackSlug = "" } = useParams();
   const location = useLocation();
   const navigate = useNavigate();
-  const highlightedNodeSlug = new URLSearchParams(location.search).get("nodeSlug");
+  const highlightedNodeId = new URLSearchParams(location.search).get("nodeId");
 
   const [layout, setLayout] = useState<RackLayout | null>(null);
   const [layoutNodes, setLayoutNodes] = useState<ReturnType<typeof nodeToRackLayoutNode>[]>([]);
-  const [selectedItemSlug, setSelectedItemSlug] = useState<string | null>(null);
+  const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
   const [pending, setPending] = useState<PendingNode | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -127,8 +128,8 @@ export function RackPage() {
   }, [nodesFromStore, rackSlug]);
 
   const selectedItem = useMemo(
-    () => layoutNodes.find((item) => item.slug === selectedItemSlug) ?? null,
-    [layoutNodes, selectedItemSlug],
+    () => layoutNodes.find((item) => item.id === selectedItemId) ?? null,
+    [layoutNodes, selectedItemId],
   );
   const managedItemCount = useMemo(
     () => layoutNodes.filter((item) => item.managed).length,
@@ -136,7 +137,7 @@ export function RackPage() {
   );
   const unmanagedItemCount = layoutNodes.length - managedItemCount;
 
-  const loadRack = useCallback(async (preserveSlug?: string) => {
+  const loadRack = useCallback(async (preserveId?: string) => {
     if (!rackSlug) {
       setLayout(null);
       setLayoutNodes([]);
@@ -151,13 +152,13 @@ export function RackPage() {
     setRackColsDraft(data.rack_cols);
     const nodes = data.nodes.map(nodeToRackLayoutNode);
     setLayoutNodes(nodes);
-    setSelectedItemSlug((prev) => {
-      const slugToKeep = preserveSlug ?? prev;
-      if (slugToKeep && nodes.some((n) => n.slug === slugToKeep)) return slugToKeep;
-      if (highlightedNodeSlug && nodes.some((n) => n.slug === highlightedNodeSlug)) return highlightedNodeSlug;
+    setSelectedItemId((prev) => {
+      const idToKeep = preserveId ?? prev;
+      if (idToKeep && nodes.some((n) => n.id === idToKeep)) return idToKeep;
+      if (highlightedNodeId && nodes.some((n) => n.id === highlightedNodeId)) return highlightedNodeId;
       return null;
     });
-  }, [highlightedNodeSlug, rackSlug]);
+  }, [highlightedNodeId, rackSlug]);
 
   useEffect(() => {
     let active = true;
@@ -178,17 +179,17 @@ export function RackPage() {
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
-    const current = params.get("nodeSlug");
-    if (selectedItemSlug) {
-      if (current === selectedItemSlug) return;
-      params.set("nodeSlug", selectedItemSlug);
+    const current = params.get("nodeId");
+    if (selectedItemId) {
+      if (current === selectedItemId) return;
+      params.set("nodeId", selectedItemId);
     } else {
       if (!current) return;
-      params.delete("nodeSlug");
+      params.delete("nodeId");
     }
     const nextSearch = params.toString();
     navigate({ pathname: location.pathname, search: nextSearch ? `?${nextSearch}` : "" }, { replace: true });
-  }, [location.pathname, location.search, navigate, selectedItemSlug]);
+  }, [location.pathname, location.search, navigate, selectedItemId]);
 
   useEffect(() => setPending(null), [rackSlug]);
   useEffect(() => setFrameControlsVisible(false), [rackSlug]);
@@ -231,7 +232,7 @@ export function RackPage() {
       await Promise.all(
         nodesOnRack.map((node) => {
           const input = layoutNodeToNodeInput(node, rackSlug);
-          return updateNode(node.slug, { ...input, placement: null });
+          return updateNode(node.id, { ...input, placement: null });
         }),
       );
       await loadRack();
@@ -247,7 +248,7 @@ export function RackPage() {
 
   const handlePlaceUnplacedNode = useCallback(
     async (
-      nodeSlug: string,
+      nodeId: string,
       position: {
         position_u_start: number;
         position_u_height: number;
@@ -260,8 +261,8 @@ export function RackPage() {
       try {
         const frameSaved = await ensureFrameDraftSaved();
         if (!frameSaved) return;
-        const { node } = await getNode(nodeSlug);
-        await updateNode(nodeSlug, {
+        const { node } = await getNode(nodeId);
+        await updateNode(nodeId, {
           name: node.name ?? "",
           host: node.host ?? "",
           ssh_user: node.ssh_user ?? "",
@@ -293,15 +294,15 @@ export function RackPage() {
   );
 
   const handleUnplaceNode = useCallback(
-    async (nodeSlug: string) => {
-      const existing = layoutNodes.find((n) => n.slug === nodeSlug);
+    async (nodeId: string) => {
+      const existing = layoutNodes.find((n) => n.id === nodeId);
       if (!existing || !rack) return;
       setSaving(true);
       try {
         const frameSaved = await ensureFrameDraftSaved();
         if (!frameSaved) return;
         const input = layoutNodeToNodeInput(existing, rackSlug);
-        await updateNode(nodeSlug, { ...input, placement: null });
+        await updateNode(nodeId, { ...input, placement: null });
         await loadRack();
         await loadNodes();
         await loadRacks();
@@ -326,7 +327,7 @@ export function RackPage() {
 
   const updateItemPosition = useCallback(
     async (
-      slug: string,
+      itemId: string,
       position: {
         position_u_start: number;
         position_u_height: number;
@@ -335,7 +336,7 @@ export function RackPage() {
       },
     ) => {
       if (!rack) return;
-      const existing = layoutNodes.find((n) => n.slug === slug);
+      const existing = layoutNodes.find((n) => n.id === itemId);
       if (!existing) return;
 
       setSaving(true);
@@ -343,7 +344,7 @@ export function RackPage() {
         const frameSaved = await ensureFrameDraftSaved();
         if (!frameSaved) return;
         const input = layoutNodeToNodeInput(existing, rackSlug);
-        await updateNode(slug, {
+        await updateNode(itemId, {
           ...input,
           placement: {
             rack: rackSlug,
@@ -538,7 +539,7 @@ export function RackPage() {
           rackCols={rackColsDraft}
           rackName={rackNameDraft}
           items={layoutNodes}
-          selectedItemSlug={selectedItemSlug}
+          selectedItemId={selectedItemId}
           pending={pending}
           saving={saving}
           frameEditorSlot={
@@ -626,10 +627,10 @@ export function RackPage() {
             setRackColsDraft(cols);
           }}
           onRackNameChange={setRackNameDraft}
-          onSelectItem={setSelectedItemSlug}
+          onSelectItem={setSelectedItemId}
           onSelectZone={onSelectZone}
-          onMoveItem={(slug, position) => void updateItemPosition(slug, position)}
-          onResizeItem={(slug, position) => void updateItemPosition(slug, position)}
+          onMoveItem={(itemId, position) => void updateItemPosition(itemId, position)}
+          onResizeItem={(itemId, position) => void updateItemPosition(itemId, position)}
           onPendingChange={(patch) => setPending((prev) => (prev ? { ...prev, ...patch } : prev))}
           onPlacePending={async () => {
             if (!pending) return;
@@ -638,7 +639,7 @@ export function RackPage() {
               const frameSaved = await ensureFrameDraftSaved();
               if (!frameSaved) return;
               const { node } = await createNode(pendingToNodeInput(pending, rackSlug));
-              await loadRack(node.slug);
+              await loadRack(node.id);
               await loadRacks();
               setPending(null);
               toast.success("Item added");
@@ -650,8 +651,9 @@ export function RackPage() {
           }}
           onCancelPending={() => setPending(null)}
           unplacedNodes={unplacedNodes.map((n) => ({
-            slug: n.slug,
+            id: n.id,
             name: n.name ?? "",
+            hostname: n.hostname ?? "",
             host: n.host ?? "",
           }))}
           onPlaceUnplacedNode={handlePlaceUnplacedNode}
@@ -659,7 +661,7 @@ export function RackPage() {
           onSelectedItemChange={(patch) => {
             if (!selectedItem) return;
             setLayoutNodes((prev) =>
-              prev.map((item) => (item.slug === selectedItem.slug ? { ...item, ...patch } : item)),
+              prev.map((item) => (item.id === selectedItem.id ? { ...item, ...patch } : item)),
             );
           }}
           selectedItemActionSlot={
@@ -675,7 +677,7 @@ export function RackPage() {
                     onClick={async () => {
                     setSaving(true);
                     try {
-                      await refreshNode(selectedItem.slug);
+                      await refreshNode(selectedItem.id);
                       await loadRack();
                       await loadRacks();
                       toast.success("Item rediscovered");
@@ -695,7 +697,7 @@ export function RackPage() {
                   disabled={saving}
                   aria-label="Open node page"
                   title="Open node page"
-                  onClick={() => navigate(`/nodes/${selectedItem.slug}`)}
+                  onClick={() => navigate(`/nodes/${selectedItem.id}`)}
                 >
                   <ExternalLink className="size-3.5" />
                 </Button>
@@ -704,7 +706,7 @@ export function RackPage() {
           }
           onSaveSelected={async () => {
             if (!selectedItem) return;
-            const slugToKeep = selectedItem.slug;
+            const idToKeep = selectedItem.id;
             setSaving(true);
             try {
               const input = layoutNodeToNodeInput(selectedItem, rackSlug);
@@ -715,8 +717,8 @@ export function RackPage() {
                 col_start: selectedItem.position_col_start,
                 col_count: selectedItem.position_col_count,
               } : null;
-              await updateNode(slugToKeep, { ...input, placement });
-              await loadRack(slugToKeep);
+              await updateNode(idToKeep, { ...input, placement });
+              await loadRack(idToKeep);
               await loadRacks();
               toast.success("Item updated");
             } catch (error) {
@@ -729,10 +731,10 @@ export function RackPage() {
             if (!selectedItem) return;
             setSaving(true);
             try {
-              await deleteNode(selectedItem.slug);
+              await deleteNode(selectedItem.id);
               await loadRack();
               await loadRacks();
-              setSelectedItemSlug(null);
+              setSelectedItemId(null);
               toast.success("Item deleted");
             } catch (error) {
               toast.error(error instanceof Error ? error.message : "Failed to delete item");

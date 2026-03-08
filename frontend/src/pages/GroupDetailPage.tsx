@@ -85,11 +85,13 @@ export function GroupDetailPage() {
             <div className="space-y-1">
               {group.nodes.map((node) => (
                 <NavLink
-                  key={node.slug}
-                  to={`/nodes/${node.slug}`}
+                  key={node.id}
+                  to={`/nodes/${node.id}`}
                   className="block border border-zinc-800 bg-zinc-900/30 p-3 hover:border-zinc-700 transition-colors"
                 >
-                  <p className="text-zinc-100 font-medium">{node.name || node.host || node.slug}</p>
+                  <p className="text-zinc-100 font-medium">
+                    {node.name || node.hostname || node.host || node.id}
+                  </p>
                   <p className="text-xs text-zinc-500">{node.host}</p>
                 </NavLink>
               ))}

@@ -29,12 +29,12 @@ export function NodeCreatePage() {
         name: form.name?.trim() ?? "",
       });
       try {
-        await refreshNode(result.node.slug);
+        await refreshNode(result.node.id);
       } catch {
         // Node created; probe failed (e.g. SSH not ready). User can rediscover later.
       }
       toast.success("Node created");
-      navigate(`/nodes/${result.node.slug}`);
+      navigate(`/nodes/${result.node.id}`);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to create node");
     } finally {

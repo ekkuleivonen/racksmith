@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-import re
+import secrets
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -23,9 +23,12 @@ def _now_iso() -> str:
     return datetime.now(UTC).isoformat()
 
 
-def _slugify(name: str) -> str:
-    slug = re.sub(r"[^a-z0-9]+", "-", name.strip().lower()).strip("-")
-    return slug or "node"
+def _generate_node_id(repo_path: Path) -> str:
+    for _ in range(100):
+        candidate = f"n-{secrets.token_hex(3)}"
+        if not (repo_path / NODES_DIR / f"{candidate}.yaml").exists():
+            return candidate
+    raise RuntimeError("Failed to generate unique node ID")
 
 
 def _os_to_family(os_name: str) -> str | None:
@@ -40,7 +43,7 @@ def _os_to_family(os_name: str) -> str | None:
     return None
 
 
-def _node_from_yaml(slug: str, data: dict) -> Node:
+def _node_from_yaml(node_id: str, data: dict) -> Node:
     """Build Node from YAML dict (flat placement fields)."""
     placement = None
     if data.get("rack"):
@@ -52,7 +55,8 @@ def _node_from_yaml(slug: str, data: dict) -> Node:
             "col_count": data.get("position_col_count", 1),
         }
     return Node(
-        slug=slug,
+        id=node_id,
+        hostname=data.get("hostname", ""),
         name=data.get("name", ""),
         host=data.get("host", ""),
         ssh_user=data.get("ssh_user", ""),
@@ -70,7 +74,8 @@ def _node_from_yaml(slug: str, data: dict) -> Node:
 def _node_to_yaml(node: Node) -> dict:
     """Serialize Node to YAML dict (flat placement)."""
     out: dict = {
-        "slug": node.slug,
+        "id": node.id,
+        "hostname": node.hostname,
         "name": node.name,
         "host": node.host,
         "ssh_user": node.ssh_user,
@@ -97,8 +102,8 @@ class NodeManager:
     def _nodes_dir(self, repo_path: Path) -> Path:
         return repo_path / NODES_DIR
 
-    def _node_file(self, repo_path: Path, slug: str) -> Path:
-        return self._nodes_dir(repo_path) / f"{slug}.yaml"
+    def _node_file(self, repo_path: Path, node_id: str) -> Path:
+        return self._nodes_dir(repo_path) / f"{node_id}.yaml"
 
     def _iter_node_files(self, repo_path: Path) -> list[Path]:
         nodes_dir = self._nodes_dir(repo_path)
@@ -115,8 +120,8 @@ class NodeManager:
         for path in self._iter_node_files(repo_path):
             try:
                 data = yaml.safe_load(path.read_text(encoding="utf-8"))
-                slug = path.stem
-                nodes.append(_node_from_yaml(slug, data or {}))
+                node_id = path.stem
+                nodes.append(_node_from_yaml(node_id, data or {}))
             except (OSError, yaml.YAMLError):
                 continue
 
@@ -126,25 +131,25 @@ class NodeManager:
         for node in nodes:
             if not node.managed or not node.host or not node.ssh_user:
                 continue
-            hosts[node.slug] = {
+            hosts[node.id] = {
                 "ansible_host": node.host,
                 "ansible_user": node.ssh_user,
                 "ansible_port": node.ssh_port,
                 "ansible_python_interpreter": "auto_silent",
             }
             if settings.SSH_DISABLE_HOST_KEY_CHECK:
-                hosts[node.slug]["ansible_ssh_common_args"] = (
+                hosts[node.id]["ansible_ssh_common_args"] = (
                     "-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
                 )
             if node.os_family:
-                hosts[node.slug]["os_family"] = node.os_family
+                hosts[node.id]["os_family"] = node.os_family
             if node.labels:
-                hosts[node.slug]["labels"] = node.labels
+                hosts[node.id]["labels"] = node.labels
 
             for group in node.groups:
                 if group not in children:
                     children[group] = {"hosts": {}}
-                children[group]["hosts"][node.slug] = {}
+                children[group]["hosts"][node.id] = {}
 
         inventory = {"all": {"hosts": hosts}}
         if children:
@@ -165,39 +170,33 @@ class NodeManager:
         for path in self._iter_node_files(repo_path):
             try:
                 data = yaml.safe_load(path.read_text(encoding="utf-8"))
-                slug = path.stem
-                nodes.append(_node_from_yaml(slug, data or {}))
+                node_id = path.stem
+                nodes.append(_node_from_yaml(node_id, data or {}))
             except (OSError, yaml.YAMLError):
                 continue
-        return sorted(nodes, key=lambda n: (n.name.lower(), n.slug))
+        return sorted(
+            nodes,
+            key=lambda n: (
+                (n.name or n.hostname or n.host or n.id).lower(),
+                n.id,
+            ),
+        )
 
-    def get_node(self, session, slug: str) -> Node:
+    def get_node(self, session, node_id: str) -> Node:
         repo_path = repos_manager.active_repo_path(session)
-        path = self._node_file(repo_path, slug)
+        path = self._node_file(repo_path, node_id)
         if not path.is_file():
-            raise KeyError(f"Node {slug} not found")
+            raise KeyError(f"Node {node_id} not found")
         data = yaml.safe_load(path.read_text(encoding="utf-8"))
-        return _node_from_yaml(slug, data or {})
-
-    def _next_slug(self, repo_path: Path, base: str) -> str:
-        if base == "node":
-            candidate = "node-1"
-            suffix = 2
-        else:
-            candidate = base
-            suffix = 2
-        while self._node_file(repo_path, candidate).exists():
-            candidate = f"{base}-{suffix}"
-            suffix += 1
-        return candidate
+        return _node_from_yaml(node_id, data or {})
 
     def create_node(self, session, data: NodeInput) -> Node:
         repo_path = repos_manager.active_repo_path(session)
-        base_slug = _slugify(data.name) or "node"
-        slug = self._next_slug(repo_path, base_slug)
+        node_id = _generate_node_id(repo_path)
 
         node = Node(
-            slug=slug,
+            id=node_id,
+            hostname="",
             name=data.name.strip(),
             host=data.host.strip(),
             ssh_user=data.ssh_user.strip(),
@@ -212,19 +211,20 @@ class NodeManager:
         )
         nodes_dir = self._nodes_dir(repo_path)
         nodes_dir.mkdir(parents=True, exist_ok=True)
-        self._node_file(repo_path, slug).write_text(
+        self._node_file(repo_path, node_id).write_text(
             yaml.safe_dump(_node_to_yaml(node), sort_keys=False), encoding="utf-8"
         )
         self._regenerate_inventory(repo_path)
         return node
 
-    def update_node(self, session, slug: str, data: NodeInput) -> Node:
+    def update_node(self, session, node_id: str, data: NodeInput) -> Node:
         repo_path = repos_manager.active_repo_path(session)
-        existing = self.get_node(session, slug)
+        existing = self.get_node(session, node_id)
         name = data.name.strip() if data.name and data.name.strip() else existing.name
         host = data.host.strip() if data.host and data.host.strip() else existing.host
         node = Node(
-            slug=slug,
+            id=node_id,
+            hostname=existing.hostname,
             name=name,
             host=host,
             ssh_user=data.ssh_user.strip(),
@@ -237,29 +237,30 @@ class NodeManager:
             placement=data.placement,
             mac_address=existing.mac_address,
         )
-        self._node_file(repo_path, slug).write_text(
+        self._node_file(repo_path, node_id).write_text(
             yaml.safe_dump(_node_to_yaml(node), sort_keys=False), encoding="utf-8"
         )
         self._regenerate_inventory(repo_path)
         return node
 
-    def delete_node(self, session, slug: str) -> None:
+    def delete_node(self, session, node_id: str) -> None:
         repo_path = repos_manager.active_repo_path(session)
-        path = self._node_file(repo_path, slug)
+        path = self._node_file(repo_path, node_id)
         if not path.is_file():
-            raise KeyError(f"Node {slug} not found")
+            raise KeyError(f"Node {node_id} not found")
         path.unlink(missing_ok=True)
         self._regenerate_inventory(repo_path)
 
-    async def probe_node(self, session, slug: str) -> Node:
-        node = self.get_node(session, slug)
+    async def probe_node(self, session, node_id: str) -> Node:
+        node = self.get_node(session, node_id)
         if not node.managed or not node.host or not node.ssh_user:
             raise ValueError("Node is not managed or missing host/ssh_user")
         probe = await probe_ssh_target(node.host, node.ssh_user, node.ssh_port)
         os_family = _os_to_family(probe.os) or node.os_family
         updated = Node(
-            slug=node.slug,
-            name=node.name or probe.name,
+            id=node.id,
+            hostname=probe.name,
+            name=node.name,
             host=probe.host,
             ssh_user=node.ssh_user,
             ssh_port=node.ssh_port,
@@ -272,17 +273,18 @@ class NodeManager:
             mac_address=probe.mac_address,
         )
         repo_path = repos_manager.active_repo_path(session)
-        self._node_file(repo_path, slug).write_text(
+        self._node_file(repo_path, node_id).write_text(
             yaml.safe_dump(_node_to_yaml(updated), sort_keys=False), encoding="utf-8"
         )
         self._regenerate_inventory(repo_path)
         return updated
 
     async def preview_node(self, data: NodeInput) -> Node:
-        """Probe without saving. Returns Node with slug='preview'."""
+        """Probe without saving. Returns Node with id='preview'."""
         if not data.managed or not data.host or not data.ssh_user:
             return Node(
-                slug="preview",
+                id="preview",
+                hostname="",
                 name=data.name,
                 host=data.host,
                 ssh_user=data.ssh_user,
@@ -298,7 +300,8 @@ class NodeManager:
         probe = await probe_ssh_target(data.host, data.ssh_user, data.ssh_port)
         os_family = _os_to_family(probe.os) or data.os_family
         return Node(
-            slug="preview",
+            id="preview",
+            hostname=probe.name,
             name=data.name or probe.name,
             host=probe.host,
             ssh_user=data.ssh_user,

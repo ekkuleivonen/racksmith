@@ -1,4 +1,4 @@
-"""Node config schema for nodes/<slug>.yaml."""
+"""Node config schema for nodes/<id>.yaml."""
 
 from __future__ import annotations
 
@@ -8,7 +8,8 @@ from pydantic import BaseModel, Field
 class NodeConfig(BaseModel):
     """Schema for a single machine/node definition."""
 
-    slug: str = Field(description="Human-readable identifier, matches filename stem")
+    id: str = Field(description="Stable machine-generated identifier, matches filename stem")
+    hostname: str = Field(default="", description="Device hostname from SSH probe")
     name: str = Field(default="", description="Display name for the node")
     host: str = Field(default="", description="IP or hostname for SSH/Ansible")
     ssh_user: str = Field(default="", description="SSH username")

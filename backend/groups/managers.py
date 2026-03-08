@@ -68,8 +68,9 @@ class GroupManager:
         all_nodes = node_manager.list_nodes(session)
         members = [
             NodeSummary(
-                slug=n.slug,
+                id=n.id,
                 name=n.name,
+                hostname=n.hostname,
                 host=n.host,
                 managed=n.managed,
                 groups=n.groups,

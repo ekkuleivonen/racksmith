@@ -61,7 +61,7 @@ export function AppShell({ children }: AppShellProps) {
       stopPolling();
       return;
     }
-    const targets = nodes.map((node) => ({ node_slug: node.slug }));
+    const targets = nodes.map((node) => ({ node_id: node.id }));
     startPolling(targets);
     return () => {
       stopPolling();

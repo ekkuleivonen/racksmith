@@ -52,7 +52,7 @@ export function ReposPage() {
         return;
       }
       const nodes = await listNodes();
-      navigate(nodes[0] ? `/nodes/${nodes[0].slug}` : "/nodes", { replace: true });
+      navigate(nodes[0] ? `/nodes/${nodes[0].id}` : "/nodes", { replace: true });
     },
     [navigate]
   );

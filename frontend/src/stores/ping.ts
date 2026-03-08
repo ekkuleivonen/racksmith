@@ -30,7 +30,7 @@ export const usePingStore = create<PingStore>((set, get) => ({
         set({
           statuses: Object.fromEntries(
             response.statuses.map((entry) => [
-              nodeStatusKey(entry.node_slug),
+              nodeStatusKey(entry.node_id),
               entry.status,
             ]),
           ),

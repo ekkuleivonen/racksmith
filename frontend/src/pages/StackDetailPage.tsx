@@ -210,8 +210,8 @@ export function StackDetailPage() {
       nodes
         .filter((n) => n.managed && n.host && n.ssh_user)
         .map((n) => ({
-          value: n.slug,
-          label: n.name || n.host || n.slug,
+          value: n.id,
+          label: n.name || n.hostname || n.host || n.id,
           group: (n.groups ?? [])[0],
         })),
     [nodes],

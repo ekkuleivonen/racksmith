@@ -93,11 +93,11 @@ export function SidebarRacksSection() {
                     ) : (
                       nodes.map((node) => {
                         const nodeStatus =
-                          pingStatuses[nodeStatusKey(node.slug)] ?? "unknown";
+                          pingStatuses[nodeStatusKey(node.id)] ?? "unknown";
                         return (
                           <NavLink
-                            key={node.slug}
-                            to={`/nodes/${node.slug}`}
+                            key={node.id}
+                            to={`/nodes/${node.id}`}
                             className={({ isActive }) =>
                               cn(
                                 "flex items-center gap-1.5 rounded py-0.5 px-1.5 text-xs no-underline",
@@ -123,7 +123,7 @@ export function SidebarRacksSection() {
                               }
                             />
                             <span className="truncate">
-                              {node.name || node.host || node.slug}
+                              {node.name || node.hostname || node.host || node.id}
                             </span>
                           </NavLink>
                         );

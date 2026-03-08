@@ -31,14 +31,14 @@ class SSHManager:
     def generate_key(self, _session) -> str:
         return generate_ssh_key_pair()
 
-    def _history_key(self, user_id: str, node_slug: str) -> str:
-        return f"{_HISTORY_PREFIX}:{user_id}:{node_slug}"
+    def _history_key(self, user_id: str, node_id: str) -> str:
+        return f"{_HISTORY_PREFIX}:{user_id}:{node_id}"
 
-    def _find_node(self, session, node_slug: str):
-        return node_manager.get_node(session, node_slug)
+    def _find_node(self, session, node_id: str):
+        return node_manager.get_node(session, node_id)
 
-    def _require_ssh_node(self, session, node_slug: str):
-        node = self._find_node(session, node_slug)
+    def _require_ssh_node(self, session, node_id: str):
+        node = self._find_node(session, node_id)
         if not node.managed:
             raise ValueError("Node is not managed")
         if not node.host or not node.ssh_user:
@@ -64,8 +64,8 @@ class SSHManager:
             return False
         return process.returncode == 0
 
-    def _load_history(self, user_id: str, node_slug: str) -> list[CommandHistoryEntry]:
-        raw = Redis.get(self._history_key(user_id, node_slug))
+    def _load_history(self, user_id: str, node_id: str) -> list[CommandHistoryEntry]:
+        raw = Redis.get(self._history_key(user_id, node_id))
         if not raw:
             return []
         try:
@@ -74,33 +74,33 @@ class SSHManager:
             return []
         return [CommandHistoryEntry.model_validate(entry) for entry in data]
 
-    def list_history(self, session, node_slug: str) -> list[CommandHistoryEntry]:
-        self._find_node(session, node_slug)
+    def list_history(self, session, node_id: str) -> list[CommandHistoryEntry]:
+        self._find_node(session, node_id)
         user_id = user_storage_id(session.user)
-        return list(reversed(self._load_history(user_id, node_slug)))
+        return list(reversed(self._load_history(user_id, node_id)))
 
-    def record_command(self, session, node_slug: str, command: str) -> None:
-        node = self._find_node(session, node_slug)
+    def record_command(self, session, node_id: str, command: str) -> None:
+        node = self._find_node(session, node_id)
         normalized = command.strip()
         if not normalized:
             return
         user_id = user_storage_id(session.user)
-        history = self._load_history(user_id, node_slug)
+        history = self._load_history(user_id, node_id)
         history.append(
             CommandHistoryEntry(
                 command=normalized,
                 created_at=_now_iso(),
-                node_slug=node.slug,
-                node_name=node.name,
+                node_id=node.id,
+                node_name=node.name or node.hostname or node.host,
                 host=node.host,
             )
         )
         payload = json.dumps([entry.model_dump() for entry in history[-HISTORY_LIMIT:]])
-        Redis.setex(self._history_key(user_id, node_slug), HISTORY_TTL, payload)
+        Redis.setex(self._history_key(user_id, node_id), HISTORY_TTL, payload)
 
-    async def reboot_node(self, session, node_slug: str) -> None:
-        node = self._require_ssh_node(session, node_slug)
-        self.record_command(session, node_slug, "sudo reboot")
+    async def reboot_node(self, session, node_id: str) -> None:
+        node = self._require_ssh_node(session, node_id)
+        self.record_command(session, node_id, "sudo reboot")
         conn = await asyncssh.connect(
             **_connect_kwargs(node.host, node.ssh_user, node.ssh_port)
         )
@@ -126,23 +126,23 @@ class SSHManager:
 
         async def check_target(target: PingStatusTarget) -> PingStatusEntry:
             try:
-                node = self._find_node(session, target.node_slug)
+                node = self._find_node(session, target.node_id)
             except KeyError:
                 return PingStatusEntry(
-                    node_slug=target.node_slug,
+                    node_id=target.node_id,
                     status="unknown",
                 )
 
             if not node.managed:
                 return PingStatusEntry(
-                    node_slug=target.node_slug,
+                    node_id=target.node_id,
                     status="unknown",
                 )
 
             host = (node.host or "").strip()
             if not host:
                 return PingStatusEntry(
-                    node_slug=target.node_slug,
+                    node_id=target.node_id,
                     status="unknown",
                 )
 
@@ -152,14 +152,14 @@ class SSHManager:
                 host_checks[host] = task
 
             return PingStatusEntry(
-                node_slug=target.node_slug,
+                node_id=target.node_id,
                 status="online" if await task else "offline",
             )
 
         return await asyncio.gather(*(check_target(target) for target in targets))
 
-    async def proxy_terminal(self, session, node_slug: str, websocket) -> None:
-        node = self._require_ssh_node(session, node_slug)
+    async def proxy_terminal(self, session, node_id: str, websocket) -> None:
+        node = self._require_ssh_node(session, node_id)
         conn = await asyncssh.connect(
             **_connect_kwargs(node.host, node.ssh_user, node.ssh_port)
         )
@@ -179,7 +179,7 @@ class SSHManager:
                 if event_type == "input":
                     data = str(message.get("data") or "")
                     if data.endswith("\n"):
-                        self.record_command(session, node_slug, data.rstrip("\r\n"))
+                        self.record_command(session, node_id, data.rstrip("\r\n"))
                     process.stdin.write(data)
                 elif event_type == "resize":
                     cols = int(message.get("cols") or 120)

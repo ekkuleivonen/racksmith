@@ -123,7 +123,7 @@ export function RackCanvas({
     (u: number, col: number, excludeItemId?: string) =>
       placedItems.some(
         (item) => {
-          if (excludeItemId && item.slug === excludeItemId) return false;
+          if (excludeItemId && item.id === excludeItemId) return false;
           const bottomU = item.position_u_start;
           const topU = item.position_u_start + item.position_u_height - 1;
           return (
@@ -141,14 +141,14 @@ export function RackCanvas({
     e.dataTransfer.setData(
       "application/x-racksmith-item",
       JSON.stringify({
-        itemId: item.slug,
+        itemId: item.id,
         position_u_height: item.position_u_height,
         position_col_count: item.position_col_count,
       })
     );
     e.dataTransfer.effectAllowed = "move";
     setDraggedItem({
-      itemId: item.slug,
+      itemId: item.id,
       position_u_height: item.position_u_height,
       position_col_count: item.position_col_count,
     });
@@ -168,14 +168,14 @@ export function RackCanvas({
       const unplacedRaw = e.dataTransfer.getData("application/x-racksmith-unplaced-node");
       if (unplacedRaw && onPlaceUnplacedNode) {
         try {
-          const { nodeSlug } = JSON.parse(unplacedRaw);
+          const { nodeId } = JSON.parse(unplacedRaw);
           const topU = dropU;
           const bottomU = topU;
           const position_u_height = 1;
           const position_col_count = 1;
           if (bottomU < 1 || topU > rackUnits || dropCol >= cols) return;
           if (isCellOccupied(bottomU, dropCol)) return;
-          onPlaceUnplacedNode(nodeSlug, {
+          onPlaceUnplacedNode(nodeId, {
             position_u_start: bottomU,
             position_u_height,
             position_col_start: dropCol,
@@ -315,10 +315,10 @@ export function RackCanvas({
         let valid = true;
         for (let u = pos.position_u_start; u < pos.position_u_start + pos.position_u_height; u++) {
           for (let c = pos.position_col_start; c < pos.position_col_start + pos.position_col_count; c++) {
-            if (isCellOccupied(u, c, item.slug)) valid = false;
+            if (isCellOccupied(u, c, item.id)) valid = false;
           }
         }
-        if (valid) onResizeItem(item.slug, pos);
+        if (valid) onResizeItem(item.id, pos);
       }
       setResizing(null);
       setResizePreview(null);
@@ -539,8 +539,8 @@ export function RackCanvas({
             })()}
 
           {placedItems.map((item) => {
-            const isPending = pendingItemId === item.slug;
-            const isResizing = resizing?.item.slug === item.slug;
+            const isPending = pendingItemId === item.id;
+            const isResizing = resizing?.item.id === item.id;
             const pos = isResizing && resizePreview ? resizePreview : item;
             const top =
               (rackUnits - (pos.position_u_start + pos.position_u_height - 1)) * ROW_HEIGHT;
@@ -551,17 +551,17 @@ export function RackCanvas({
               !isPending && !!onResizeItem && (height > RESIZE_HANDLE_MIN || widthPct > 4);
             return (
               <div
-                key={item.slug}
+                key={item.id}
                 className={cn(
                   "absolute rounded-none border text-left overflow-visible",
                   isResizing && "opacity-50",
                   isPending
                     ? "border-zinc-500/80 bg-zinc-500/15"
-                    : !item.managed && selectedItemId === item.slug
+                    : !item.managed && selectedItemId === item.id
                     ? "border-zinc-400 bg-zinc-500/20"
                     : !item.managed
                     ? "border-zinc-600 bg-zinc-500/10 hover:bg-zinc-500/15"
-                    : selectedItemId === item.slug
+                    : selectedItemId === item.id
                     ? "border-emerald-400 bg-emerald-500/20"
                     : "border-sky-400/60 bg-sky-500/10 hover:bg-sky-500/20"
                 )}
@@ -618,11 +618,11 @@ export function RackCanvas({
                   }}
                   onClick={(e) => {
                     e.stopPropagation();
-                    onSelectItem?.(item.slug);
+                    onSelectItem?.(item.id);
                   }}
                 >
                   <p className="text-[11px] text-zinc-100 truncate">
-                    {item.name || item.host || (isPending ? "Pending details" : "Unassigned")}
+                    {item.name || item.hostname || item.host || (isPending ? "Pending details" : "Unassigned")}
                   </p>
                 </div>
               </div>

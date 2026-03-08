@@ -23,41 +23,41 @@ async def create_node(body: NodeInput, session=Depends(auth_manager.get_current_
         node = node_manager.create_node(session, body)
     except FileNotFoundError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
-    return {"node": node.model_dump(), "slug": node.slug}
+    return {"node": node.model_dump()}
 
 
-@router.get("/{slug}")
-async def get_node(slug: str, session=Depends(auth_manager.get_current_session)):
+@router.get("/{node_id}")
+async def get_node(node_id: str, session=Depends(auth_manager.get_current_session)):
     try:
-        node = node_manager.get_node(session, slug)
+        node = node_manager.get_node(session, node_id)
     except KeyError:
         raise HTTPException(status_code=404, detail="Node not found")
     return {"node": node.model_dump()}
 
 
-@router.patch("/{slug}")
+@router.patch("/{node_id}")
 async def update_node(
-    slug: str, body: NodeInput, session=Depends(auth_manager.get_current_session)
+    node_id: str, body: NodeInput, session=Depends(auth_manager.get_current_session)
 ):
     try:
-        node = node_manager.update_node(session, slug, body)
+        node = node_manager.update_node(session, node_id, body)
     except KeyError:
         raise HTTPException(status_code=404, detail="Node not found")
     return {"node": node.model_dump()}
 
 
-@router.delete("/{slug}", status_code=204)
-async def delete_node(slug: str, session=Depends(auth_manager.get_current_session)):
+@router.delete("/{node_id}", status_code=204)
+async def delete_node(node_id: str, session=Depends(auth_manager.get_current_session)):
     try:
-        node_manager.delete_node(session, slug)
+        node_manager.delete_node(session, node_id)
     except KeyError:
         raise HTTPException(status_code=404, detail="Node not found")
 
 
-@router.post("/{slug}/refresh")
-async def refresh_node(slug: str, session=Depends(auth_manager.get_current_session)):
+@router.post("/{node_id}/refresh")
+async def refresh_node(node_id: str, session=Depends(auth_manager.get_current_session)):
     try:
-        node = await node_manager.probe_node(session, slug)
+        node = await node_manager.probe_node(session, node_id)
     except KeyError:
         raise HTTPException(status_code=404, detail="Node not found")
     except ValueError as exc:

@@ -47,12 +47,13 @@ export function NodesOnboardingPage() {
       });
       resetForm();
       try {
-        await refreshNode(result.node.slug);
+        await refreshNode(result.node.id);
       } catch {
         // Node created; probe failed (e.g. SSH not ready). User can rediscover later.
       }
       await loadNodes();
-      const displayName = result.node.name || result.node.slug || "node";
+      const displayName =
+        result.node.name || result.node.hostname || result.node.host || result.node.id || "node";
       toast.success(`Added ${displayName}`);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to add node");
@@ -117,10 +118,10 @@ export function NodesOnboardingPage() {
             </p>
             <div className="space-y-1.5 max-h-32 overflow-y-auto">
               {nodes.map((node) => {
-                const status = pingStatuses[nodeStatusKey(node.slug)] ?? "unknown";
+                const status = pingStatuses[nodeStatusKey(node.id)] ?? "unknown";
                 return (
                   <div
-                    key={node.slug}
+                    key={node.id}
                     className="flex items-center gap-2 border border-zinc-800 bg-zinc-900/50 px-3 py-2 rounded-sm"
                   >
                     <span
@@ -139,7 +140,7 @@ export function NodesOnboardingPage() {
                       }
                     />
                     <span className="text-xs text-zinc-100 truncate min-w-0">
-                      {node.name || node.host || node.slug}
+                      {node.name || node.hostname || node.host || node.id}
                     </span>
                     {node.labels && node.labels.length > 0 && (
                       <div className="flex gap-1 shrink-0 ml-auto">

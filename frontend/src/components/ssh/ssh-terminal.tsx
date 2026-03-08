@@ -6,14 +6,14 @@ import { sshTerminalUrl } from "@/lib/ssh";
 import type { Node } from "@/lib/nodes";
 
 interface SshTerminalProps {
-  nodeSlug: string;
+  nodeId: string;
   node: Node;
   title?: string;
   description?: string;
 }
 
 export function SshTerminal({
-  nodeSlug,
+  nodeId,
   node,
   title,
   description,
@@ -49,7 +49,7 @@ export function SshTerminal({
       `Opening SSH session to ${node.ssh_user}@${node.host}:${node.ssh_port}...`,
     );
 
-    const socket = new WebSocket(sshTerminalUrl(nodeSlug));
+    const socket = new WebSocket(sshTerminalUrl(nodeId));
     socketRef.current = socket;
     terminalRef.current = terminal;
     fitAddonRef.current = fitAddon;
@@ -128,7 +128,7 @@ export function SshTerminal({
       terminalRef.current = null;
       fitAddonRef.current = null;
     };
-  }, [enabled, node.host, node.slug, node.ssh_port, node.ssh_user, nodeSlug]);
+  }, [enabled, node.host, node.id, node.ssh_port, node.ssh_user, nodeId]);
 
   useEffect(() => {
     setEnabled(false);
@@ -138,7 +138,7 @@ export function SshTerminal({
     socketRef.current = null;
     terminalRef.current = null;
     fitAddonRef.current = null;
-  }, [node.slug]);
+  }, [node.id]);
 
   const closeSession = () => {
     if (socketRef.current?.readyState === WebSocket.OPEN) {

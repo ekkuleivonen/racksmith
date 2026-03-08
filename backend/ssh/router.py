@@ -19,27 +19,27 @@ def _require_session(session_id: str | None):
     return session
 
 
-@router.get("/nodes/{node_slug}/history")
+@router.get("/nodes/{node_id}/history")
 async def list_history(
-    node_slug: str,
+    node_id: str,
     session_id: str | None = Cookie(default=None, alias=settings.SESSION_COOKIE_NAME),
 ):
     session = _require_session(session_id)
     try:
-        history = ssh_manager.list_history(session, node_slug)
+        history = ssh_manager.list_history(session, node_id)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     return {"history": [entry.model_dump() for entry in history]}
 
 
-@router.post("/nodes/{node_slug}/reboot", status_code=202)
+@router.post("/nodes/{node_id}/reboot", status_code=202)
 async def reboot_node(
-    node_slug: str,
+    node_id: str,
     session_id: str | None = Cookie(default=None, alias=settings.SESSION_COOKIE_NAME),
 ):
     session = _require_session(session_id)
     try:
-        await ssh_manager.reboot_node(session, node_slug)
+        await ssh_manager.reboot_node(session, node_id)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ValueError as exc:
@@ -83,10 +83,10 @@ async def get_public_key(
     return {"public_key": public_key}
 
 
-@router.websocket("/nodes/{node_slug}/terminal")
+@router.websocket("/nodes/{node_id}/terminal")
 async def terminal_socket(
     websocket: WebSocket,
-    node_slug: str,
+    node_id: str,
     session_id: str | None = Cookie(default=None, alias=settings.SESSION_COOKIE_NAME),
 ):
     session = get_session(session_id)
@@ -96,7 +96,7 @@ async def terminal_socket(
 
     await websocket.accept()
     try:
-        await ssh_manager.proxy_terminal(session, node_slug, websocket)
+        await ssh_manager.proxy_terminal(session, node_id, websocket)
     except WebSocketDisconnect:
         return
     except (KeyError, ValueError) as exc:

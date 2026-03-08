@@ -47,7 +47,7 @@ export function SidebarFooter({ onLogout }: SidebarFooterProps) {
     const newStatus = useSetupStore.getState().status;
     const newNodes = useNodesStore.getState().nodes;
     const path = newStatus?.nodes_ready && newNodes[0]
-      ? `/nodes/${newNodes[0].slug}`
+      ? `/nodes/${newNodes[0].id}`
       : "/nodes";
     navigate(path, { replace: true });
   };

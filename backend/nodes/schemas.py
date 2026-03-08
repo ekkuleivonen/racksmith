@@ -27,13 +27,15 @@ class NodeInput(BaseModel):
 
 
 class Node(NodeInput):
-    slug: str
+    id: str
+    hostname: str = ""
     mac_address: str = ""
 
 
 class NodeSummary(BaseModel):
-    slug: str
+    id: str
     name: str
+    hostname: str = ""
     host: str
     managed: bool
     groups: list[str]

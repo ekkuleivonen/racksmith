@@ -22,13 +22,15 @@ export type NodeInput = {
 };
 
 export type Node = NodeInput & {
-  slug: string;
+  id: string;
+  hostname?: string;
   mac_address?: string;
 };
 
 export type NodeSummary = {
-  slug: string;
+  id: string;
   name: string;
+  hostname: string;
   host: string;
   managed: boolean;
   groups: string[];
@@ -37,7 +39,12 @@ export type NodeSummary = {
 };
 
 export function nodeAlias(node: Node | NodeSummary): string {
-  return node.name.trim().toLowerCase().replace(/\s+/g, "-") || node.host || node.slug;
+  return (
+    node.name?.trim().toLowerCase().replace(/\s+/g, "-") ||
+    node.hostname ||
+    node.host ||
+    node.id
+  );
 }
 
 export function isReachableNode(node: { host?: string; ssh_user?: string }): boolean {
@@ -53,24 +60,24 @@ export async function listNodes() {
   return data.nodes;
 }
 
-export async function getNode(slug: string) {
-  return apiGet<{ node: Node }>(`/nodes/${slug}`);
+export async function getNode(id: string) {
+  return apiGet<{ node: Node }>(`/nodes/${id}`);
 }
 
 export async function createNode(payload: NodeInput) {
   return apiPost<{ node: Node }>("/nodes", payload);
 }
 
-export async function updateNode(slug: string, payload: NodeInput) {
-  return apiPatch<{ node: Node }>(`/nodes/${slug}`, payload);
+export async function updateNode(id: string, payload: NodeInput) {
+  return apiPatch<{ node: Node }>(`/nodes/${id}`, payload);
 }
 
-export async function deleteNode(slug: string) {
-  return apiDelete(`/nodes/${slug}`);
+export async function deleteNode(id: string) {
+  return apiDelete(`/nodes/${id}`);
 }
 
-export async function refreshNode(slug: string) {
-  return apiPost<{ node: Node }>(`/nodes/${slug}/refresh`);
+export async function refreshNode(id: string) {
+  return apiPost<{ node: Node }>(`/nodes/${id}/refresh`);
 }
 
 export async function previewNode(payload: NodeInput) {

@@ -305,9 +305,9 @@ class StackManager:
 
         wanted_nodes = {s.strip() for s in targets.nodes if s.strip()}
         if wanted_nodes:
-            filtered = [n for n in filtered if n.slug in wanted_nodes]
+            filtered = [n for n in filtered if n.id in wanted_nodes]
 
-        hosts = sorted({n.slug for n in filtered})
+        hosts = sorted({n.id for n in filtered})
         return StackResolveTargetsResponse(hosts=hosts)
 
     async def list_runs(self, session, stack_id: str | None = None) -> list[StackRun]:

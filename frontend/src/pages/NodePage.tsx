@@ -25,7 +25,7 @@ import { cn } from "@/lib/utils";
 
 export function NodePage() {
   const navigate = useNavigate();
-  const { slug: nodeSlug = "" } = useParams();
+  const { id: nodeId = "" } = useParams();
   const [node, setNode] = useState<Node | null>(null);
   const [loading, setLoading] = useState(true);
   const [rebooting, setRebooting] = useState(false);
@@ -65,13 +65,13 @@ export function NodePage() {
   }, [node]);
 
   const loadNode = useCallback(async () => {
-    if (!nodeSlug) {
+    if (!nodeId) {
       setNode(null);
       return;
     }
-    const data = await getNode(nodeSlug);
+    const data = await getNode(nodeId);
     setNode(data.node);
-  }, [nodeSlug]);
+  }, [nodeId]);
 
   useEffect(() => {
     let active = true;
@@ -92,14 +92,14 @@ export function NodePage() {
   }, [loadNode]);
 
   useEffect(() => {
-    if (!nodeSlug) return;
+    if (!nodeId) return;
     listStacks()
       .then((data) => setStacks(data.stacks))
       .catch(() => setStacks([]));
-  }, [nodeSlug]);
+  }, [nodeId]);
 
   useEffect(() => {
-    if (!nodeSlug || !node?.host) {
+    if (!nodeId || !node?.host) {
       setPingStatus("unknown");
       return;
     }
@@ -109,7 +109,7 @@ export function NodePage() {
 
     const poll = async () => {
       try {
-        const response = await fetchPingStatuses([{ node_slug: nodeSlug }]);
+        const response = await fetchPingStatuses([{ node_id: nodeId }]);
         if (!active) return;
         setPingStatus(response.statuses[0]?.status ?? "unknown");
       } catch {
@@ -129,7 +129,7 @@ export function NodePage() {
       active = false;
       if (timer !== null) window.clearTimeout(timer);
     };
-  }, [nodeSlug, node?.host]);
+  }, [nodeId, node?.host]);
 
   if (loading) {
     return (
@@ -168,7 +168,7 @@ export function NodePage() {
           <div className="flex items-center justify-between gap-3">
             <div className="space-y-1">
               <h1 className="text-zinc-100 font-semibold">
-                {node.name || node.host || "Unassigned"}
+                {node.name || node.hostname || node.host || "Unassigned"}
               </h1>
               <div className="flex flex-wrap items-center gap-2">
                 <p className="text-xs text-zinc-500">
@@ -214,7 +214,7 @@ export function NodePage() {
                   size="sm"
                   variant="outline"
                   onClick={() =>
-                    navigate(`/rack/view/${rackSlug}?nodeSlug=${node.slug}`)
+                    navigate(`/rack/view/${rackSlug}?nodeId=${node.id}`)
                   }
                 >
                   View rack
@@ -230,7 +230,7 @@ export function NodePage() {
                 onClick={async () => {
                   setRefreshing(true);
                   try {
-                    await refreshNode(node.slug);
+                    await refreshNode(node.id);
                     await loadNode();
                     toast.success("Node rediscovered");
                   } catch (error) {
@@ -257,7 +257,7 @@ export function NodePage() {
                 onClick={async () => {
                   setRebooting(true);
                   try {
-                    await rebootNodeApi(node.slug);
+                    await rebootNodeApi(node.id);
                     toast.success("Reboot command sent");
                   } catch (error) {
                     toast.error(
@@ -283,7 +283,7 @@ export function NodePage() {
                     return;
                   setDeleting(true);
                   try {
-                    await deleteNode(node.slug);
+                    await deleteNode(node.id);
                     toast.success("Node deleted");
                     navigate(rackSlug ? `/rack/view/${rackSlug}` : "/nodes");
                   } catch (error) {
@@ -355,7 +355,7 @@ export function NodePage() {
                     onClick={async () => {
                       setSavingName(true);
                       try {
-                        await updateNode(node.slug, {
+                        await updateNode(node.id, {
                           name: nameDraft.trim() || "",
                           host: node.host ?? "",
                           ssh_user: node.ssh_user ?? "",
@@ -458,7 +458,7 @@ export function NodePage() {
                     onClick={async () => {
                       setSavingConnection(true);
                       try {
-                        await updateNode(node.slug, {
+                        await updateNode(node.id, {
                           name: node.name ?? "",
                           host: connectionDraft.host,
                           ssh_user: connectionDraft.ssh_user,
@@ -600,7 +600,7 @@ export function NodePage() {
                     onClick={async () => {
                       setSavingLabels(true);
                       try {
-                        await updateNode(node.slug, {
+                        await updateNode(node.id, {
                           name: node.name ?? "",
                           host: node.host ?? "",
                           ssh_user: node.ssh_user ?? "",
@@ -656,7 +656,7 @@ export function NodePage() {
         <section className="space-y-3">
           {isReachableNode(node) ? (
             <SshTerminal
-              nodeSlug={node.slug}
+              nodeId={node.id}
               node={node}
               title="SSH"
               description="Open a terminal to this device using the server host machine's SSH credentials."
@@ -730,7 +730,7 @@ export function NodePage() {
                     className="shrink-0 gap-1.5"
                     onClick={() =>
                       navigate(
-                        `/stacks/${stack.id}?node=${encodeURIComponent(node.slug)}`,
+                        `/stacks/${stack.id}?node=${encodeURIComponent(node.id)}`,
                       )
                     }
                   >

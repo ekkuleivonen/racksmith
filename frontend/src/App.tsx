@@ -148,7 +148,7 @@ function AppRoutes() {
               }
             />
             <Route
-              path="/nodes/:slug"
+              path="/nodes/:id"
               element={
                 <ProtectedRoute>
                   <AppShell title="Nodes">

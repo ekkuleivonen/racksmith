@@ -20,7 +20,7 @@ type MovePosition = {
   position_col_count: number;
 };
 
-export type PendingNode = RackLayoutNode & { slug: string };
+export type PendingNode = RackLayoutNode & { id: string };
 
 type RackBuilderProps = {
   title?: string;
@@ -34,7 +34,7 @@ type RackBuilderProps = {
   rackCols: number;
   rackName: string;
   items: RackLayoutNode[];
-  selectedItemSlug: string | null;
+  selectedItemId: string | null;
   pending: PendingNode | null;
   saving?: boolean;
   actionSlot?: ReactNode;
@@ -45,19 +45,19 @@ type RackBuilderProps = {
   onRackUnitsChange: (units: number) => void;
   onRackColsChange: (cols: number) => void;
   onRackNameChange: (name: string) => void;
-  onSelectItem: (slug: string | null) => void;
+  onSelectItem: (itemId: string | null) => void;
   onSelectZone: (zone: ZoneSelection) => void;
-  onMoveItem: (slug: string, position: MovePosition) => void;
-  onResizeItem: (slug: string, position: MovePosition) => void;
+  onMoveItem: (itemId: string, position: MovePosition) => void;
+  onResizeItem: (itemId: string, position: MovePosition) => void;
   onPendingChange: (patch: Partial<PendingNode>) => void;
   onPlacePending: () => Promise<void>;
   onCancelPending: () => void;
   onSelectedItemChange: (patch: Partial<RackLayoutNode>) => void;
   onSaveSelected: () => Promise<void>;
   onDeleteSelected: () => Promise<void>;
-  unplacedNodes?: Array<{ slug: string; name: string; host?: string }>;
-  onPlaceUnplacedNode?: (nodeSlug: string, position: MovePosition) => void;
-  onUnplaceNode?: (nodeSlug: string) => void;
+  unplacedNodes?: Array<{ id: string; name: string; hostname?: string; host?: string }>;
+  onPlaceUnplacedNode?: (nodeId: string, position: MovePosition) => void;
+  onUnplaceNode?: (nodeId: string) => void;
 };
 
 export function RackBuilder({
@@ -72,7 +72,7 @@ export function RackBuilder({
   rackCols,
   rackName,
   items,
-  selectedItemSlug,
+  selectedItemId,
   pending,
   saving = false,
   actionSlot,
@@ -104,15 +104,15 @@ export function RackBuilder({
   );
 
   const selectedItem = useMemo(
-    () => items.find((item) => item.slug === selectedItemSlug) ?? null,
-    [items, selectedItemSlug]
+    () => items.find((item) => item.id === selectedItemId) ?? null,
+    [items, selectedItemId]
   );
 
   const handleUnplacedNodeDragStart = useCallback(
-    (event: React.DragEvent, node: { slug: string }) => {
+    (event: React.DragEvent, node: { id: string }) => {
       event.dataTransfer.setData(
         "application/x-racksmith-unplaced-node",
-        JSON.stringify({ nodeSlug: node.slug })
+        JSON.stringify({ nodeId: node.id })
       );
       event.dataTransfer.effectAllowed = "move";
     },
@@ -177,7 +177,7 @@ export function RackBuilder({
       (n) =>
         (n.name ?? "").toLowerCase().includes(q) ||
         (n.host ?? "").toLowerCase().includes(q) ||
-        (n.slug ?? "").toLowerCase().includes(q)
+        (n.id ?? "").toLowerCase().includes(q)
     );
   }, [unplacedNodes, unassignedSearch]);
 
@@ -298,8 +298,8 @@ export function RackBuilder({
             rackUnits={rackUnits}
             cols={rackCols}
             items={canvasItems}
-            selectedItemId={selectedItemSlug}
-            pendingItemId={pending?.slug ?? null}
+            selectedItemId={selectedItemId}
+            pendingItemId={pending?.id ?? null}
             onSelectItem={onSelectItem}
             onSelectZone={onSelectZone}
             onMoveItem={onMoveItem}
@@ -443,13 +443,13 @@ export function RackBuilder({
                   <div className="mt-2 flex flex-col gap-1 overflow-y-auto min-h-0 max-h-80 flex-1">
                     {filteredUnplacedNodes.map((node) => (
                       <button
-                        key={node.slug}
+                        key={node.id}
                         type="button"
                         draggable
                         onDragStart={(e) => handleUnplacedNodeDragStart(e, node)}
                         className="border border-zinc-800 bg-zinc-950/60 px-2 py-1.5 text-left hover:border-zinc-700 cursor-grab active:cursor-grabbing text-xs truncate"
                       >
-                        {node.name || node.host || node.slug}
+                        {node.name || node.hostname || node.host || node.id}
                       </button>
                     ))}
                     {filteredUnplacedNodes.length === 0 && unassignedSearch.trim() ? (

@@ -53,11 +53,11 @@ export function NodesPage() {
           ) : (
             <div className="space-y-1">
               {nodes.map((node) => {
-                const status = pingStatuses[nodeStatusKey(node.slug)] ?? "unknown";
+                const status = pingStatuses[nodeStatusKey(node.id)] ?? "unknown";
                 return (
                   <NavLink
-                    key={node.slug}
-                    to={`/nodes/${node.slug}`}
+                    key={node.id}
+                    to={`/nodes/${node.id}`}
                     className={({ isActive }) =>
                       cn(
                         "flex items-center gap-3 border border-zinc-800 bg-zinc-900/30 p-4 transition-colors",
@@ -84,7 +84,7 @@ export function NodesPage() {
                     />
                     <div className="min-w-0 flex-1">
                       <p className="text-zinc-100 font-medium truncate">
-                        {node.name || node.host || node.slug}
+                        {node.name || node.hostname || node.host || node.id}
                       </p>
                       {node.host ? (
                         <p className="text-xs text-zinc-500 truncate">
