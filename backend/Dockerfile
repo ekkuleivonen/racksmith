@@ -9,6 +9,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends git iputils-pin
 COPY backend/pyproject.toml backend/uv.lock ./
 RUN uv sync --frozen --no-dev
 
+# Include Ansible collections requirements used at worker startup
+COPY .racksmith/collections/requirements.yml /.racksmith/collections/requirements.yml
+
 # Copy application code
 COPY backend/ .
 

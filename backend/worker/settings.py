@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import settings
+from _utils.ansible import install_ansible_collections_on_startup
 from arq.connections import RedisSettings
 from redis.asyncio import Redis
 
@@ -12,6 +13,7 @@ REDIS_SETTINGS = RedisSettings.from_dsn(settings.REDIS_URL)
 
 
 async def _on_startup(ctx: dict) -> None:
+    await install_ansible_collections_on_startup()
     ctx["redis"] = Redis.from_url(settings.REDIS_URL, decode_responses=True)
 
 
