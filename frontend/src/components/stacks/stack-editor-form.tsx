@@ -14,7 +14,7 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { Check, GripVertical, Trash2 } from "lucide-react";
+import { GripVertical, Trash2 } from "lucide-react";
 import {
   Accordion,
   AccordionContent,
@@ -106,9 +106,9 @@ function SortableRoleCard({
         transform: CSS.Transform.toString(transform),
         transition,
       }}
-      className="border border-zinc-800 bg-zinc-950/40 px-3"
+      className="border border-zinc-800 bg-zinc-950/40"
     >
-      <div className="flex items-start gap-2 py-3">
+      <div className="flex items-start gap-2 px-3 py-3">
         <button
           type="button"
           className="mt-0.5 text-zinc-500 hover:text-zinc-100"
@@ -119,9 +119,9 @@ function SortableRoleCard({
           <GripVertical className="size-4" />
         </button>
         <AccordionTrigger
-          className="py-0 text-left hover:no-underline"
+          className="flex-1 py-0 pr-2 text-left hover:no-underline"
         >
-          <div className="space-y-1">
+          <div className="min-w-0 space-y-1">
             <p className="text-sm text-zinc-100">{action.name}</p>
             <p className="truncate text-xs text-zinc-500">{action.description}</p>
           </div>
@@ -137,7 +137,7 @@ function SortableRoleCard({
         </Button>
       </div>
 
-      <AccordionContent className="pb-3">
+      <AccordionContent className="px-3 pb-3">
         {action.inputs.filter((f) => !(f as { interactive?: boolean }).interactive)
           .length > 0 ? (
           <div className="grid gap-2 md:grid-cols-2">
@@ -235,6 +235,7 @@ export function StackEditorForm({
   const [actionPickerValue, setActionPickerValue] = useState<string | null>(
     null,
   );
+  const [actionQuery, setActionQuery] = useState("");
   const [activeRoleId, setActiveRoleId] = useState<string | undefined>(
     draft.roles[0]?.action_slug,
   );
@@ -257,11 +258,12 @@ export function StackEditorForm({
   const actionsByLabel = useMemo(() => {
     const grouped = new Map<string, Action[]>();
     for (const action of actions) {
-      const labels = action.labels.length > 0 ? action.labels : ["other"];
-      for (const label of labels) {
-        const existing = grouped.get(label) ?? [];
-        grouped.set(label, [...existing, action]);
-      }
+      // Keep each action in one deterministic group to avoid duplicates.
+      const label =
+        [...(action.labels ?? [])].sort((a, b) => a.localeCompare(b))[0] ??
+        "other";
+      const existing = grouped.get(label) ?? [];
+      grouped.set(label, [...existing, action]);
     }
 
     return Array.from(grouped.entries())
@@ -271,6 +273,35 @@ export function StackEditorForm({
         actions: [...groupedActions].sort((a, b) => a.name.localeCompare(b.name)),
       }));
   }, [actions]);
+
+  const filteredActionsByLabel = useMemo(() => {
+    const normalized = actionQuery.trim().toLowerCase();
+    const availableActionSlugSet = new Set(
+      draft.roles.map((role) => role.action_slug),
+    );
+
+    const withoutAlreadyAdded = actionsByLabel
+      .map((group) => ({
+        ...group,
+        actions: group.actions.filter(
+          (action) => !availableActionSlugSet.has(action.slug),
+        ),
+      }))
+      .filter((group) => group.actions.length > 0);
+
+    if (!normalized) return withoutAlreadyAdded;
+
+    return withoutAlreadyAdded
+      .map((group) => ({
+        ...group,
+        actions: group.actions.filter((action) =>
+          `${action.name} ${action.description} ${(action.labels ?? []).join(" ")}`
+            .toLowerCase()
+            .includes(normalized),
+        ),
+      }))
+      .filter((group) => group.actions.length > 0);
+  }, [actionsByLabel, actionQuery, draft.roles]);
 
   useEffect(() => {
     if (editingField === "name") {
@@ -466,6 +497,7 @@ export function StackEditorForm({
                 const actionSlug = parseActionSlugFromPickerValue(value);
                 addRole(actionSlug);
                 setActionPickerValue(null);
+                setActionQuery("");
               }}
               items={actionPickerItems}
             >
@@ -473,34 +505,36 @@ export function StackEditorForm({
                 className="w-full"
                 placeholder="Search and add actions..."
                 showClear={!!actionPickerValue}
+                onChange={(event) =>
+                  setActionQuery((event.target as HTMLInputElement).value)
+                }
               />
               <ComboboxContent anchor={actionPickerAnchor}>
                 <ComboboxList>
-                  {actionsByLabel.map((group) => (
-                    <ComboboxGroup key={group.label}>
-                      <ComboboxLabel>{group.label}</ComboboxLabel>
+                  {filteredActionsByLabel.map((group) => (
+                    <ComboboxGroup
+                      key={group.label}
+                      className="border-zinc-800/70 border-t pt-1 first:border-t-0 first:pt-0"
+                    >
+                      <ComboboxLabel className="px-2 py-1 text-[10px] font-semibold tracking-wide text-zinc-500 uppercase">
+                        Label: {group.label}
+                      </ComboboxLabel>
                       {group.actions.map((action) => {
-                        const alreadyAdded = draft.roles.some(
-                          (role) => role.action_slug === action.slug,
-                        );
                         return (
                           <ComboboxItem
                             key={`${group.label}-${action.slug}`}
                             value={actionPickerValueBySlug[action.slug]}
-                            disabled={alreadyAdded}
+                            className="pl-4"
                           >
                             <div className="flex w-full items-start justify-between gap-2">
                               <div className="min-w-0">
-                                <p className="truncate text-xs text-zinc-100">
+                                <p className="truncate text-xs font-medium text-zinc-100">
                                   {action.name}
                                 </p>
                                 <p className="truncate text-[11px] text-zinc-500">
                                   {action.description}
                                 </p>
                               </div>
-                              {alreadyAdded ? (
-                                <Check className="mt-0.5 size-3.5 text-zinc-500" />
-                              ) : null}
                             </div>
                           </ComboboxItem>
                         );
