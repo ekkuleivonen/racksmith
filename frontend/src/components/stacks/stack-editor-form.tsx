@@ -108,29 +108,31 @@ function SortableRoleCard({
       }}
       className="border border-zinc-800 bg-zinc-950/40"
     >
-      <div className="flex items-start gap-2 px-3 py-3">
+      <div className="flex items-center gap-2 px-3">
         <button
           type="button"
-          className="mt-0.5 text-zinc-500 hover:text-zinc-100"
+          className="shrink-0 text-zinc-500 hover:text-zinc-100"
           aria-label={`Reorder ${action.name}`}
           {...attributes}
           {...listeners}
         >
           <GripVertical className="size-4" />
         </button>
-        <AccordionTrigger
-          className="flex-1 py-0 pr-2 text-left hover:no-underline"
-        >
-          <div className="min-w-0 space-y-1">
-            <p className="text-sm text-zinc-100">{action.name}</p>
-            <p className="truncate text-xs text-zinc-500">{action.description}</p>
-          </div>
-        </AccordionTrigger>
+        <div className="min-w-0 flex-1">
+          <AccordionTrigger
+            className="w-full py-2.5 text-left hover:no-underline"
+          >
+            <div className="min-w-0 space-y-0.5">
+              <p className="text-sm text-zinc-100">{action.name}</p>
+              <p className="truncate text-xs text-zinc-500">{action.description}</p>
+            </div>
+          </AccordionTrigger>
+        </div>
         <Button
           type="button"
           size="icon"
           variant="ghost"
-          className="h-8 w-8"
+          className="h-8 w-8 shrink-0"
           onClick={() => removeRole(index)}
         >
           <Trash2 className="size-3.5" />
@@ -237,7 +239,7 @@ export function StackEditorForm({
   );
   const [actionQuery, setActionQuery] = useState("");
   const [activeRoleId, setActiveRoleId] = useState<string | undefined>(
-    draft.roles[0]?.action_slug,
+    undefined,
   );
   const playNameInputRef = useRef<HTMLInputElement | null>(null);
   const descriptionInputRef = useRef<HTMLTextAreaElement | null>(null);
