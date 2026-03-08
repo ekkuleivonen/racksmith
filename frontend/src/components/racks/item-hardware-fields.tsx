@@ -208,7 +208,7 @@ export function ItemHardwareFields({
         onChange={(e) => onChange({ name: e.target.value })}
         placeholder={managed ? "Optional display name" : "Patch panel"}
       />
-      {labelsSection}
+      {managed ? labelsSection : null}
       {managed ? (
         connectionSection
       ) : (

@@ -45,6 +45,9 @@ export function NodePage() {
   const [newLabelInput, setNewLabelInput] = useState("");
   const [savingLabels, setSavingLabels] = useState(false);
   const newLabelInputRef = useRef<HTMLInputElement>(null);
+  const [editingName, setEditingName] = useState(false);
+  const [nameDraft, setNameDraft] = useState("");
+  const [savingName, setSavingName] = useState(false);
 
   useEffect(() => {
     if (node) {
@@ -54,6 +57,7 @@ export function NodePage() {
         ssh_port: node.ssh_port ?? 22,
       });
       setLabelsDraft(node.labels ?? []);
+      setNameDraft(node.name ?? "");
       if (!node.host || !node.ssh_user) {
         setEditingConnection(true);
       }
@@ -313,6 +317,86 @@ export function NodePage() {
               ))}
             </div>
           )}
+
+          <Separator />
+
+          <div className="space-y-3">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-[11px] text-zinc-500 font-medium uppercase tracking-wider">
+                Display name
+              </p>
+              {!editingName ? (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-7 gap-1.5 text-zinc-400 hover:text-zinc-200"
+                  onClick={() => {
+                    setNameDraft(node.name ?? "");
+                    setEditingName(true);
+                  }}
+                >
+                  <Pencil className="size-3" />
+                  Edit
+                </Button>
+              ) : null}
+            </div>
+            {editingName ? (
+              <div className="space-y-2">
+                <Input
+                  className="h-8 text-xs"
+                  value={nameDraft}
+                  onChange={(e) => setNameDraft(e.target.value)}
+                  placeholder="Optional display name"
+                />
+                <div className="flex gap-2">
+                  <Button
+                    size="sm"
+                    disabled={savingName}
+                    onClick={async () => {
+                      setSavingName(true);
+                      try {
+                        await updateNode(node.slug, {
+                          name: nameDraft.trim() || "",
+                          host: node.host ?? "",
+                          ssh_user: node.ssh_user ?? "",
+                          ssh_port: node.ssh_port ?? 22,
+                          labels: node.labels ?? [],
+                          groups: node.groups ?? [],
+                        });
+                        await loadNode();
+                        setEditingName(false);
+                        toast.success("Display name updated");
+                      } catch (error) {
+                        toast.error(
+                          error instanceof Error
+                            ? error.message
+                            : "Failed to update display name",
+                        );
+                      } finally {
+                        setSavingName(false);
+                      }
+                    }}
+                  >
+                    {savingName ? "Saving..." : "Save"}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      setNameDraft(node.name ?? "");
+                      setEditingName(false);
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <p className="text-sm text-zinc-300">
+                {node.name || "Not set"}
+              </p>
+            )}
+          </div>
 
           <Separator />
 
