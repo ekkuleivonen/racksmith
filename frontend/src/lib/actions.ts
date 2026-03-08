@@ -18,6 +18,7 @@ export type ActionSummary = {
   description: string;
   source: string;
   inputs: ActionInput[];
+  labels: string[];
   compatibility: { os_family: string[] };
   has_tasks: boolean;
 };

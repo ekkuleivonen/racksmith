@@ -149,6 +149,7 @@ class StackManager:
                 description=cfg.description,
                 source=cfg.source,
                 inputs=[ActionInput(**i.model_dump()) for i in cfg.inputs],
+                labels=cfg.labels,
             )
         return actions
 

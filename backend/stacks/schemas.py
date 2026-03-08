@@ -26,6 +26,7 @@ class Action(BaseModel):
     description: str
     source: str = "user"  # builtin | user | community
     inputs: list[ActionInput] = Field(default_factory=list)
+    labels: list[str] = Field(default_factory=list)
 
 
 class StackRoleInput(BaseModel):

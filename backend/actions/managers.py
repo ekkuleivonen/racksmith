@@ -72,6 +72,7 @@ def _read_action(action_dir: Path) -> ActionResponse | None:
         description=cfg.description,
         source=cfg.source,
         inputs=[i.model_dump() for i in cfg.inputs],
+        labels=cfg.labels,
         compatibility=cfg.compatibility.model_dump(),
         has_tasks=tasks_file.is_file(),
     )
@@ -109,6 +110,7 @@ def _read_action_detail(action_dir: Path) -> ActionDetailResponse | None:
         description=cfg.description,
         source=cfg.source,
         inputs=[i.model_dump() for i in cfg.inputs],
+        labels=cfg.labels,
         compatibility=cfg.compatibility.model_dump(),
         has_tasks=tasks_file.is_file(),
         raw_content=raw_content,

@@ -17,6 +17,7 @@ export type Action = {
   description: string;
   source: string;
   inputs: ActionInput[];
+  labels: string[];
 };
 
 export type StackRoleEntry = {

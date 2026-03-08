@@ -24,8 +24,6 @@ import { RacksPage } from "@/pages/RacksPage";
 import { NodesPage } from "@/pages/NodesPage";
 import { NodeCreatePage } from "@/pages/NodeCreatePage";
 import { ActionNewPage } from "@/pages/ActionNewPage";
-import { ActionDetailPage } from "@/pages/ActionDetailPage";
-import { ActionsPage } from "@/pages/ActionsPage";
 
 class ErrorBoundary extends Component<
   { children: ReactNode },
@@ -260,31 +258,11 @@ function AppRoutes() {
               }
             />
             <Route
-              path="/actions"
+              path="/actions/import"
               element={
                 <ProtectedRoute>
-                  <AppShell title="Actions">
-                    <ActionsPage />
-                  </AppShell>
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/actions/create"
-              element={
-                <ProtectedRoute>
-                  <AppShell title="New action">
+                  <AppShell title="Import action">
                     <ActionNewPage />
-                  </AppShell>
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/actions/:slug"
-              element={
-                <ProtectedRoute>
-                  <AppShell title="Actions">
-                    <ActionDetailPage />
                   </AppShell>
                 </ProtectedRoute>
               }

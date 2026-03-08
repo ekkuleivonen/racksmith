@@ -1,6 +1,7 @@
 slug: service-status
 name: Service status
 description: Inspect the active state of a systemd service.
+labels: [services, system]
 executor: ansible
 source: builtin
 inputs:

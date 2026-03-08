@@ -38,4 +38,5 @@ class ActionConfig(BaseModel):
     executor: Literal["ansible"] = Field(default="ansible")
     source: Literal["builtin", "user", "community"] = Field(default="user")
     inputs: list[ActionInputConfig] = Field(default_factory=list)
+    labels: list[str] = Field(default_factory=list, description="Freeform category tags")
     compatibility: ActionCompatibility = Field(default_factory=ActionCompatibility)

@@ -24,7 +24,6 @@ import { useRackStore } from "@/stores/racks";
 import { useNodesStore } from "@/stores/nodes";
 import { useStackStore } from "@/stores/stacks";
 import { useGroupsStore } from "@/stores/groups";
-import { useActionsStore } from "@/stores/actions";
 import { usePingStore } from "@/stores/ping";
 
 type AppShellProps = {
@@ -48,15 +47,14 @@ export function AppShell({ children }: AppShellProps) {
   const loadNodes = useNodesStore((s) => s.load);
   const loadStacks = useStackStore((s) => s.load);
   const loadGroups = useGroupsStore((s) => s.load);
-  const loadActions = useActionsStore((s) => s.load);
 
   const nodes = useNodesStore((s) => s.nodes);
   const startPolling = usePingStore((s) => s.startPolling);
   const stopPolling = usePingStore((s) => s.stopPolling);
 
   useEffect(() => {
-    void Promise.all([loadSetup(), loadRacks(), loadNodes(), loadStacks(), loadGroups(), loadActions()]);
-  }, [location.pathname, loadSetup, loadRacks, loadNodes, loadStacks, loadGroups, loadActions]);
+    void Promise.all([loadSetup(), loadRacks(), loadNodes(), loadStacks(), loadGroups()]);
+  }, [location.pathname, loadSetup, loadRacks, loadNodes, loadStacks, loadGroups]);
 
   useEffect(() => {
     if (!status?.repo_ready || nodes.length === 0) {

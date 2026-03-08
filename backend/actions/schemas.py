@@ -24,6 +24,7 @@ class ActionCreateRequest(BaseModel):
     executor: str = "ansible"
     source: str = "user"
     inputs: list[dict[str, Any]] = Field(default_factory=list)
+    labels: list[str] = Field(default_factory=list)
     compatibility: dict[str, Any] = Field(default_factory=lambda: {"os_family": []})
     tasks: list[Any] = Field(
         default_factory=list,
@@ -47,6 +48,7 @@ class ActionResponse(BaseModel):
     description: str
     source: str
     inputs: list[dict[str, Any]]
+    labels: list[str] = Field(default_factory=list)
     compatibility: dict[str, Any]
     has_tasks: bool
 

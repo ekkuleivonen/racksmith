@@ -15,6 +15,7 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { GripVertical, Plus, Search, Trash2 } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -151,6 +152,26 @@ export function StackEditorForm({
     "name" | "description" | null
   >(null);
   const [roleSearch, setRoleSearch] = useState("");
+  const [selectedLabelFilters, setSelectedLabelFilters] = useState<Set<string>>(
+    new Set(),
+  );
+
+  const allLabels = useMemo(
+    () =>
+      Array.from(
+        new Set(actions.flatMap((a) => a.labels ?? [])),
+      ).sort(),
+    [actions],
+  );
+
+  const toggleLabelFilter = (label: string) => {
+    setSelectedLabelFilters((prev) => {
+      const next = new Set(prev);
+      if (next.has(label)) next.delete(label);
+      else next.add(label);
+      return next;
+    });
+  };
   const playNameInputRef = useRef<HTMLInputElement | null>(null);
   const descriptionInputRef = useRef<HTMLTextAreaElement | null>(null);
 
@@ -200,12 +221,20 @@ export function StackEditorForm({
   };
 
   const filteredActions = useMemo(() => {
+    let result = actions;
     const normalized = roleSearch.trim().toLowerCase();
-    if (!normalized) return actions;
-    return actions.filter((action) =>
-      `${action.name} ${action.description}`.toLowerCase().includes(normalized),
-    );
-  }, [roleSearch, actions]);
+    if (normalized) {
+      result = result.filter((action) =>
+        `${action.name} ${action.description}`.toLowerCase().includes(normalized),
+      );
+    }
+    if (selectedLabelFilters.size > 0) {
+      result = result.filter((action) =>
+        (action.labels ?? []).some((l) => selectedLabelFilters.has(l)),
+      );
+    }
+    return result;
+  }, [roleSearch, actions, selectedLabelFilters]);
 
   return (
     <section className="space-y-4 border border-zinc-800 bg-zinc-900/30 p-4">
@@ -324,6 +353,21 @@ export function StackEditorForm({
             className="pl-7"
           />
         </div>
+
+        {allLabels.length > 0 && (
+          <div className="flex flex-wrap gap-2">
+            {allLabels.map((label) => (
+              <Badge
+                key={label}
+                variant={selectedLabelFilters.has(label) ? "default" : "outline"}
+                className="cursor-pointer text-[10px]"
+                onClick={() => toggleLabelFilter(label)}
+              >
+                {label}
+              </Badge>
+            ))}
+          </div>
+        )}
 
         <div className="flex flex-wrap gap-2">
           {filteredActions.map((action) => (
