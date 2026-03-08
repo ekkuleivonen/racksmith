@@ -118,7 +118,7 @@ function SortableRoleCard({
         >
           <GripVertical className="size-4" />
         </button>
-        <div className="min-w-0 flex-1">
+        <div className="min-w-0 flex-1 [&>*]:w-full">
           <AccordionTrigger
             className="w-full py-2.5 text-left hover:no-underline"
           >
