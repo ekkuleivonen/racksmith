@@ -22,6 +22,7 @@ import { useAuth } from "@/context/auth-context";
 import { useSetupStore } from "@/stores/setup";
 import { useNodes } from "@/hooks/queries";
 import { usePingStore } from "@/stores/ping";
+import { isManagedNode } from "@/lib/nodes";
 
 type AppShellProps = {
   children: ReactNode;
@@ -40,6 +41,7 @@ export function AppShell({ children }: AppShellProps) {
   const loadSetup = useSetupStore((s) => s.load);
 
   const { data: nodes = [] } = useNodes();
+  const managedNodes = nodes.filter(isManagedNode);
   const startPolling = usePingStore((s) => s.startPolling);
   const stopPolling = usePingStore((s) => s.stopPolling);
 
@@ -48,11 +50,11 @@ export function AppShell({ children }: AppShellProps) {
   }, [loadSetup]);
 
   useEffect(() => {
-    if (!status?.repo_ready || nodes.length === 0) {
+    if (!status?.repo_ready || managedNodes.length === 0) {
       stopPolling();
       return;
     }
-    const targets = nodes.map((node) => ({ node_id: node.id }));
+    const targets = managedNodes.map((node) => ({ node_id: node.id }));
     startPolling(targets);
     return () => {
       stopPolling();
@@ -60,7 +62,7 @@ export function AppShell({ children }: AppShellProps) {
   }, [
     status?.repo_ready,
     status?.repo?.full_name,
-    nodes,
+    managedNodes,
     startPolling,
     stopPolling,
   ]);

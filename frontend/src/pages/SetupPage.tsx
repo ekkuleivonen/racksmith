@@ -28,6 +28,7 @@ import {
 import { fetchMachinePublicKey, generateMachineKey } from "@/lib/ssh";
 import { useSetupStore } from "@/stores/setup";
 import { useNodes, useRackEntries } from "@/hooks/queries";
+import { isManagedNode } from "@/lib/nodes";
 import { RackOnboardingPage } from "@/pages/RackOnboardingPage";
 import { SetupNodesStep } from "@/components/setup/setup-nodes-step";
 
@@ -78,6 +79,7 @@ export function SetupPage() {
   const status = useSetupStore((s) => s.status);
   const loadSetup = useSetupStore((s) => s.load);
   const { data: nodes = [] } = useNodes();
+  const managedCount = nodes.filter(isManagedNode).length;
   const { data: rackEntries = [] } = useRackEntries();
 
   const [wantsRack, setWantsRackState] = useState<boolean | null>(getWantsRackFromStorage);
@@ -103,7 +105,7 @@ export function SetupPage() {
   const step = computeStep(
     isAuthenticated,
     status?.repo_ready ?? false,
-    nodes.length
+    managedCount
   );
 
   const refreshStatus = useCallback(async () => {
@@ -527,7 +529,7 @@ export function SetupPage() {
             </CardContent>
           </Card>
 
-          <SetupNodesStep onContinue={() => {}} canContinue={nodes.length > 0} />
+          <SetupNodesStep onContinue={() => {}} canContinue={managedCount > 0} />
         </div>
       </div>
     );
@@ -546,7 +548,7 @@ export function SetupPage() {
               <CardHeader>
                 <CardTitle>Place on rack?</CardTitle>
               <p className="text-sm text-zinc-500">
-                You have {nodes.length} node{nodes.length !== 1 ? "s" : ""}. Would you like to
+                You have {managedCount} node{managedCount !== 1 ? "s" : ""}. Would you like to
                 visualize them on a rack? You can skip and do this later.
               </p>
             </CardHeader>

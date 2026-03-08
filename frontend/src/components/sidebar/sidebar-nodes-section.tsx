@@ -4,12 +4,13 @@ import { cn } from "@/lib/utils";
 import { useNodes } from "@/hooks/queries";
 import { usePingStore } from "@/stores/ping";
 import { nodeStatusKey } from "@/lib/ssh";
+import { isManagedNode } from "@/lib/nodes";
 
 export function SidebarNodesSection() {
   const location = useLocation();
   const pathname = location.pathname;
   const { data: allNodes = [] } = useNodes();
-  const nodes = allNodes.filter((n) => !n.placement?.rack);
+  const nodes = allNodes.filter((n) => isManagedNode(n) && !n.placement?.rack);
   const pingStatuses = usePingStore((s) => s.statuses);
 
   return (

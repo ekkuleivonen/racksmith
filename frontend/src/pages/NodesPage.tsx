@@ -4,9 +4,11 @@ import { useNodes } from "@/hooks/queries";
 import { usePingStore } from "@/stores/ping";
 import { nodeStatusKey } from "@/lib/ssh";
 import { cn } from "@/lib/utils";
+import { isManagedNode } from "@/lib/nodes";
 
 export function NodesPage() {
-  const { data: nodes = [] } = useNodes();
+  const { data: allNodes = [] } = useNodes();
+  const nodes = allNodes.filter(isManagedNode);
   const pingStatuses = usePingStore((s) => s.statuses);
 
   return (

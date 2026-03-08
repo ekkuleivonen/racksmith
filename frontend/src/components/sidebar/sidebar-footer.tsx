@@ -46,8 +46,9 @@ export function SidebarFooter({ onLogout }: SidebarFooterProps) {
     if (!owner || !repo) return;
     await switchRepo(owner, repo);
     const newStatus = useSetupStore.getState().status;
-    const path = newStatus?.nodes_ready && nodes[0]
-      ? `/nodes/${nodes[0].id}`
+    const firstManaged = nodes.find((n) => n.managed);
+    const path = newStatus?.nodes_ready && firstManaged
+      ? `/nodes/${firstManaged.id}`
       : "/nodes";
     navigate(path, { replace: true });
   };

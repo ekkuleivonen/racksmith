@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { ItemHardwareFields } from "@/components/racks/item-hardware-fields";
-import { createNode, refreshNode, type NodeInput } from "@/lib/nodes";
+import { createNode, isManagedNode, refreshNode, type NodeInput } from "@/lib/nodes";
 import { useNodes } from "@/hooks/queries";
 import { usePingStore } from "@/stores/ping";
 import { nodeStatusKey } from "@/lib/ssh";
@@ -28,7 +28,8 @@ export function NodesOnboardingPage() {
   const [saving, setSaving] = useState(false);
   const [showRackPrompt, setShowRackPrompt] = useState(false);
 
-  const { data: nodes = [] } = useNodes();
+  const { data: allNodes = [] } = useNodes();
+  const nodes = allNodes.filter(isManagedNode);
   const pingStatuses = usePingStore((s) => s.statuses);
 
   const resetForm = useCallback(() => {

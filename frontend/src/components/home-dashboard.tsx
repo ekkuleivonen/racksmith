@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { useNodes, useRackEntries, useGroups, useStacks } from "@/hooks/queries";
+import { isManagedNode } from "@/lib/nodes";
 
 export function HomeDashboard() {
   const { data: nodes = [] } = useNodes();
@@ -21,7 +22,7 @@ export function HomeDashboard() {
         <div className="grid grid-cols-2 gap-4">
           <div className="border border-zinc-800 bg-zinc-900/40 p-4 rounded">
             <p className="text-zinc-500 text-xs font-medium uppercase tracking-wider">Nodes</p>
-            <p className="text-2xl font-semibold text-zinc-100 mt-1">{nodes.length}</p>
+            <p className="text-2xl font-semibold text-zinc-100 mt-1">{nodes.filter(isManagedNode).length}</p>
             <Button variant="outline" size="sm" className="mt-2" asChild>
               <Link to="/nodes">View nodes</Link>
             </Button>

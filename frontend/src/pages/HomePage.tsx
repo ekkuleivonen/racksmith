@@ -6,6 +6,7 @@ import { HomeDashboard } from "@/components/home-dashboard";
 import { useAuth } from "@/context/auth-context";
 import { useSetupStore } from "@/stores/setup";
 import { useNodes } from "@/hooks/queries";
+import { isManagedNode } from "@/lib/nodes";
 
 function isSetupComplete(
   loading: boolean,
@@ -82,7 +83,8 @@ export function HomePage() {
     );
   }
 
-  if (!isSetupComplete(loading, status?.repo_ready ?? false, nodes.length)) {
+  const managedCount = nodes.filter(isManagedNode).length;
+  if (!isSetupComplete(loading, status?.repo_ready ?? false, managedCount)) {
     return <Navigate to="/setup" replace />;
   }
 

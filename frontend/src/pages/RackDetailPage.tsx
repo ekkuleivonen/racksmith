@@ -20,6 +20,7 @@ import {
   createNode,
   deleteNode,
   getNode,
+  isManagedNode,
   isReachableNode,
   refreshNode,
   updateNode,
@@ -120,7 +121,8 @@ export function RackPage() {
   const unplacedNodes = useMemo(() => {
     if (!rackSlug) return [];
     return nodesFromStore.filter(
-      (n) => !n.placement || n.placement.rack !== rackSlug
+      (n) =>
+        isManagedNode(n) && (!n.placement || n.placement.rack !== rackSlug)
     );
   }, [nodesFromStore, rackSlug]);
 

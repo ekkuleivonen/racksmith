@@ -3,6 +3,7 @@ import { Navigate } from "react-router-dom";
 import { useAuth } from "@/context/auth-context";
 import { useSetupStore } from "@/stores/setup";
 import { useNodes } from "@/hooks/queries";
+import { isManagedNode } from "@/lib/nodes";
 
 export function ProtectedRoute({ children }: { children: ReactNode }) {
   const { isAuthenticated, isLoading: authLoading } = useAuth();
@@ -10,6 +11,7 @@ export function ProtectedRoute({ children }: { children: ReactNode }) {
   const status = useSetupStore((s) => s.status);
   const loadSetup = useSetupStore((s) => s.load);
   const { data: nodes = [] } = useNodes();
+  const managedCount = nodes.filter(isManagedNode).length;
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -37,7 +39,7 @@ export function ProtectedRoute({ children }: { children: ReactNode }) {
     );
   }
 
-  if (!status?.repo_ready || nodes.length === 0) {
+  if (!status?.repo_ready || managedCount === 0) {
     return <Navigate to="/setup" replace />;
   }
 
