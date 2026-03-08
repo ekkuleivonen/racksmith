@@ -71,7 +71,7 @@ function pendingToNodeInput(pending: PendingNode, rackId: string): NodeInput {
 
 function layoutNodeToNodeInput(
   node: ReturnType<typeof nodeToRackLayoutNode>,
-  rackId: string
+  rackId: string,
 ): NodeInput {
   return {
     name: node.name,
@@ -103,7 +103,9 @@ export function RackPage() {
   const highlightedNodeId = new URLSearchParams(location.search).get("nodeId");
 
   const [layout, setLayout] = useState<RackLayout | null>(null);
-  const [layoutNodes, setLayoutNodes] = useState<ReturnType<typeof nodeToRackLayoutNode>[]>([]);
+  const [layoutNodes, setLayoutNodes] = useState<
+    ReturnType<typeof nodeToRackLayoutNode>[]
+  >([]);
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
   const [pending, setPending] = useState<PendingNode | null>(null);
   const [loading, setLoading] = useState(true);
@@ -132,7 +134,7 @@ export function RackPage() {
     if (!rackIdParam) return [];
     return nodesFromStore.filter(
       (n) =>
-        isManagedNode(n) && (!n.placement || n.placement.rack !== rackIdParam)
+        isManagedNode(n) && (!n.placement || n.placement.rack !== rackIdParam),
     );
   }, [nodesFromStore, rackIdParam]);
 
@@ -146,35 +148,41 @@ export function RackPage() {
   );
   const unmanagedItemCount = layoutNodes.length - managedItemCount;
 
-  const loadRack = useCallback(async (preserveId?: string) => {
-    if (!rackIdParam) {
-      setLayout(null);
-      setLayoutNodes([]);
-      return;
-    }
+  const loadRack = useCallback(
+    async (preserveId?: string) => {
+      if (!rackIdParam) {
+        setLayout(null);
+        setLayoutNodes([]);
+        return;
+      }
 
-    const { layout: data } = await getRackLayout(rackIdParam);
-    setLayout(data);
-    setRackNameDraft(data.name);
-    setRackWidthDraft(data.rack_width_inches);
-    setRackUnitsDraft(data.rack_units);
-    setRackColsDraft(data.rack_cols);
-    const nodes = data.nodes.map(nodeToRackLayoutNode);
-    setLayoutNodes(nodes);
-    setSelectedItemId((prev) => {
-      const idToKeep = preserveId ?? prev;
-      if (idToKeep && nodes.some((n) => n.id === idToKeep)) return idToKeep;
-      if (highlightedNodeId && nodes.some((n) => n.id === highlightedNodeId)) return highlightedNodeId;
-      return null;
-    });
-  }, [highlightedNodeId, rackIdParam]);
+      const { layout: data } = await getRackLayout(rackIdParam);
+      setLayout(data);
+      setRackNameDraft(data.name);
+      setRackWidthDraft(data.rack_width_inches);
+      setRackUnitsDraft(data.rack_units);
+      setRackColsDraft(data.rack_cols);
+      const nodes = data.nodes.map(nodeToRackLayoutNode);
+      setLayoutNodes(nodes);
+      setSelectedItemId((prev) => {
+        const idToKeep = preserveId ?? prev;
+        if (idToKeep && nodes.some((n) => n.id === idToKeep)) return idToKeep;
+        if (highlightedNodeId && nodes.some((n) => n.id === highlightedNodeId))
+          return highlightedNodeId;
+        return null;
+      });
+    },
+    [highlightedNodeId, rackIdParam],
+  );
 
   useEffect(() => {
     let active = true;
     void loadRack()
       .catch((error) => {
         if (!active) return;
-        toast.error(error instanceof Error ? error.message : "Failed to load rack");
+        toast.error(
+          error instanceof Error ? error.message : "Failed to load rack",
+        );
         setLayout(null);
         setLayoutNodes([]);
       })
@@ -197,7 +205,13 @@ export function RackPage() {
       params.delete("nodeId");
     }
     const nextSearch = params.toString();
-    navigate({ pathname: location.pathname, search: nextSearch ? `?${nextSearch}` : "" }, { replace: true });
+    navigate(
+      {
+        pathname: location.pathname,
+        search: nextSearch ? `?${nextSearch}` : "",
+      },
+      { replace: true },
+    );
   }, [location.pathname, location.search, navigate, selectedItemId]);
 
   useEffect(() => setPending(null), [rackIdParam]);
@@ -221,7 +235,9 @@ export function RackPage() {
       setLayout({ ...layout!, ...result.rack, nodes: layout!.nodes });
       return true;
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to update rack frame");
+      toast.error(
+        error instanceof Error ? error.message : "Failed to update rack frame",
+      );
       return false;
     }
   }, [layout, rack, rackColsDraft, rackUnitsDraft, rackWidthDraft]);
@@ -243,7 +259,9 @@ export function RackPage() {
       await loadRack();
       toast.success("Nodes unassigned. You can now change the rack frame.");
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to unassign nodes");
+      toast.error(
+        error instanceof Error ? error.message : "Failed to unassign nodes",
+      );
     } finally {
       setSaving(false);
     }
@@ -286,7 +304,9 @@ export function RackPage() {
         await loadRack();
         toast.success("Node placed on rack");
       } catch (error) {
-        toast.error(error instanceof Error ? error.message : "Failed to place node");
+        toast.error(
+          error instanceof Error ? error.message : "Failed to place node",
+        );
       } finally {
         setSaving(false);
       }
@@ -307,7 +327,9 @@ export function RackPage() {
         await loadRack();
         toast.success("Node unplaced");
       } catch (error) {
-        toast.error(error instanceof Error ? error.message : "Failed to unplace node");
+        toast.error(
+          error instanceof Error ? error.message : "Failed to unplace node",
+        );
       } finally {
         setSaving(false);
       }
@@ -315,14 +337,17 @@ export function RackPage() {
     [ensureFrameDraftSaved, layoutNodes, loadRack, rack, rackIdParam],
   );
 
-  const onSelectZone = useCallback((zone: ZoneSelection) => {
-    const bottomU = zone.startU - zone.heightU + 1;
-    if (bottomU < 1) {
-      toast.error("Selection does not fit rack height");
-      return;
-    }
-    setPending(makePendingNode(zone));
-  }, [rackIdParam]);
+  const onSelectZone = useCallback(
+    (zone: ZoneSelection) => {
+      const bottomU = zone.startU - zone.heightU + 1;
+      if (bottomU < 1) {
+        toast.error("Selection does not fit rack height");
+        return;
+      }
+      setPending(makePendingNode(zone));
+    },
+    [rackIdParam],
+  );
 
   const updateItemPosition = useCallback(
     async (
@@ -355,7 +380,9 @@ export function RackPage() {
         });
         await loadRack();
       } catch (error) {
-        toast.error(error instanceof Error ? error.message : "Failed to update item");
+        toast.error(
+          error instanceof Error ? error.message : "Failed to update item",
+        );
       } finally {
         setSaving(false);
       }
@@ -378,7 +405,11 @@ export function RackPage() {
         setRackColsDraft(result.rack.rack_cols);
         return true;
       } catch (error) {
-        toast.error(error instanceof Error ? error.message : "Failed to update rack frame");
+        toast.error(
+          error instanceof Error
+            ? error.message
+            : "Failed to update rack frame",
+        );
         return false;
       }
     },
@@ -402,7 +433,9 @@ export function RackPage() {
       setRackNameDraft(result.rack.name);
       return true;
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to update rack name");
+      toast.error(
+        error instanceof Error ? error.message : "Failed to update rack name",
+      );
       return false;
     } finally {
       setSaving(false);
@@ -411,10 +444,14 @@ export function RackPage() {
 
   const activateFrameEdit = useCallback(async () => {
     if (!rack) return;
-    const placedCount = layoutNodes.filter((n) => n.placement === "rack").length;
+    const placedCount = layoutNodes.filter(
+      (n) => n.placement === "rack",
+    ).length;
     const confirmed =
       placedCount === 0 ||
-      window.confirm("Changing the rack frame will unassign all nodes from this rack. Continue?");
+      window.confirm(
+        "Changing the rack frame will unassign all nodes from this rack. Continue?",
+      );
     if (!confirmed) return;
 
     if (placedCount > 0) {
@@ -437,9 +474,11 @@ export function RackPage() {
         <div className="max-w-3xl mx-auto space-y-4 border border-zinc-800 bg-zinc-900/30 p-4">
           <div className="space-y-1">
             <h1 className="text-zinc-100 font-semibold">Rack not found</h1>
-            <p className="text-sm text-zinc-500">This rack does not exist in the active repo anymore.</p>
+            <p className="text-sm text-zinc-500">
+              This rack does not exist in the active repo anymore.
+            </p>
           </div>
-          <Button size="sm" onClick={() => navigate("/rack/create")}>
+          <Button size="sm" onClick={() => navigate("/racks/create")}>
             Create a rack
           </Button>
         </div>
@@ -483,12 +522,18 @@ export function RackPage() {
                 </h1>
               )}
               <p className="text-xs text-zinc-500">
-                Rack definitions are stored under `.racksmith/racks` in the active repo.
+                Rack definitions are stored under `.racksmith/racks` in the
+                active repo.
               </p>
             </div>
             <div className="flex flex-wrap items-center justify-end gap-2">
               {!frameControlsVisible ? (
-                <Button size="sm" variant="outline" disabled={saving} onClick={() => void activateFrameEdit()}>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={saving}
+                  onClick={() => void activateFrameEdit()}
+                >
                   Change rack frame
                 </Button>
               ) : null}
@@ -500,14 +545,14 @@ export function RackPage() {
                   setSaving(true);
                   try {
                     await deleteRack(rack.id);
-                    const remaining = await listRacks();
                     toast.success("Rack deleted");
-                    navigate(
-                      remaining[0] ? `/rack/view/${remaining[0].id}` : "/rack/create",
-                      { replace: true },
-                    );
+                    navigate("/racks", { replace: true });
                   } catch (error) {
-                    toast.error(error instanceof Error ? error.message : "Failed to delete rack");
+                    toast.error(
+                      error instanceof Error
+                        ? error.message
+                        : "Failed to delete rack",
+                    );
                   } finally {
                     setSaving(false);
                   }
@@ -546,7 +591,8 @@ export function RackPage() {
               <div className="space-y-1">
                 <p className="text-sm text-zinc-100">Adjust rack dimensions</p>
                 <p className="text-xs text-zinc-500">
-                  All nodes were unassigned from this rack before frame editing was enabled.
+                  All nodes were unassigned from this rack before frame editing
+                  was enabled.
                 </p>
               </div>
               <div className="space-y-2">
@@ -579,7 +625,9 @@ export function RackPage() {
                 </div>
               </div>
               <div className="space-y-1">
-                <p className="text-xs text-zinc-400">Rack units: {rackUnitsDraft}U</p>
+                <p className="text-xs text-zinc-400">
+                  Rack units: {rackUnitsDraft}U
+                </p>
                 <Slider
                   min={1}
                   max={52}
@@ -589,12 +637,18 @@ export function RackPage() {
                     setRackUnitsDraft(units ?? 12);
                   }}
                   onValueCommit={([units]) =>
-                    void persistRackFrame(rackWidthDraft, units ?? rackUnitsDraft, rackColsDraft)
+                    void persistRackFrame(
+                      rackWidthDraft,
+                      units ?? rackUnitsDraft,
+                      rackColsDraft,
+                    )
                   }
                 />
               </div>
               <div className="space-y-1">
-                <p className="text-xs text-zinc-400">Columns: {rackColsDraft}</p>
+                <p className="text-xs text-zinc-400">
+                  Columns: {rackColsDraft}
+                </p>
                 <Slider
                   min={2}
                   max={48}
@@ -604,12 +658,20 @@ export function RackPage() {
                     setRackColsDraft(cols ?? 12);
                   }}
                   onValueCommit={([cols]) =>
-                    void persistRackFrame(rackWidthDraft, rackUnitsDraft, cols ?? rackColsDraft)
+                    void persistRackFrame(
+                      rackWidthDraft,
+                      rackUnitsDraft,
+                      cols ?? rackColsDraft,
+                    )
                   }
                 />
               </div>
               <div className="flex justify-end">
-                <Button size="sm" disabled={saving} onClick={() => setFrameControlsVisible(false)}>
+                <Button
+                  size="sm"
+                  disabled={saving}
+                  onClick={() => setFrameControlsVisible(false)}
+                >
                   Confirm rack dimensions
                 </Button>
               </div>
@@ -628,21 +690,31 @@ export function RackPage() {
           onRackNameChange={setRackNameDraft}
           onSelectItem={setSelectedItemId}
           onSelectZone={onSelectZone}
-          onMoveItem={(itemId, position) => void updateItemPosition(itemId, position)}
-          onResizeItem={(itemId, position) => void updateItemPosition(itemId, position)}
-          onPendingChange={(patch) => setPending((prev) => (prev ? { ...prev, ...patch } : prev))}
+          onMoveItem={(itemId, position) =>
+            void updateItemPosition(itemId, position)
+          }
+          onResizeItem={(itemId, position) =>
+            void updateItemPosition(itemId, position)
+          }
+          onPendingChange={(patch) =>
+            setPending((prev) => (prev ? { ...prev, ...patch } : prev))
+          }
           onPlacePending={async () => {
             if (!pending) return;
             setSaving(true);
             try {
               const frameSaved = await ensureFrameDraftSaved();
               if (!frameSaved) return;
-              const { node } = await createNode(pendingToNodeInput(pending, rackIdParam));
+              const { node } = await createNode(
+                pendingToNodeInput(pending, rackIdParam),
+              );
               await loadRack(node.id);
               setPending(null);
               toast.success("Item added");
             } catch (error) {
-              toast.error(error instanceof Error ? error.message : "Failed to add item");
+              toast.error(
+                error instanceof Error ? error.message : "Failed to add item",
+              );
             } finally {
               setSaving(false);
             }
@@ -659,7 +731,9 @@ export function RackPage() {
           onSelectedItemChange={(patch) => {
             if (!selectedItem) return;
             setLayoutNodes((prev) =>
-              prev.map((item) => (item.id === selectedItem.id ? { ...item, ...patch } : item)),
+              prev.map((item) =>
+                item.id === selectedItem.id ? { ...item, ...patch } : item,
+              ),
             );
           }}
           selectedItemActionSlot={
@@ -672,14 +746,18 @@ export function RackPage() {
                   disabled={saving || !isReachableNode(selectedItem)}
                   aria-label="Rediscover item"
                   title="Rediscover item"
-                    onClick={async () => {
+                  onClick={async () => {
                     setSaving(true);
                     try {
                       await refreshNode(selectedItem.id);
                       await loadRack();
                       toast.success("Item rediscovered");
                     } catch (error) {
-                      toast.error(error instanceof Error ? error.message : "Failed to rediscover item");
+                      toast.error(
+                        error instanceof Error
+                          ? error.message
+                          : "Failed to rediscover item",
+                      );
                     } finally {
                       setSaving(false);
                     }
@@ -707,18 +785,25 @@ export function RackPage() {
             setSaving(true);
             try {
               const input = layoutNodeToNodeInput(selectedItem, rackIdParam);
-              const placement = selectedItem.placement === "rack" ? {
-                rack: rackIdParam,
-                u_start: selectedItem.position_u_start,
-                u_height: selectedItem.position_u_height,
-                col_start: selectedItem.position_col_start,
-                col_count: selectedItem.position_col_count,
-              } : null;
+              const placement =
+                selectedItem.placement === "rack"
+                  ? {
+                      rack: rackIdParam,
+                      u_start: selectedItem.position_u_start,
+                      u_height: selectedItem.position_u_height,
+                      col_start: selectedItem.position_col_start,
+                      col_count: selectedItem.position_col_count,
+                    }
+                  : null;
               await updateNode(idToKeep, { ...input, placement });
               await loadRack(idToKeep);
               toast.success("Item updated");
             } catch (error) {
-              toast.error(error instanceof Error ? error.message : "Failed to update item");
+              toast.error(
+                error instanceof Error
+                  ? error.message
+                  : "Failed to update item",
+              );
             } finally {
               setSaving(false);
             }
@@ -732,7 +817,11 @@ export function RackPage() {
               setSelectedItemId(null);
               toast.success("Item deleted");
             } catch (error) {
-              toast.error(error instanceof Error ? error.message : "Failed to delete item");
+              toast.error(
+                error instanceof Error
+                  ? error.message
+                  : "Failed to delete item",
+              );
             } finally {
               setSaving(false);
             }

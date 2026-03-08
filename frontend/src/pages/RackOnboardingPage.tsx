@@ -37,10 +37,12 @@ export function RackOnboardingPage({ onCreated }: RackOnboardingPageProps) {
       if (onCreated) {
         onCreated(result.rack_id);
       } else {
-        navigate(`/rack/view/${result.rack_id}`, { replace: true });
+        navigate(`/racks/view/${result.rack_id}`, { replace: true });
       }
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to create rack");
+      toast.error(
+        error instanceof Error ? error.message : "Failed to create rack",
+      );
     } finally {
       setSaving(false);
     }

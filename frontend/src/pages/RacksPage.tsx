@@ -14,11 +14,12 @@ export function RacksPage() {
             <div>
               <h1 className="text-zinc-100 font-semibold">Racks</h1>
               <p className="text-xs text-zinc-500 mt-0.5">
-                Define rack topology and hardware placement. Add servers and network gear.
+                Define rack topology and hardware placement. Add servers and
+                network gear.
               </p>
             </div>
             <NavLink
-              to="/rack/create"
+              to="/racks/create"
               className="text-zinc-500 hover:text-zinc-100"
               aria-label="Create rack"
             >
@@ -35,7 +36,7 @@ export function RacksPage() {
                 Create your first rack to define hardware topology.
               </p>
               <NavLink
-                to="/rack/create"
+                to="/racks/create"
                 className="inline-block mt-3 text-sm text-zinc-400 hover:text-zinc-100"
               >
                 Create rack
@@ -46,20 +47,23 @@ export function RacksPage() {
               {rackEntries.map(({ rack }) => (
                 <NavLink
                   key={rack.id}
-                  to={`/rack/view/${rack.id}`}
+                  to={`/racks/view/${rack.id}`}
                   className={({ isActive }) =>
                     cn(
                       "flex items-center gap-3 border border-zinc-800 bg-zinc-900/30 p-4 transition-colors",
                       isActive
                         ? "border-zinc-600 bg-zinc-800/50"
-                        : "hover:border-zinc-700 hover:bg-zinc-900/50"
+                        : "hover:border-zinc-700 hover:bg-zinc-900/50",
                     )
                   }
                 >
                   <div className="min-w-0 flex-1">
-                    <p className="text-zinc-100 font-medium truncate">{rack.name}</p>
+                    <p className="text-zinc-100 font-medium truncate">
+                      {rack.name}
+                    </p>
                     <p className="text-xs text-zinc-500 truncate">
-                      {rack.rack_units}U · {rack.rack_width_inches}" · {rack.rack_cols} cols
+                      {rack.rack_units}U · {rack.rack_width_inches}" ·{" "}
+                      {rack.rack_cols} cols
                     </p>
                   </div>
                 </NavLink>

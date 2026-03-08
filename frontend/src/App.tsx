@@ -46,7 +46,9 @@ class ErrorBoundary extends Component<
       return (
         <div className="flex-1 flex items-center justify-center p-12">
           <div className="max-w-md space-y-4 text-center">
-            <h1 className="text-lg font-semibold text-zinc-100">Something went wrong</h1>
+            <h1 className="text-lg font-semibold text-zinc-100">
+              Something went wrong
+            </h1>
             <pre className="text-xs text-zinc-500 bg-zinc-900 border border-zinc-800 p-4 rounded text-left overflow-auto max-h-48">
               {this.state.error.message}
             </pre>
@@ -110,7 +112,7 @@ function AppRoutes() {
               }
             />
             <Route
-              path="/rack/create"
+              path="/racks/create"
               element={
                 <ProtectedRoute>
                   <AppShell title="Racks">
@@ -120,7 +122,7 @@ function AppRoutes() {
               }
             />
             <Route
-              path="/rack/view/:rackId"
+              path="/racks/view/:rackId"
               element={
                 <ProtectedRoute>
                   <AppShell title="Racks">

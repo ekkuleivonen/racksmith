@@ -52,7 +52,7 @@ type RequiredStep = 1 | 2 | 3 | "done";
 function computeStep(
   isAuthenticated: boolean,
   repoReady: boolean,
-  nodesCount: number
+  nodesCount: number,
 ): RequiredStep {
   if (!isAuthenticated) return 1;
   if (!repoReady) return 2;
@@ -63,7 +63,7 @@ function computeStep(
 function computeProgress(
   step: RequiredStep,
   wantsRack: boolean | null,
-  rackCount: number
+  rackCount: number,
 ): number {
   if (step === 1) return 20;
   if (step === 2) return 40;
@@ -82,7 +82,9 @@ export function SetupPage() {
   const managedCount = nodes.filter(isManagedNode).length;
   const { data: rackEntries = [] } = useRackEntries();
 
-  const [wantsRack, setWantsRackState] = useState<boolean | null>(getWantsRackFromStorage);
+  const [wantsRack, setWantsRackState] = useState<boolean | null>(
+    getWantsRackFromStorage,
+  );
   const setWantsRack = useCallback((value: boolean) => {
     persistWantsRack(value);
     setWantsRackState(value);
@@ -91,28 +93,37 @@ export function SetupPage() {
   const [repos, setRepos] = useState<GithubRepoChoice[]>([]);
   const [loadingRepos, setLoadingRepos] = useState(false);
   const [activeTab, setActiveTab] = useState<"existing" | "create">("existing");
-  const [selectedRepoFullName, setSelectedRepoFullName] = useState<string | null>(null);
+  const [selectedRepoFullName, setSelectedRepoFullName] = useState<
+    string | null
+  >(null);
   const [newRepoName, setNewRepoName] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const [dropTarget, setDropTarget] = useState<{ owner: string; repo: string } | null>(null);
+  const [dropTarget, setDropTarget] = useState<{
+    owner: string;
+    repo: string;
+  } | null>(null);
   const [signingIn, setSigningIn] = useState(false);
   const [setupPublicKey, setSetupPublicKey] = useState<string | null>(null);
   const [setupPublicKeyLoading, setSetupPublicKeyLoading] = useState(false);
-  const [setupPublicKeyError, setSetupPublicKeyError] = useState<string | null>(null);
+  const [setupPublicKeyError, setSetupPublicKeyError] = useState<string | null>(
+    null,
+  );
   const localRepos = useSetupStore((s) => s.localRepos);
   const dropRepo = useSetupStore((s) => s.dropRepo);
 
   const step = computeStep(
     isAuthenticated,
     status?.repo_ready ?? false,
-    managedCount
+    managedCount,
   );
 
   const refreshStatus = useCallback(async () => {
     try {
       await useSetupStore.getState().load();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to load workspace");
+      toast.error(
+        error instanceof Error ? error.message : "Failed to load workspace",
+      );
     }
   }, []);
 
@@ -122,7 +133,9 @@ export function SetupPage() {
       const next = await listGithubRepos();
       setRepos(next);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to load repositories");
+      toast.error(
+        error instanceof Error ? error.message : "Failed to load repositories",
+      );
     } finally {
       setLoadingRepos(false);
     }
@@ -146,7 +159,9 @@ export function SetupPage() {
       })
       .catch((err) => {
         setSetupPublicKey(null);
-        setSetupPublicKeyError(err instanceof Error ? err.message : "Failed to load public key");
+        setSetupPublicKeyError(
+          err instanceof Error ? err.message : "Failed to load public key",
+        );
         toast.error("Could not load Racksmith public key. See the note below.");
       })
       .finally(() => setSetupPublicKeyLoading(false));
@@ -165,9 +180,12 @@ export function SetupPage() {
 
   useEffect(() => {
     if (repos.length === 0 || !status) return;
-    const activeFullName = status.repo ? `${status.repo.owner}/${status.repo.repo}` : null;
+    const activeFullName = status.repo
+      ? `${status.repo.owner}/${status.repo.repo}`
+      : null;
     setSelectedRepoFullName((current) => {
-      if (current && repos.some((r) => `${r.owner}/${r.name}` === current)) return current;
+      if (current && repos.some((r) => `${r.owner}/${r.name}` === current))
+        return current;
       return activeFullName ?? null;
     });
   }, [repos, status?.repo]);
@@ -181,7 +199,9 @@ export function SetupPage() {
 
   const selectedExistingRepo = useMemo(() => {
     if (!selectedRepoFullName) return null;
-    return repos.find((r) => `${r.owner}/${r.name}` === selectedRepoFullName) ?? null;
+    return (
+      repos.find((r) => `${r.owner}/${r.name}` === selectedRepoFullName) ?? null
+    );
   }, [repos, selectedRepoFullName]);
 
   const repoItems = useMemo(() => repos.map((r) => r.full_name), [repos]);
@@ -248,9 +268,12 @@ export function SetupPage() {
             <p className="text-xs text-zinc-500">Step 2 of 5</p>
           </div>
           <div className="space-y-1">
-            <h1 className="text-zinc-100 text-xl font-semibold">Step 2 — Select repo</h1>
+            <h1 className="text-zinc-100 text-xl font-semibold">
+              Step 2 — Select repo
+            </h1>
             <p className="text-sm text-zinc-500">
-              Pick a Git repo to use with Racksmith. Everything lives in version control.
+              Pick a Git repo to use with Racksmith. Everything lives in version
+              control.
             </p>
           </div>
 
@@ -267,7 +290,9 @@ export function SetupPage() {
               ) : (
                 <Tabs
                   value={activeTab}
-                  onValueChange={(v) => setActiveTab(v as "existing" | "create")}
+                  onValueChange={(v) =>
+                    setActiveTab(v as "existing" | "create")
+                  }
                 >
                   <TabsList variant="line" className="w-full">
                     <TabsTrigger value="existing" className="flex-1">
@@ -288,7 +313,8 @@ export function SetupPage() {
                     {selectedExistingRepo ? (
                       <>
                         <p className="text-sm text-zinc-500">
-                          {selectedExistingRepo.private ? "Private" : "Public"} repo ready to import.
+                          {selectedExistingRepo.private ? "Private" : "Public"}{" "}
+                          repo ready to import.
                         </p>
                         <Button
                           disabled={submitting}
@@ -297,13 +323,17 @@ export function SetupPage() {
                             try {
                               await selectGithubRepo(
                                 selectedExistingRepo.owner,
-                                selectedExistingRepo.name
+                                selectedExistingRepo.name,
                               );
                               await refreshStatus();
-                              toast.success(`Using ${selectedExistingRepo.full_name}`);
+                              toast.success(
+                                `Using ${selectedExistingRepo.full_name}`,
+                              );
                             } catch (error) {
                               toast.error(
-                                error instanceof Error ? error.message : "Failed to select repo"
+                                error instanceof Error
+                                  ? error.message
+                                  : "Failed to select repo",
                               );
                             } finally {
                               setSubmitting(false);
@@ -347,7 +377,9 @@ export function SetupPage() {
                           toast.success(`Created ${newRepoName.trim()}`);
                         } catch (error) {
                           toast.error(
-                            error instanceof Error ? error.message : "Failed to create repo"
+                            error instanceof Error
+                              ? error.message
+                              : "Failed to create repo",
                           );
                         } finally {
                           setSubmitting(false);
@@ -374,7 +406,8 @@ export function SetupPage() {
               <CardHeader className="space-y-3">
                 <CardTitle>Local repos</CardTitle>
                 <p className="text-xs text-zinc-500">
-                  Repos cloned on this server. Dropping removes the clone from disk.
+                  Repos cloned on this server. Dropping removes the clone from
+                  disk.
                 </p>
               </CardHeader>
               <CardContent>
@@ -387,14 +420,18 @@ export function SetupPage() {
                       <span className="text-sm text-zinc-200 truncate">
                         {repo.full_name}
                         {repo.active ? (
-                          <span className="ml-2 text-xs text-zinc-500">(active)</span>
+                          <span className="ml-2 text-xs text-zinc-500">
+                            (active)
+                          </span>
                         ) : null}
                       </span>
                       <Button
                         variant="ghost"
                         size="sm"
                         className="shrink-0 text-red-400 hover:text-red-300 hover:bg-red-950/40"
-                        onClick={() => setDropTarget({ owner: repo.owner, repo: repo.repo })}
+                        onClick={() =>
+                          setDropTarget({ owner: repo.owner, repo: repo.repo })
+                        }
                         aria-label={`Drop ${repo.full_name}`}
                       >
                         <Trash2 className="size-4" />
@@ -413,12 +450,16 @@ export function SetupPage() {
           )}
         </div>
 
-        <AlertDialog open={!!dropTarget} onOpenChange={(open) => !open && setDropTarget(null)}>
+        <AlertDialog
+          open={!!dropTarget}
+          onOpenChange={(open) => !open && setDropTarget(null)}
+        >
           <AlertDialogContent>
             <AlertDialogHeader>
               <AlertDialogTitle>Drop repo from server</AlertDialogTitle>
               <AlertDialogDescription>
-                Remove {dropTarget?.owner}/{dropTarget?.repo}? The clone will be deleted from disk.
+                Remove {dropTarget?.owner}/{dropTarget?.repo}? The clone will be
+                deleted from disk.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
@@ -450,9 +491,12 @@ export function SetupPage() {
             <p className="text-xs text-zinc-500">Step 3 of 5</p>
           </div>
           <div className="space-y-1">
-            <h1 className="text-zinc-100 text-xl font-semibold">Step 3 — Add hardware</h1>
+            <h1 className="text-zinc-100 text-xl font-semibold">
+              Step 3 — Add hardware
+            </h1>
             <p className="text-sm text-zinc-500">
-              Add at least one node. Each node is a machine you can SSH into and run stacks on.
+              Add at least one node. Each node is a machine you can SSH into and
+              run stacks on.
             </p>
           </div>
 
@@ -460,15 +504,22 @@ export function SetupPage() {
             <CardHeader className="space-y-2">
               <CardTitle className="text-base">Racksmith public key</CardTitle>
               <p className="text-xs text-zinc-500">
-                Add this key to each host&apos;s <code className="rounded bg-zinc-800 px-1">~/.ssh/authorized_keys</code> so
-                Racksmith can SSH in without a password.
+                Add this key to each host&apos;s{" "}
+                <code className="rounded bg-zinc-800 px-1">
+                  ~/.ssh/authorized_keys
+                </code>{" "}
+                so Racksmith can SSH in without a password.
               </p>
             </CardHeader>
             <CardContent className="space-y-2">
               <div className="flex gap-2">
                 <textarea
                   readOnly
-                  value={setupPublicKeyLoading ? "Loading..." : setupPublicKey ?? ""}
+                  value={
+                    setupPublicKeyLoading
+                      ? "Loading..."
+                      : (setupPublicKey ?? "")
+                  }
                   className="min-h-20 flex-1 rounded-none border border-zinc-800 bg-zinc-950 px-3 py-2 font-mono text-[11px] text-zinc-200 outline-none resize-none"
                 />
                 <Button
@@ -509,7 +560,9 @@ export function SetupPage() {
                         toast.success("SSH key generated");
                       } catch (err) {
                         setSetupPublicKeyError(
-                          err instanceof Error ? err.message : "Failed to generate key"
+                          err instanceof Error
+                            ? err.message
+                            : "Failed to generate key",
                         );
                         toast.error("Could not generate SSH key");
                       } finally {
@@ -523,13 +576,19 @@ export function SetupPage() {
               )}
               {setupPublicKeyError && (
                 <p className="text-xs text-zinc-500">
-                  No SSH key found. Click <strong>Generate key</strong> to create one, or mount your host&apos;s <code className="rounded bg-zinc-800 px-1">~/.ssh</code> in Docker.
+                  No SSH key found. Click <strong>Generate key</strong> to
+                  create one, or mount your host&apos;s{" "}
+                  <code className="rounded bg-zinc-800 px-1">~/.ssh</code> in
+                  Docker.
                 </p>
               )}
             </CardContent>
           </Card>
 
-          <SetupNodesStep onContinue={() => {}} canContinue={managedCount > 0} />
+          <SetupNodesStep
+            onContinue={() => {}}
+            canContinue={managedCount > 0}
+          />
         </div>
       </div>
     );
@@ -547,32 +606,30 @@ export function SetupPage() {
             <Card className="border-zinc-800 bg-zinc-900/40">
               <CardHeader>
                 <CardTitle>Place on rack?</CardTitle>
-              <p className="text-sm text-zinc-500">
-                You have {managedCount} node{managedCount !== 1 ? "s" : ""}. Would you like to
-                visualize them on a rack? You can skip and do this later.
-              </p>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              <Button
-                className="w-full"
-                onClick={() => setWantsRack(true)}
-              >
-                Yes, create a rack
-              </Button>
-              <Button
-                variant="outline"
-                className="w-full"
-                onClick={() => {
-                  setWantsRack(false);
-                  navigateHome();
-                }}
-              >
-                Skip for now
-              </Button>
-            </CardContent>
-          </Card>
+                <p className="text-sm text-zinc-500">
+                  You have {managedCount} node{managedCount !== 1 ? "s" : ""}.
+                  Would you like to visualize them on a rack? You can skip and
+                  do this later.
+                </p>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                <Button className="w-full" onClick={() => setWantsRack(true)}>
+                  Yes, create a rack
+                </Button>
+                <Button
+                  variant="outline"
+                  className="w-full"
+                  onClick={() => {
+                    setWantsRack(false);
+                    navigateHome();
+                  }}
+                >
+                  Skip for now
+                </Button>
+              </CardContent>
+            </Card>
+          </div>
         </div>
-      </div>
       );
     }
 
@@ -607,7 +664,7 @@ export function SetupPage() {
           </div>
           <RackOnboardingPage
             onCreated={(rackId) => {
-              navigate(`/rack/view/${rackId}`, { replace: true });
+              navigate(`/racks/view/${rackId}`, { replace: true });
             }}
           />
           <div className="flex justify-end">

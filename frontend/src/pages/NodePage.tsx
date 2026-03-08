@@ -1,6 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { Layers, Pencil, Plus, Power, RefreshCw, Trash2, X } from "lucide-react";
+import {
+  Layers,
+  Pencil,
+  Plus,
+  Power,
+  RefreshCw,
+  Trash2,
+  X,
+} from "lucide-react";
 import { toast } from "sonner";
 import { SshTerminal } from "@/components/ssh/ssh-terminal";
 import { Badge } from "@/components/ui/badge";
@@ -170,7 +178,7 @@ export function NodePage() {
               This node is either missing or marked as visual-only.
             </p>
           </div>
-          <Button size="sm" onClick={() => navigate("/rack/create")}>
+          <Button size="sm" onClick={() => navigate("/racks/create")}>
             Back to racks
           </Button>
         </div>
@@ -233,7 +241,7 @@ export function NodePage() {
                   size="sm"
                   variant="outline"
                   onClick={() =>
-                    navigate(`/rack/view/${rackId}?nodeId=${node.id}`)
+                    navigate(`/racks/view/${rackId}?nodeId=${node.id}`)
                   }
                 >
                   View rack
@@ -298,13 +306,15 @@ export function NodePage() {
                 aria-label="Delete node"
                 disabled={deleting}
                 onClick={async () => {
-                  if (!window.confirm("Delete this node? This cannot be undone."))
+                  if (
+                    !window.confirm("Delete this node? This cannot be undone.")
+                  )
                     return;
                   setDeleting(true);
                   try {
                     await deleteNode(node.id);
                     toast.success("Node deleted");
-                    navigate(rackId ? `/rack/view/${rackId}` : "/nodes");
+                    navigate(rackId ? `/racks/view/${rackId}` : "/nodes");
                   } catch (error) {
                     toast.error(
                       error instanceof Error
@@ -411,9 +421,7 @@ export function NodePage() {
                 </div>
               </div>
             ) : (
-              <p className="text-sm text-zinc-300">
-                {node.name || "Not set"}
-              </p>
+              <p className="text-sm text-zinc-300">{node.name || "Not set"}</p>
             )}
           </div>
 
@@ -442,7 +450,10 @@ export function NodePage() {
                   className="h-8 text-xs"
                   value={connectionDraft.ip_address}
                   onChange={(e) =>
-                    setConnectionDraft((d) => ({ ...d, ip_address: e.target.value }))
+                    setConnectionDraft((d) => ({
+                      ...d,
+                      ip_address: e.target.value,
+                    }))
                   }
                   placeholder="IP address"
                 />
@@ -895,12 +906,12 @@ export function NodePage() {
           ) : (
             <section className="border border-zinc-800 bg-zinc-900/30 p-4">
               <p className="text-zinc-500 text-sm">
-                Add IP address and SSH user above, then Save to enable SSH access.
+                Add IP address and SSH user above, then Save to enable SSH
+                access.
               </p>
             </section>
           )}
         </section>
-
       </div>
     </div>
   );

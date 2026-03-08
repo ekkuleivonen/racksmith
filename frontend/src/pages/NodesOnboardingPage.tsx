@@ -5,7 +5,12 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { ItemHardwareFields } from "@/components/racks/item-hardware-fields";
-import { createNode, isManagedNode, refreshNode, type NodeInput } from "@/lib/nodes";
+import {
+  createNode,
+  isManagedNode,
+  refreshNode,
+  type NodeInput,
+} from "@/lib/nodes";
 import { useNodes } from "@/hooks/queries";
 import { usePingStore } from "@/stores/ping";
 import { nodeStatusKey } from "@/lib/ssh";
@@ -52,10 +57,16 @@ export function NodesOnboardingPage() {
         // Node created; probe failed (e.g. SSH not ready). User can rediscover later.
       }
       const displayName =
-        result.node.name || result.node.hostname || result.node.ip_address || result.node.id || "node";
+        result.node.name ||
+        result.node.hostname ||
+        result.node.ip_address ||
+        result.node.id ||
+        "node";
       toast.success(`Added ${displayName}`);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to add node");
+      toast.error(
+        error instanceof Error ? error.message : "Failed to add node",
+      );
     } finally {
       setSaving(false);
     }
@@ -74,7 +85,7 @@ export function NodesOnboardingPage() {
   }, [navigate]);
 
   const handleCreateRack = useCallback(() => {
-    navigate("/rack/create", { replace: true });
+    navigate("/racks/create", { replace: true });
   }, [navigate]);
 
   if (showRackPrompt) {
@@ -82,10 +93,13 @@ export function NodesOnboardingPage() {
       <div className="flex-1 min-h-0 overflow-auto p-6">
         <div className="max-w-xl mx-auto space-y-4 border border-zinc-800 bg-zinc-900/30 p-6">
           <div className="space-y-1">
-            <h1 className="text-zinc-100 font-semibold">Place nodes on a rack?</h1>
+            <h1 className="text-zinc-100 font-semibold">
+              Place nodes on a rack?
+            </h1>
             <p className="text-sm text-zinc-500">
-              You added {nodes.length} node{nodes.length !== 1 ? "s" : ""}. Would you like to
-              visualize them on a rack? You can skip and do this later.
+              You added {nodes.length} node{nodes.length !== 1 ? "s" : ""}.
+              Would you like to visualize them on a rack? You can skip and do
+              this later.
             </p>
           </div>
           <div className="flex gap-2">
@@ -105,8 +119,8 @@ export function NodesOnboardingPage() {
         <div className="space-y-1">
           <h1 className="text-zinc-100 font-semibold">Add your hardware</h1>
           <p className="text-sm text-zinc-500">
-            Add one or more nodes. Each node is a machine you can SSH into and run stacks on.
-            You can add more anytime from the Nodes page.
+            Add one or more nodes. Each node is a machine you can SSH into and
+            run stacks on. You can add more anytime from the Nodes page.
           </p>
         </div>
 
@@ -117,7 +131,8 @@ export function NodesOnboardingPage() {
             </p>
             <div className="space-y-1.5 max-h-32 overflow-y-auto">
               {nodes.map((node) => {
-                const status = pingStatuses[nodeStatusKey(node.id)] ?? "unknown";
+                const status =
+                  pingStatuses[nodeStatusKey(node.id)] ?? "unknown";
                 return (
                   <div
                     key={node.id}
@@ -128,7 +143,7 @@ export function NodesOnboardingPage() {
                         "size-2 shrink-0 rounded-full",
                         status === "online" && "bg-emerald-400",
                         status === "offline" && "bg-red-500",
-                        status === "unknown" && "bg-zinc-600"
+                        status === "unknown" && "bg-zinc-600",
                       )}
                       title={
                         status === "online"
@@ -194,7 +209,8 @@ export function NodesOnboardingPage() {
             )}
           </div>
           <p className="text-[11px] text-zinc-500">
-            Add at least one to continue. You can add more anytime from the Nodes page.
+            Add at least one to continue. You can add more anytime from the
+            Nodes page.
           </p>
         </div>
       </div>

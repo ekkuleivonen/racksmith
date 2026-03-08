@@ -94,7 +94,7 @@ export function AppShell({ children }: AppShellProps) {
 
   const isOnboarding =
     location.pathname.startsWith("/nodes/create") ||
-    location.pathname === "/rack/create" ||
+    location.pathname === "/racks/create" ||
     location.pathname === "/racks";
 
   const alertDialog = (
@@ -115,7 +115,8 @@ export function AppShell({ children }: AppShellProps) {
           />
           {!loadingPublicKey && !publicKey ? (
             <p className="text-[11px] text-zinc-500">
-              No SSH key found. Generate one to allow Racksmith to connect to your nodes.
+              No SSH key found. Generate one to allow Racksmith to connect to
+              your nodes.
             </p>
           ) : null}
         </div>
@@ -129,7 +130,9 @@ export function AppShell({ children }: AppShellProps) {
               }}
               disabled={generatingKey}
             >
-              <RefreshCw className={`size-3 ${generatingKey ? "animate-spin" : ""}`} />
+              <RefreshCw
+                className={`size-3 ${generatingKey ? "animate-spin" : ""}`}
+              />
               {generatingKey ? "Generating..." : "Generate key"}
             </AlertDialogAction>
           ) : (
@@ -152,9 +155,7 @@ export function AppShell({ children }: AppShellProps) {
   if (isOnboarding) {
     return (
       <div className="h-screen bg-zinc-950 flex overflow-hidden">
-        <main className="h-full flex-1 min-w-0 overflow-auto">
-          {children}
-        </main>
+        <main className="h-full flex-1 min-w-0 overflow-auto">{children}</main>
         {alertDialog}
       </div>
     );

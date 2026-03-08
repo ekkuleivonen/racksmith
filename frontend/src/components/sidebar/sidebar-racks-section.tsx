@@ -29,7 +29,9 @@ export function SidebarRacksSection() {
           className={({ isActive }) =>
             cn(
               "flex items-center gap-1.5 text-[11px] uppercase tracking-wide",
-              isActive || pathname === "/racks" || pathname.startsWith("/rack/")
+              isActive ||
+                pathname === "/racks" ||
+                pathname.startsWith("/racks/")
                 ? "text-zinc-100"
                 : "text-zinc-400 hover:text-zinc-200",
             )
@@ -39,7 +41,7 @@ export function SidebarRacksSection() {
           Racks
         </NavLink>
         <NavLink
-          to="/rack/create"
+          to="/racks/create"
           className="text-zinc-500 hover:text-zinc-100"
           aria-label="Create rack"
         >
@@ -56,12 +58,11 @@ export function SidebarRacksSection() {
             className="w-full border-0"
           >
             {rackEntries.map(({ rack, nodes }) => (
-              <AccordionItem
-                key={rack.id}
-                value={rack.id}
-                className="border-0"
-              >
-                <AccordionTrigger hideIcon className="py-0.5 pl-0.5 pr-1.5 hover:no-underline font-normal rounded text-zinc-400 hover:bg-zinc-800/50 hover:text-zinc-300 flex items-center gap-1.5 group">
+              <AccordionItem key={rack.id} value={rack.id} className="border-0">
+                <AccordionTrigger
+                  hideIcon
+                  className="py-0.5 pl-0.5 pr-1.5 hover:no-underline font-normal rounded text-zinc-400 hover:bg-zinc-800/50 hover:text-zinc-300 flex items-center gap-1.5 group"
+                >
                   <button
                     type="button"
                     className="shrink-0 p-0.5 -m-0.5 flex items-center justify-center rounded cursor-pointer hover:bg-zinc-800 text-zinc-400 hover:text-zinc-300 transition-transform group-data-[state=open]:rotate-90"
@@ -70,7 +71,7 @@ export function SidebarRacksSection() {
                     <ChevronRight className="size-3.5" />
                   </button>
                   <NavLink
-                    to={`/rack/view/${rack.id}`}
+                    to={`/racks/view/${rack.id}`}
                     onClick={(e) => e.stopPropagation()}
                     className={({ isActive }) =>
                       cn(
@@ -123,7 +124,10 @@ export function SidebarRacksSection() {
                               }
                             />
                             <span className="truncate">
-                              {node.name || node.hostname || node.ip_address || node.id}
+                              {node.name ||
+                                node.hostname ||
+                                node.ip_address ||
+                                node.id}
                             </span>
                           </NavLink>
                         );
