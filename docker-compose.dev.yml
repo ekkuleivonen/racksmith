@@ -1,0 +1,21 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    image: racksmith-app:dev
+
+  worker:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    image: racksmith-app:dev
+
+  frontend:
+    build:
+      context: frontend
+      dockerfile: Dockerfile
+    image: racksmith-frontend:dev
+
+  watchtower:
+    profiles: [disabled]
