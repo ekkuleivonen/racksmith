@@ -1,6 +1,6 @@
 import { type ReactNode, useCallback, useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { Copy } from "lucide-react";
+import { Copy, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import {
   AlertDialog,
@@ -41,6 +41,8 @@ export function AppShell({ children }: AppShellProps) {
   const publicKey = useSetupStore((s) => s.publicKey);
   const loadingPublicKey = useSetupStore((s) => s.loadingPublicKey);
   const setPublicKeyOpen = useSetupStore((s) => s.setPublicKeyOpen);
+  const generateKey = useSetupStore((s) => s.generateKey);
+  const generatingKey = useSetupStore((s) => s.generatingKey);
   const loadSetup = useSetupStore((s) => s.load);
   const loadRacks = useRackStore((s) => s.load);
   const loadNodes = useNodesStore((s) => s.load);
@@ -122,22 +124,35 @@ export function AppShell({ children }: AppShellProps) {
           />
           {!loadingPublicKey && !publicKey ? (
             <p className="text-[11px] text-zinc-500">
-              No local public SSH key was found on this Racksmith machine.
+              No SSH key found. Generate one to allow Racksmith to connect to your nodes.
             </p>
           ) : null}
         </div>
         <AlertDialogFooter>
           <AlertDialogCancel>Close</AlertDialogCancel>
-          <AlertDialogAction
-            onClick={(event) => {
-              event.preventDefault();
-              void copyPublicKey();
-            }}
-            disabled={!publicKey || loadingPublicKey}
-          >
-            <Copy className="size-3" />
-            Copy
-          </AlertDialogAction>
+          {!publicKey && !loadingPublicKey ? (
+            <AlertDialogAction
+              onClick={(event) => {
+                event.preventDefault();
+                void generateKey();
+              }}
+              disabled={generatingKey}
+            >
+              <RefreshCw className={`size-3 ${generatingKey ? "animate-spin" : ""}`} />
+              {generatingKey ? "Generating..." : "Generate key"}
+            </AlertDialogAction>
+          ) : (
+            <AlertDialogAction
+              onClick={(event) => {
+                event.preventDefault();
+                void copyPublicKey();
+              }}
+              disabled={!publicKey || loadingPublicKey}
+            >
+              <Copy className="size-3" />
+              Copy
+            </AlertDialogAction>
+          )}
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>

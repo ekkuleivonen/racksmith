@@ -102,32 +102,22 @@ def _racksmith_ssh_dir() -> Path:
     return Path(settings.DB_PATH).parent / ".ssh"
 
 
-def _key_search_dirs() -> list[Path]:
-    """Directories to search for SSH keys, in order. Racksmith dir first, then ~/.ssh."""
-    return [_racksmith_ssh_dir(), Path.home() / ".ssh"]
-
-
 def machine_public_key() -> str:
-    candidates = [
-        "id_ed25519.pub",
-        "id_ecdsa.pub",
-        "id_rsa.pub",
-    ]
-    for ssh_dir in _key_search_dirs():
-        for name in candidates:
-            path = ssh_dir / name
-            if path.is_file():
-                value = path.read_text(encoding="utf-8").strip()
-                if value:
-                    return value
+    ssh_dir = _racksmith_ssh_dir()
+    for name in ("id_ed25519.pub", "id_ecdsa.pub", "id_rsa.pub"):
+        path = ssh_dir / name
+        if path.is_file():
+            value = path.read_text(encoding="utf-8").strip()
+            if value:
+                return value
     raise FileNotFoundError(
-        "No public SSH key found. Add one to ~/.ssh or generate one below."
+        "No public SSH key found. Generate one below."
     )
 
 
 def generate_ssh_key_pair() -> str:
-    """Generate an Ed25519 key pair in ~/.ssh. Returns the public key."""
-    ssh_dir = Path.home() / ".ssh"
+    """Generate an Ed25519 key pair in the Racksmith data dir. Returns the public key."""
+    ssh_dir = _racksmith_ssh_dir()
     ssh_dir.mkdir(parents=True, exist_ok=True)
     ssh_dir.chmod(0o700)
 

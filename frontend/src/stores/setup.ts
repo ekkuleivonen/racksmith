@@ -9,7 +9,7 @@ import {
   type LocalRepo,
   type SetupStatus,
 } from "@/lib/setup";
-import { fetchMachinePublicKey } from "@/lib/ssh";
+import { fetchMachinePublicKey, generateMachineKey } from "@/lib/ssh";
 import { useCodeStore } from "./code";
 import { useRackStore } from "./racks";
 import { useNodesStore } from "./nodes";
@@ -24,12 +24,14 @@ type SetupStore = {
   syncing: boolean;
   publicKey: string;
   loadingPublicKey: boolean;
+  generatingKey: boolean;
   publicKeyOpen: boolean;
   load: () => Promise<void>;
   switchRepo: (owner: string, repo: string) => Promise<void>;
   dropRepo: (owner: string, repo: string) => Promise<void>;
   syncRepo: () => Promise<void>;
   openPublicKey: () => Promise<void>;
+  generateKey: () => Promise<void>;
   setPublicKeyOpen: (open: boolean) => void;
 };
 
@@ -41,6 +43,7 @@ export const useSetupStore = create<SetupStore>((set, get) => ({
   syncing: false,
   publicKey: "",
   loadingPublicKey: false,
+  generatingKey: false,
   publicKeyOpen: false,
 
   load: async () => {
@@ -144,6 +147,20 @@ export const useSetupStore = create<SetupStore>((set, get) => ({
       );
     } finally {
       set({ loadingPublicKey: false });
+    }
+  },
+
+  generateKey: async () => {
+    set({ generatingKey: true });
+    try {
+      const result = await generateMachineKey();
+      set({ publicKey: result.public_key });
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Failed to generate key",
+      );
+    } finally {
+      set({ generatingKey: false });
     }
   },
 

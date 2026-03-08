@@ -22,7 +22,6 @@ services:
     volumes:
       - ./data:/app/data
       - ./workspace:/app/workspace
-      - ${HOME}/.ssh:/root/.ssh
     depends_on:
       - redis
 
@@ -41,7 +40,6 @@ services:
     volumes:
       - ./data:/app/data
       - ./workspace:/app/workspace
-      - ${HOME}/.ssh:/root/.ssh
     depends_on:
       - redis
 
