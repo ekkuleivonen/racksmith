@@ -19,6 +19,13 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import type {
@@ -107,19 +114,59 @@ function SortableRoleCard({
             .map((field) => (
             <div key={field.key} className="space-y-1">
               <p className="text-xs text-zinc-400">{field.label}</p>
-              <Input
-                value={String(role.vars[field.key] ?? field.default ?? "")}
-                onChange={(event) =>
-                  updateRole(index, {
-                    ...role,
-                    vars: {
-                      ...role.vars,
-                      [field.key]: event.target.value,
-                    },
-                  })
-                }
-                placeholder={field.placeholder}
-              />
+              {field.type === "select" && (field.options?.length ?? 0) > 0 ? (
+                <Select
+                  value={String(role.vars[field.key] ?? field.default ?? "")}
+                  onValueChange={(value) =>
+                    updateRole(index, {
+                      ...role,
+                      vars: { ...role.vars, [field.key]: value },
+                    })
+                  }
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder={field.placeholder} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {field.options!.map((opt) => (
+                      <SelectItem key={opt} value={opt}>
+                        {opt}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : field.type === "boolean" ? (
+                <Checkbox
+                  checked={
+                    role.vars[field.key] !== undefined
+                      ? Boolean(role.vars[field.key])
+                      : field.default === true
+                  }
+                  onCheckedChange={(checked) =>
+                    updateRole(index, {
+                      ...role,
+                      vars: {
+                        ...role.vars,
+                        [field.key]: checked === true,
+                      },
+                    })
+                  }
+                />
+              ) : (
+                <Input
+                  value={String(role.vars[field.key] ?? field.default ?? "")}
+                  onChange={(event) =>
+                    updateRole(index, {
+                      ...role,
+                      vars: {
+                        ...role.vars,
+                        [field.key]: event.target.value,
+                      },
+                    })
+                  }
+                  placeholder={field.placeholder}
+                />
+              )}
             </div>
           ))}
         </div>
