@@ -653,23 +653,6 @@ export function NodePage() {
           </div>
         </section>
 
-        <section className="space-y-3">
-          {isReachableNode(node) ? (
-            <SshTerminal
-              nodeId={node.id}
-              node={node}
-              title="SSH"
-              description="Open a terminal to this device using the server host machine's SSH credentials."
-            />
-          ) : (
-            <section className="border border-zinc-800 bg-zinc-900/30 p-4">
-              <p className="text-zinc-500 text-sm">
-                Add IP address and SSH user above, then Save to enable SSH access.
-              </p>
-            </section>
-          )}
-        </section>
-
         <section className="border border-zinc-800 bg-zinc-900/30 p-4 space-y-3">
           <div className="flex items-center gap-2">
             <Layers className="size-4 text-zinc-400" />
@@ -740,6 +723,23 @@ export function NodePage() {
                 </li>
               ))}
             </ul>
+          )}
+        </section>
+
+        <section className="space-y-3">
+          {isReachableNode(node) ? (
+            <SshTerminal
+              nodeId={node.id}
+              node={node}
+              title="SSH"
+              description="Open a terminal to this device using the server host machine's SSH credentials."
+            />
+          ) : (
+            <section className="border border-zinc-800 bg-zinc-900/30 p-4">
+              <p className="text-zinc-500 text-sm">
+                Add IP address and SSH user above, then Save to enable SSH access.
+              </p>
+            </section>
           )}
         </section>
 
