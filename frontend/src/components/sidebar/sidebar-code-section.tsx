@@ -1,8 +1,7 @@
 import { useCallback, useMemo, useState } from "react";
-import { useLocation, NavLink, useNavigate } from "react-router-dom";
-import { Code2, FilePlus, FolderPlus } from "lucide-react";
+import { useLocation, useNavigate } from "react-router-dom";
+import { FilePlus, FolderPlus } from "lucide-react";
 import { toast } from "sonner";
-import { cn } from "@/lib/utils";
 import {
   FileTree,
   type FileStatus,
@@ -164,52 +163,36 @@ export function SidebarCodeSection() {
   );
 
   return (
-    <div className="space-y-1">
-      <div className="flex items-center justify-between gap-2 px-2 py-1.5 border border-transparent">
-        <NavLink
-          to={codeHref}
-          className={({ isActive }) =>
-            cn(
-              "flex items-center gap-1.5 text-[11px] uppercase tracking-wide",
-              isActive || pathname.startsWith("/code")
-                ? "text-zinc-100"
-                : "text-zinc-400 hover:text-zinc-200",
-            )
-          }
-        >
-          <Code2 className="size-3 shrink-0" />
-          Code
-        </NavLink>
-        {repo && (
-          <div className="flex items-center gap-0.5">
-            <button
-              type="button"
-              onClick={() => handleCreateInDir("", "file")}
-              className="text-zinc-500 hover:text-zinc-100 p-0.5"
-              title="New file"
-              aria-label="New file"
-            >
-              <FilePlus className="size-3" />
-            </button>
-            <button
-              type="button"
-              onClick={() => handleCreateInDir("", "dir")}
-              className="text-zinc-500 hover:text-zinc-100 p-0.5"
-              title="New folder"
-              aria-label="New folder"
-            >
-              <FolderPlus className="size-3" />
-            </button>
-          </div>
-        )}
-      </div>
-      <div className="space-y-1 pl-2">
+    <div className="space-y-2">
+      {repo && (
+        <div className="flex items-center justify-end gap-0.5 px-2">
+          <button
+            type="button"
+            onClick={() => handleCreateInDir("", "file")}
+            className="text-zinc-500 hover:text-zinc-100 p-0.5"
+            title="New file"
+            aria-label="New file"
+          >
+            <FilePlus className="size-3" />
+          </button>
+          <button
+            type="button"
+            onClick={() => handleCreateInDir("", "dir")}
+            className="text-zinc-500 hover:text-zinc-100 p-0.5"
+            title="New folder"
+            aria-label="New folder"
+          >
+            <FolderPlus className="size-3" />
+          </button>
+        </div>
+      )}
+      <div className="space-y-1 px-2">
         {!repo ? (
-          <p className="px-2 py-1 text-[10px] text-zinc-500">No repo</p>
+          <p className="py-1 text-[10px] text-zinc-500">No repo</p>
         ) : loading ? (
-          <p className="px-2 py-1 text-[10px] text-zinc-500">Loading...</p>
+          <p className="py-1 text-[10px] text-zinc-500">Loading...</p>
         ) : entries.length === 0 ? (
-          <p className="px-2 py-1 text-[10px] text-zinc-500">No files</p>
+          <p className="py-1 text-[10px] text-zinc-500">No files</p>
         ) : (
           <FileTree
             entries={entries}
