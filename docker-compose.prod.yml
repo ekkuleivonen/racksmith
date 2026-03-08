@@ -1,0 +1,68 @@
+services:
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
+  app:
+    image: ghcr.io/ekkuleivonen/racksmith-app:latest
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      REDIS_URL: redis://redis:6379
+      DB_PATH: /app/data/racksmith.db
+      REPOS_WORKSPACE: /app/workspace
+      LIBRARY_DIR: /app/.racksmith
+    volumes:
+      - ./data:/app/data
+      - ./workspace:/app/workspace
+    depends_on:
+      redis:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/repos/status')"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 15s
+
+  worker:
+    image: ghcr.io/ekkuleivonen/racksmith-app:latest
+    command: ["uv", "run", "python", "run_worker.py", "worker.settings.WorkerSettings"]
+    env_file:
+      - .env
+    environment:
+      REDIS_URL: redis://redis:6379
+      DB_PATH: /app/data/racksmith.db
+      REPOS_WORKSPACE: /app/workspace
+      LIBRARY_DIR: /app/.racksmith
+    volumes:
+      - ./data:/app/data
+      - ./workspace:/app/workspace
+    depends_on:
+      - redis
+
+  frontend:
+    image: ghcr.io/ekkuleivonen/racksmith-frontend:latest
+    ports:
+      - "3000:80"
+    depends_on:
+      app:
+        condition: service_healthy
+
+  watchtower:
+    image: containrrr/watchtower
+    environment:
+      - WATCHTOWER_POLL_INTERVAL=60
+      - WATCHTOWER_CLEANUP=true
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ${HOME}/.docker/config.json:/config.json:ro
+    restart: unless-stopped
+
+volumes:
+  redis_data:
