@@ -14,10 +14,27 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { GripVertical, Plus, Search, Trash2 } from "lucide-react";
+import { Check, GripVertical, Trash2 } from "lucide-react";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Combobox,
+  ComboboxContent,
+  ComboboxEmpty,
+  ComboboxGroup,
+  ComboboxInput,
+  ComboboxItem,
+  ComboboxLabel,
+  ComboboxList,
+  useComboboxAnchor,
+} from "@/components/ui/combobox";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -51,7 +68,16 @@ function actionMap(actions: Action[]) {
   return Object.fromEntries(actions.map((action) => [action.slug, action]));
 }
 
+function makeActionPickerValue(action: Action) {
+  return `${action.slug}|||${action.name}|||${action.description}|||${(action.labels ?? []).join(" ")}`;
+}
+
+function parseActionSlugFromPickerValue(value: string) {
+  return value.split("|||")[0] ?? "";
+}
+
 type SortableRoleCardProps = {
+  roleId: string;
   role: StackRoleEntry;
   index: number;
   action: Action;
@@ -60,6 +86,7 @@ type SortableRoleCardProps = {
 };
 
 function SortableRoleCard({
+  roleId,
   role,
   index,
   action,
@@ -68,34 +95,37 @@ function SortableRoleCard({
 }: SortableRoleCardProps) {
   const { attributes, listeners, setNodeRef, transform, transition } =
     useSortable({
-      id: `${role.action_slug}-${index}`,
+      id: roleId,
     });
 
   return (
-    <div
+    <AccordionItem
+      value={roleId}
       ref={setNodeRef}
       style={{
         transform: CSS.Transform.toString(transform),
         transition,
       }}
-      className="space-y-2 border border-zinc-800 bg-zinc-950/40 p-3"
+      className="border border-zinc-800 bg-zinc-950/40 px-3"
     >
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex items-start gap-2">
-          <button
-            type="button"
-            className="mt-0.5 text-zinc-500 hover:text-zinc-100"
-            aria-label={`Reorder ${action.name}`}
-            {...attributes}
-            {...listeners}
-          >
-            <GripVertical className="size-4" />
-          </button>
+      <div className="flex items-start gap-2 py-3">
+        <button
+          type="button"
+          className="mt-0.5 text-zinc-500 hover:text-zinc-100"
+          aria-label={`Reorder ${action.name}`}
+          {...attributes}
+          {...listeners}
+        >
+          <GripVertical className="size-4" />
+        </button>
+        <AccordionTrigger
+          className="py-0 text-left hover:no-underline"
+        >
           <div className="space-y-1">
             <p className="text-sm text-zinc-100">{action.name}</p>
-            <p className="text-xs text-zinc-500">{action.description}</p>
+            <p className="truncate text-xs text-zinc-500">{action.description}</p>
           </div>
-        </div>
+        </AccordionTrigger>
         <Button
           type="button"
           size="icon"
@@ -107,75 +137,78 @@ function SortableRoleCard({
         </Button>
       </div>
 
-      {action.inputs.filter((f) => !(f as { interactive?: boolean }).interactive).length > 0 ? (
-        <div className="grid gap-2 md:grid-cols-2">
-          {action.inputs
-            .filter((f) => !(f as { interactive?: boolean }).interactive)
-            .map((field) => (
-            <div key={field.key} className="space-y-1">
-              <p className="text-xs text-zinc-400">{field.label}</p>
-              {field.type === "select" && (field.options?.length ?? 0) > 0 ? (
-                <Select
-                  value={String(role.vars[field.key] ?? field.default ?? "")}
-                  onValueChange={(value) =>
-                    updateRole(index, {
-                      ...role,
-                      vars: { ...role.vars, [field.key]: value },
-                    })
-                  }
-                >
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder={field.placeholder} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {field.options!.map((opt) => (
-                      <SelectItem key={opt} value={opt}>
-                        {opt}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              ) : field.type === "boolean" ? (
-                <Checkbox
-                  checked={
-                    role.vars[field.key] !== undefined
-                      ? Boolean(role.vars[field.key])
-                      : field.default === true
-                  }
-                  onCheckedChange={(checked) =>
-                    updateRole(index, {
-                      ...role,
-                      vars: {
-                        ...role.vars,
-                        [field.key]: checked === true,
-                      },
-                    })
-                  }
-                />
-              ) : (
-                <Input
-                  value={String(role.vars[field.key] ?? field.default ?? "")}
-                  onChange={(event) =>
-                    updateRole(index, {
-                      ...role,
-                      vars: {
-                        ...role.vars,
-                        [field.key]: event.target.value,
-                      },
-                    })
-                  }
-                  placeholder={field.placeholder}
-                />
-              )}
-            </div>
-          ))}
-        </div>
-      ) : (
-        <p className="text-xs text-zinc-500">
-          No additional variables for this role.
-        </p>
-      )}
-    </div>
+      <AccordionContent className="pb-3">
+        {action.inputs.filter((f) => !(f as { interactive?: boolean }).interactive)
+          .length > 0 ? (
+          <div className="grid gap-2 md:grid-cols-2">
+            {action.inputs
+              .filter((f) => !(f as { interactive?: boolean }).interactive)
+              .map((field) => (
+                <div key={field.key} className="space-y-1">
+                  <p className="text-xs text-zinc-400">{field.label}</p>
+                  {field.type === "select" && (field.options?.length ?? 0) > 0 ? (
+                    <Select
+                      value={String(role.vars[field.key] ?? field.default ?? "")}
+                      onValueChange={(value) =>
+                        updateRole(index, {
+                          ...role,
+                          vars: { ...role.vars, [field.key]: value },
+                        })
+                      }
+                    >
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder={field.placeholder} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {field.options!.map((opt) => (
+                          <SelectItem key={opt} value={opt}>
+                            {opt}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  ) : field.type === "boolean" ? (
+                    <Checkbox
+                      checked={
+                        role.vars[field.key] !== undefined
+                          ? Boolean(role.vars[field.key])
+                          : field.default === true
+                      }
+                      onCheckedChange={(checked) =>
+                        updateRole(index, {
+                          ...role,
+                          vars: {
+                            ...role.vars,
+                            [field.key]: checked === true,
+                          },
+                        })
+                      }
+                    />
+                  ) : (
+                    <Input
+                      value={String(role.vars[field.key] ?? field.default ?? "")}
+                      onChange={(event) =>
+                        updateRole(index, {
+                          ...role,
+                          vars: {
+                            ...role.vars,
+                            [field.key]: event.target.value,
+                          },
+                        })
+                      }
+                      placeholder={field.placeholder}
+                    />
+                  )}
+                </div>
+              ))}
+          </div>
+        ) : (
+          <p className="text-xs text-zinc-500">
+            No additional variables for this role.
+          </p>
+        )}
+      </AccordionContent>
+    </AccordionItem>
   );
 }
 
@@ -195,32 +228,49 @@ export function StackEditorForm({
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
   );
+  const actionPickerAnchor = useComboboxAnchor();
   const [editingField, setEditingField] = useState<
     "name" | "description" | null
   >(null);
-  const [roleSearch, setRoleSearch] = useState("");
-  const [selectedLabelFilters, setSelectedLabelFilters] = useState<Set<string>>(
-    new Set(),
+  const [actionPickerValue, setActionPickerValue] = useState<string | null>(
+    null,
   );
+  const [activeRoleId, setActiveRoleId] = useState<string | undefined>(
+    draft.roles[0]?.action_slug,
+  );
+  const playNameInputRef = useRef<HTMLInputElement | null>(null);
+  const descriptionInputRef = useRef<HTMLTextAreaElement | null>(null);
 
-  const allLabels = useMemo(
+  const actionPickerValueBySlug = useMemo(
     () =>
-      Array.from(
-        new Set(actions.flatMap((a) => a.labels ?? [])),
-      ).sort(),
+      Object.fromEntries(
+        actions.map((action) => [action.slug, makeActionPickerValue(action)]),
+      ),
     [actions],
   );
 
-  const toggleLabelFilter = (label: string) => {
-    setSelectedLabelFilters((prev) => {
-      const next = new Set(prev);
-      if (next.has(label)) next.delete(label);
-      else next.add(label);
-      return next;
-    });
-  };
-  const playNameInputRef = useRef<HTMLInputElement | null>(null);
-  const descriptionInputRef = useRef<HTMLTextAreaElement | null>(null);
+  const actionPickerItems = useMemo(
+    () => Object.values(actionPickerValueBySlug),
+    [actionPickerValueBySlug],
+  );
+
+  const actionsByLabel = useMemo(() => {
+    const grouped = new Map<string, Action[]>();
+    for (const action of actions) {
+      const labels = action.labels.length > 0 ? action.labels : ["other"];
+      for (const label of labels) {
+        const existing = grouped.get(label) ?? [];
+        grouped.set(label, [...existing, action]);
+      }
+    }
+
+    return Array.from(grouped.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([label, groupedActions]) => ({
+        label,
+        actions: [...groupedActions].sort((a, b) => a.name.localeCompare(b.name)),
+      }));
+  }, [actions]);
 
   useEffect(() => {
     if (editingField === "name") {
@@ -233,6 +283,13 @@ export function StackEditorForm({
     }
   }, [editingField]);
 
+  useEffect(() => {
+    if (!activeRoleId) return;
+    if (!draft.roles.some((role) => role.action_slug === activeRoleId)) {
+      setActiveRoleId(draft.roles[0]?.action_slug);
+    }
+  }, [draft.roles, activeRoleId]);
+
   const updateRole = (index: number, nextRole: StackRoleEntry) => {
     onChange({
       ...draft,
@@ -243,10 +300,25 @@ export function StackEditorForm({
   };
 
   const removeRole = (index: number) => {
+    const removedRole = draft.roles[index];
     onChange({
       ...draft,
       roles: draft.roles.filter((_, roleIndex) => roleIndex !== index),
     });
+    if (removedRole?.action_slug === activeRoleId) {
+      const fallback = draft.roles.find((_, roleIndex) => roleIndex !== index);
+      setActiveRoleId(fallback?.action_slug);
+    }
+  };
+
+  const addRole = (actionSlug: string) => {
+    if (draft.roles.some((role) => role.action_slug === actionSlug)) return;
+
+    onChange({
+      ...draft,
+      roles: [...draft.roles, { action_slug: actionSlug, vars: {} }],
+    });
+    setActiveRoleId(actionSlug);
   };
 
   const handleDragEnd = (event: DragEndEvent) => {
@@ -254,10 +326,10 @@ export function StackEditorForm({
     if (!over || active.id === over.id) return;
 
     const oldIndex = draft.roles.findIndex(
-      (_, i) => `${draft.roles[i].action_slug}-${i}` === active.id,
+      (role) => role.action_slug === String(active.id),
     );
     const newIndex = draft.roles.findIndex(
-      (_, i) => `${draft.roles[i].action_slug}-${i}` === over.id,
+      (role) => role.action_slug === String(over.id),
     );
     if (oldIndex < 0 || newIndex < 0) return;
 
@@ -266,22 +338,6 @@ export function StackEditorForm({
       roles: arrayMove(draft.roles, oldIndex, newIndex),
     });
   };
-
-  const filteredActions = useMemo(() => {
-    let result = actions;
-    const normalized = roleSearch.trim().toLowerCase();
-    if (normalized) {
-      result = result.filter((action) =>
-        `${action.name} ${action.description}`.toLowerCase().includes(normalized),
-      );
-    }
-    if (selectedLabelFilters.size > 0) {
-      result = result.filter((action) =>
-        (action.labels ?? []).some((l) => selectedLabelFilters.has(l)),
-      );
-    }
-    return result;
-  }, [roleSearch, actions, selectedLabelFilters]);
 
   return (
     <section className="space-y-4 border border-zinc-800 bg-zinc-900/30 p-4">
@@ -382,7 +438,12 @@ export function StackEditorForm({
 
       <div className="space-y-3">
         <div className="space-y-1">
-          <p className="text-zinc-100 font-medium">Actions</p>
+          <p className="flex items-center gap-2 text-zinc-100 font-medium">
+            Actions
+            <Badge variant="outline" className="text-[10px]">
+              {draft.roles.length}
+            </Badge>
+          </p>
           {!compact ? (
             <p className="text-xs text-zinc-500">
               These are built-in automation blocks that Racksmith wires into the
@@ -391,60 +452,67 @@ export function StackEditorForm({
           ) : null}
         </div>
 
-        <div className="relative">
-          <Search className="absolute left-2 top-1/2 size-3.5 -translate-y-1/2 text-zinc-500" />
-          <Input
-            value={roleSearch}
-            onChange={(event) => setRoleSearch(event.target.value)}
-            placeholder="Search actions by name or description"
-            className="pl-7"
-          />
-        </div>
+        <div className="space-y-1">
+          <p className="text-xs text-zinc-400">Add action</p>
+          <div ref={actionPickerAnchor} className="w-full">
+            <Combobox
+              value={actionPickerValue ?? undefined}
+              onValueChange={(value) => {
+                if (!value) {
+                  setActionPickerValue(null);
+                  return;
+                }
 
-        {allLabels.length > 0 && (
-          <div className="flex flex-wrap gap-2">
-            {allLabels.map((label) => (
-              <Badge
-                key={label}
-                variant={selectedLabelFilters.has(label) ? "default" : "outline"}
-                className="cursor-pointer text-[10px]"
-                onClick={() => toggleLabelFilter(label)}
-              >
-                {label}
-              </Badge>
-            ))}
-          </div>
-        )}
-
-        <div className="flex flex-wrap gap-2">
-          {filteredActions.map((action) => (
-            <Button
-              key={action.slug}
-              type="button"
-              size="sm"
-              variant="outline"
-              disabled={draft.roles.some(
-                (role) => role.action_slug === action.slug,
-              )}
-              onClick={() =>
-                onChange({
-                  ...draft,
-                  roles: [
-                    ...draft.roles,
-                    { action_slug: action.slug, vars: {} },
-                  ],
-                })
-              }
+                const actionSlug = parseActionSlugFromPickerValue(value);
+                addRole(actionSlug);
+                setActionPickerValue(null);
+              }}
+              items={actionPickerItems}
             >
-              <Plus className="size-3.5" />
-              {action.name}
-            </Button>
-          ))}
+              <ComboboxInput
+                className="w-full"
+                placeholder="Search and add actions..."
+                showClear={!!actionPickerValue}
+              />
+              <ComboboxContent anchor={actionPickerAnchor}>
+                <ComboboxList>
+                  {actionsByLabel.map((group) => (
+                    <ComboboxGroup key={group.label}>
+                      <ComboboxLabel>{group.label}</ComboboxLabel>
+                      {group.actions.map((action) => {
+                        const alreadyAdded = draft.roles.some(
+                          (role) => role.action_slug === action.slug,
+                        );
+                        return (
+                          <ComboboxItem
+                            key={`${group.label}-${action.slug}`}
+                            value={actionPickerValueBySlug[action.slug]}
+                            disabled={alreadyAdded}
+                          >
+                            <div className="flex w-full items-start justify-between gap-2">
+                              <div className="min-w-0">
+                                <p className="truncate text-xs text-zinc-100">
+                                  {action.name}
+                                </p>
+                                <p className="truncate text-[11px] text-zinc-500">
+                                  {action.description}
+                                </p>
+                              </div>
+                              {alreadyAdded ? (
+                                <Check className="mt-0.5 size-3.5 text-zinc-500" />
+                              ) : null}
+                            </div>
+                          </ComboboxItem>
+                        );
+                      })}
+                    </ComboboxGroup>
+                  ))}
+                  <ComboboxEmpty>No actions found</ComboboxEmpty>
+                </ComboboxList>
+              </ComboboxContent>
+            </Combobox>
+          </div>
         </div>
-
-        {filteredActions.length === 0 ? (
-          <p className="text-xs text-zinc-500">No roles match that search.</p>
-        ) : null}
 
         {draft.roles.length === 0 ? (
           <p className="text-xs text-zinc-500">
@@ -457,16 +525,23 @@ export function StackEditorForm({
             onDragEnd={handleDragEnd}
           >
             <SortableContext
-              items={draft.roles.map((role, i) => `${role.action_slug}-${i}`)}
+              items={draft.roles.map((role) => role.action_slug)}
               strategy={verticalListSortingStrategy}
             >
-              <div className="space-y-3">
+              <Accordion
+                type="single"
+                collapsible
+                value={activeRoleId}
+                onValueChange={(next) => setActiveRoleId(next || undefined)}
+                className="space-y-3"
+              >
                 {draft.roles.map((role, index) => {
                   const action = actionsById[role.action_slug];
                   if (!action) return null;
                   return (
                     <SortableRoleCard
-                      key={`${role.action_slug}-${index}`}
+                      key={role.action_slug}
+                      roleId={role.action_slug}
                       role={role}
                       index={index}
                       action={action}
@@ -475,7 +550,7 @@ export function StackEditorForm({
                     />
                   );
                 })}
-              </div>
+              </Accordion>
             </SortableContext>
           </DndContext>
         )}
