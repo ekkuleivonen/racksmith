@@ -24,11 +24,11 @@ services:
       redis:
         condition: service_started
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/repos/status')"]
+      test: ["CMD", "uv", "run", "python", "-c", "import socket; s=socket.create_connection(('localhost',8000),2); s.close()"]
       interval: 5s
-      timeout: 3s
-      retries: 10
-      start_period: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
 
   worker:
     image: ghcr.io/ekkuleivonen/racksmith-app:latest
