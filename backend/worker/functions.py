@@ -189,7 +189,7 @@ async def execute_action_run(
         {
             "name": f"Run action: {action_slug}",
             "hosts": "all",
-            "gather_facts": False,
+            "gather_facts": True,
             "become": become,
             "roles": [role_entry],
         }

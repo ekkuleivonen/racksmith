@@ -49,7 +49,7 @@ def generate_docs() -> str:
         "```yaml",
         "- name: Basic Health Check",
         "  hosts: all",
-        "  gather_facts: false",
+        "  gather_facts: true",
         "  become: false",
         "  vars:",
         "    racksmith_description: Verifies connectivity and gathers system facts",

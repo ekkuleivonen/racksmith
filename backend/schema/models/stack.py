@@ -12,7 +12,7 @@ class StackPlay(BaseModel):
 
     name: str = Field(description="Display name of the stack")
     hosts: str = Field(default="all", description="Target hosts pattern")
-    gather_facts: bool = Field(default=False)
+    gather_facts: bool = Field(default=True)
     become: bool = Field(
         default=False,
         description="Run tasks with privilege escalation (sudo)",

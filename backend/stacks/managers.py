@@ -126,7 +126,7 @@ class StackManager:
         play: dict[str, Any] = {
             "name": body.name.strip(),
             "hosts": "all",
-            "gather_facts": False,
+            "gather_facts": True,
             "become": body.become,
             "roles": roles,
         }
