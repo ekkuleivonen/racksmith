@@ -1,8 +1,6 @@
 slug: uptime
 name: Uptime
 description: Run the uptime command and print the result.
-executor: ansible
-source: builtin
 inputs: []
 compatibility:
   os_family: []

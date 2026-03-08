@@ -70,7 +70,6 @@ def _read_action(action_dir: Path) -> ActionResponse | None:
         slug=cfg.slug,
         name=cfg.name,
         description=cfg.description,
-        source=cfg.source,
         inputs=[i.model_dump() for i in cfg.inputs],
         labels=cfg.labels,
         compatibility=cfg.compatibility.model_dump(),
@@ -108,7 +107,6 @@ def _read_action_detail(action_dir: Path) -> ActionDetailResponse | None:
         slug=cfg.slug,
         name=cfg.name,
         description=cfg.description,
-        source=cfg.source,
         inputs=[i.model_dump() for i in cfg.inputs],
         labels=cfg.labels,
         compatibility=cfg.compatibility.model_dump(),
@@ -163,7 +161,6 @@ class ActionManager:
             raise ValueError(f"Action '{body.slug}' already exists")
 
         manifest_data = body.model_dump(exclude={"tasks"})
-        manifest_data["source"] = "user"
 
         dest.mkdir(parents=True, exist_ok=True)
         (dest / "action.yaml").write_text(
@@ -192,14 +189,6 @@ class ActionManager:
         dest = _action_dir(repo_path, slug)
         if not dest.exists():
             raise FileNotFoundError(f"Action '{slug}' not found")
-
-        manifest = dest / "action.yaml"
-        if not manifest.is_file():
-            manifest = dest / "action.yml"
-        if manifest.is_file():
-            old_data = yaml.safe_load(manifest.read_text(encoding="utf-8"))
-            if old_data.get("source") == "builtin":
-                raise ValueError("Cannot edit a built-in action")
 
         try:
             data = yaml.safe_load(body.yaml_text)
@@ -270,14 +259,6 @@ class ActionManager:
         dest = _action_dir(repo_path, slug)
         if not dest.exists():
             raise FileNotFoundError(f"Action '{slug}' not found")
-
-        manifest = dest / "action.yaml"
-        if not manifest.is_file():
-            manifest = dest / "action.yml"
-        if manifest.is_file():
-            data = yaml.safe_load(manifest.read_text(encoding="utf-8"))
-            if data.get("source") == "builtin":
-                raise ValueError("Cannot delete a built-in action")
 
         import shutil
         shutil.rmtree(dest)

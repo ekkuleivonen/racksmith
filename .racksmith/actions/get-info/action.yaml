@@ -2,8 +2,6 @@ slug: get-info
 name: Get info
 description: Gather facts and print a short system summary.
 labels: [info, system]
-executor: ansible
-source: builtin
 inputs: []
 compatibility:
   os_family: []

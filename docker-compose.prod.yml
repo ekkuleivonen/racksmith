@@ -16,7 +16,6 @@ services:
       REDIS_URL: redis://redis:6379
       DB_PATH: /app/data/racksmith.db
       REPOS_WORKSPACE: /app/workspace
-      LIBRARY_DIR: /app/.racksmith
     volumes:
       - ./data:/app/data
       - ./workspace:/app/workspace
@@ -39,7 +38,6 @@ services:
       REDIS_URL: redis://redis:6379
       DB_PATH: /app/data/racksmith.db
       REPOS_WORKSPACE: /app/workspace
-      LIBRARY_DIR: /app/.racksmith
     volumes:
       - ./data:/app/data
       - ./workspace:/app/workspace

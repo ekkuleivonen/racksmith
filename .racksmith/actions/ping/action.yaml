@@ -2,8 +2,6 @@ slug: ping
 name: Ping
 description: Verify that Ansible can connect to the selected hosts.
 labels: [connectivity, diagnostic]
-executor: ansible
-source: builtin
 inputs: []
 compatibility:
   os_family: []

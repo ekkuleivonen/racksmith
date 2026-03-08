@@ -1,8 +1,6 @@
 slug: create-user
 name: Create User
 description: Create or remove a local user account and optionally grant sudo access.
-executor: ansible
-source: user
 inputs:
 - key: username
   label: Username

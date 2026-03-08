@@ -15,7 +15,6 @@ export type Action = {
   slug: string;
   name: string;
   description: string;
-  source: string;
   inputs: ActionInput[];
   labels: string[];
 };

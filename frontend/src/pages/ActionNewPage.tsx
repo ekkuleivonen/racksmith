@@ -17,8 +17,6 @@ const LLM_PROMPT = `You are generating a Racksmith action YAML. Output a single 
 - slug (required): unique ID, becomes directory name
 - name (required): display name
 - description: freeform text
-- executor: "ansible" (only supported value)
-- source: "user" for your own actions
 - labels: freeform category tags (e.g. [packages, system, security])
 - compatibility.os_family: [] for any OS, or ["debian"], ["rhel"], etc.
 - inputs: list of { key, label, type, placeholder?, default?, required?, options? (for select), interactive? (true = never stored, for secrets) }
@@ -31,8 +29,6 @@ Example 1 - minimal (no inputs):
 slug: ping
 name: Ping
 description: Verify Ansible connectivity.
-executor: ansible
-source: builtin
 labels: []
 inputs: []
 compatibility:
@@ -42,8 +38,6 @@ Example 2 - with inputs:
 slug: install-packages
 name: Install Packages
 description: Install or remove packages via apt/dnf/yum.
-executor: ansible
-source: user
 labels: [packages, system]
 inputs:
 - key: package_names
@@ -82,8 +76,6 @@ Example 3 - with select and boolean:
 slug: create-user
 name: Create User
 description: Create or remove a local user, optionally with sudo.
-executor: ansible
-source: user
 labels: [users]
 inputs:
 - key: username
@@ -112,8 +104,6 @@ compatibility:
 const TEMPLATE = `slug: my-action
 name: My Action
 description: What this action does.
-executor: ansible
-source: user
 labels: []
 inputs:
   - key: example_var
@@ -134,7 +124,6 @@ type ActionResponse = {
   slug: string;
   name: string;
   description: string;
-  source: string;
   has_tasks: boolean;
 };
 

@@ -18,7 +18,6 @@ from stacks.managers import (
     INVENTORY_DIR,
     STACKS_DIR,
     RUN_EVENTS_CHANNEL_PREFIX,
-    sync_builtin_actions,
 )
 
 
@@ -59,8 +58,6 @@ async def execute_run(
     stack_path = repo / STACKS_DIR / f"{stack_id}.yml"
     inventory_dir = repo / INVENTORY_DIR
     actions_dir = (repo / ACTIONS_DIR).resolve()
-
-    sync_builtin_actions(repo)
 
     # Write a minimal ansible.cfg that sets roles_path to our actions dir.
     # This overrides any ansible.cfg in the repo (e.g. roles_path = .racksmith/actions).
@@ -183,8 +180,6 @@ async def execute_action_run(
     repo = Path(repo_path)
     inventory_dir = repo / INVENTORY_DIR
     actions_dir = (repo / ACTIONS_DIR).resolve()
-
-    sync_builtin_actions(repo)
 
     role_entry: dict | str = action_slug
     if action_vars:

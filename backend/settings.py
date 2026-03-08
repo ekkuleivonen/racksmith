@@ -14,13 +14,6 @@ APP_URL: str = env.str("APP_URL", default="http://localhost:5173")
 REPOS_WORKSPACE: str = env.str("REPOS_WORKSPACE", default="./workspace")
 
 # =============================================================================
-# Library
-# =============================================================================
-# Root of the bundled action/stack library shipped with Racksmith.
-# In Docker, set to /app/.racksmith. Leave empty in dev (auto-detected from repo root).
-LIBRARY_DIR: str = env.str("LIBRARY_DIR", default="")
-
-# =============================================================================
 # Database
 # =============================================================================
 DB_PATH: str = env.str("DB_PATH", default="./data/racksmith.db")

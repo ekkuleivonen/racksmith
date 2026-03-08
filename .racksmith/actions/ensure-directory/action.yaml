@@ -1,8 +1,6 @@
 slug: ensure-directory
 name: Ensure Directory
 description: Create or remove a directory with configurable ownership and permissions.
-executor: ansible
-source: user
 inputs:
 - key: directory_path
   label: Directory path

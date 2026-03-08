@@ -16,7 +16,6 @@ export type ActionSummary = {
   slug: string;
   name: string;
   description: string;
-  source: string;
   inputs: ActionInput[];
   labels: string[];
   compatibility: { os_family: string[] };

@@ -1,8 +1,6 @@
 slug: system-upgrade
 name: System upgrade
 description: Upgrade packages on common Linux distributions. Requires become.
-executor: ansible
-source: builtin
 inputs: []
 compatibility:
   os_family: []

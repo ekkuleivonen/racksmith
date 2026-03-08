@@ -3,8 +3,6 @@ name: Install Packages
 description: Install or remove one or more system packages using the host package
   manager.
 labels: [packages, system]
-executor: ansible
-source: user
 inputs:
 - key: package_names
   label: Package names

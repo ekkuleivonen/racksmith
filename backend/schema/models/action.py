@@ -35,8 +35,6 @@ class ActionConfig(BaseModel):
     slug: str = Field(description="Unique identifier, matches directory name")
     name: str = Field(description="Display name")
     description: str = Field(default="")
-    executor: Literal["ansible"] = Field(default="ansible")
-    source: Literal["builtin", "user", "community"] = Field(default="user")
     inputs: list[ActionInputConfig] = Field(default_factory=list)
     labels: list[str] = Field(default_factory=list, description="Freeform category tags")
     compatibility: ActionCompatibility = Field(default_factory=ActionCompatibility)

@@ -12,8 +12,5 @@ RUN uv sync --frozen --no-dev
 # Copy application code
 COPY backend/ .
 
-# Copy the builtin action library (.racksmith/actions/ at repo root)
-COPY .racksmith/ .racksmith/
-
 # Default: run the FastAPI app
 CMD ["uv", "run", "python", "main.py"]

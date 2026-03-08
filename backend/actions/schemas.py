@@ -21,8 +21,6 @@ class ActionCreateRequest(BaseModel):
     slug: str = Field(description="Unique identifier — becomes the directory name")
     name: str
     description: str = ""
-    executor: str = "ansible"
-    source: str = "user"
     inputs: list[dict[str, Any]] = Field(default_factory=list)
     labels: list[str] = Field(default_factory=list)
     compatibility: dict[str, Any] = Field(default_factory=lambda: {"os_family": []})
@@ -46,7 +44,6 @@ class ActionResponse(BaseModel):
     slug: str
     name: str
     description: str
-    source: str
     inputs: list[dict[str, Any]]
     labels: list[str] = Field(default_factory=list)
     compatibility: dict[str, Any]

@@ -1,8 +1,6 @@
 slug: disk-usage
 name: Disk usage
 description: Show root filesystem usage for selected hosts.
-executor: ansible
-source: builtin
 inputs: []
 compatibility:
   os_family: []

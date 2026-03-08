@@ -1,8 +1,6 @@
 slug: set-hostname
 name: Set Hostname
 description: Set the system hostname and ensure it is applied persistently.
-executor: ansible
-source: user
 inputs:
 - key: target_hostname
   label: Hostname

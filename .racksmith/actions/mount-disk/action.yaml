@@ -1,8 +1,6 @@
 slug: mount-disk
 name: Format and Mount Disk
 description: Create a filesystem on a block device and mount it persistently.
-executor: ansible
-source: user
 inputs:
 - key: device_path
   label: Device path

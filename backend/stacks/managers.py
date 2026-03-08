@@ -36,35 +36,6 @@ STACKS_DIR = Path(".racksmith/stacks")
 ACTIONS_DIR = Path(".racksmith/actions")
 INVENTORY_DIR = Path(".racksmith/inventory")
 
-# Canonical location: .racksmith/actions/ at the repo root (the library).
-# In dev: auto-detected three levels up from backend/stacks/managers.py.
-# In Docker: LIBRARY_DIR env var points to /app/.racksmith; actions live under it.
-_library_root = (
-    Path(settings.LIBRARY_DIR)
-    if settings.LIBRARY_DIR
-    else Path(__file__).parent.parent.parent / ".racksmith"
-)
-BUILTIN_ACTIONS_SRC = _library_root / "actions"
-
-
-def sync_builtin_actions(repo_path: Path) -> None:
-    """Copy bundled built-in actions into .racksmith/actions/. Call before running stacks."""
-    actions_dir = repo_path / ACTIONS_DIR
-    for src_action_dir in sorted(BUILTIN_ACTIONS_SRC.iterdir()):
-        if not src_action_dir.is_dir():
-            continue
-        dest = actions_dir / src_action_dir.name
-        dest.mkdir(parents=True, exist_ok=True)
-        for src_file in src_action_dir.rglob("*"):
-            if src_file.is_file():
-                rel = src_file.relative_to(src_action_dir)
-                dest_file = dest / rel
-                dest_file.parent.mkdir(parents=True, exist_ok=True)
-                new_content = src_file.read_bytes()
-                if not dest_file.exists() or dest_file.read_bytes() != new_content:
-                    dest_file.write_bytes(new_content)
-
-
 RESERVED_DESCRIPTION_KEY = "racksmith_description"
 RUN_EVENTS_CHANNEL_PREFIX = "racksmith:run:"
 STACK_ID_RE = re.compile(r"^[a-zA-Z0-9._-]+$")
@@ -123,9 +94,6 @@ class StackManager:
             candidate = f"{preferred_id}-{suffix}"
             suffix += 1
 
-    def _sync_builtin_actions(self, repo_path: Path) -> None:
-        sync_builtin_actions(repo_path)
-
     def _load_action_catalog(self, repo_path: Path) -> dict[str, Action]:
         """Scan .racksmith/actions/ and parse all action.yaml files."""
         actions: dict[str, Action] = {}
@@ -147,7 +115,6 @@ class StackManager:
                 slug=cfg.slug,
                 name=cfg.name,
                 description=cfg.description,
-                source=cfg.source,
                 inputs=[ActionInput(**i.model_dump()) for i in cfg.inputs],
                 labels=cfg.labels,
             )
@@ -155,7 +122,6 @@ class StackManager:
 
     def actions(self, session) -> list[Action]:
         repo_path = repos_manager.active_repo_path(session)
-        self._sync_builtin_actions(repo_path)
         return list(self._load_action_catalog(repo_path).values())
 
     def _serialize_stack_yaml(
@@ -238,7 +204,6 @@ class StackManager:
 
     def list_stacks(self, session) -> list[StackSummary]:
         repo_path = repos_manager.active_repo_path(session)
-        self._sync_builtin_actions(repo_path)
         stacks_dir = self._stacks_dir(repo_path)
         if not stacks_dir.is_dir():
             return []
@@ -254,7 +219,6 @@ class StackManager:
 
     def get_stack(self, session, stack_id: str) -> StackDetail:
         repo_path = repos_manager.active_repo_path(session)
-        self._sync_builtin_actions(repo_path)
         path = self._stack_path(repo_path, stack_id)
         if not path.is_file():
             raise FileNotFoundError("Stack not found")
@@ -269,7 +233,6 @@ class StackManager:
 
     def create_stack(self, session, body: StackUpsertRequest) -> StackDetail:
         repo_path = repos_manager.active_repo_path(session)
-        self._sync_builtin_actions(repo_path)
         action_catalog = self._load_action_catalog(repo_path)
         stack_id = (
             self._normalize_stack_id(body.file_name)
@@ -288,7 +251,6 @@ class StackManager:
 
     def update_stack(self, session, stack_id: str, body: StackUpsertRequest) -> StackDetail:
         repo_path = repos_manager.active_repo_path(session)
-        self._sync_builtin_actions(repo_path)
         action_catalog = self._load_action_catalog(repo_path)
         path = self._stack_path(repo_path, stack_id)
         if not path.is_file():
