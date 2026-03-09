@@ -1,1 +1,0 @@
-"""Stack management and execution."""

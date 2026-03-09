@@ -3,10 +3,10 @@ import { Code2, LayoutGrid } from "lucide-react";
 import { useLocation } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { SidebarHeader } from "./sidebar-header";
-import { SidebarNodesSection } from "./sidebar-nodes-section";
+import { SidebarHostsSection } from "./sidebar-hosts-section";
 import { SidebarRacksSection } from "./sidebar-racks-section";
 import { SidebarGroupsSection } from "./sidebar-groups-section";
-import { SidebarStacksSection } from "./sidebar-stacks-section";
+import { SidebarPlaybooksSection } from "./sidebar-playbooks-section";
 import { SidebarCodeSection } from "./sidebar-code-section";
 import { SidebarFooter } from "./sidebar-footer";
 
@@ -64,10 +64,10 @@ export function Sidebar({ onLogout }: SidebarProps) {
       <nav className="scrollbar-hide space-y-0.5 overflow-x-visible overflow-y-auto flex-1 min-h-0">
         {activeTab === "ui" ? (
           <>
-            <SidebarNodesSection />
+            <SidebarHostsSection />
             <SidebarRacksSection />
             <SidebarGroupsSection />
-            <SidebarStacksSection />
+            <SidebarPlaybooksSection />
           </>
         ) : (
           <SidebarCodeSection />

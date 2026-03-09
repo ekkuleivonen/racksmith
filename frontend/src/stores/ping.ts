@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import {
   fetchPingStatuses,
-  nodeStatusKey,
+  hostStatusKey,
   type PingStatus,
   type PingStatusTarget,
 } from "@/lib/ssh";
@@ -30,7 +30,7 @@ export const usePingStore = create<PingStore>((set, get) => ({
         set({
           statuses: Object.fromEntries(
             response.statuses.map((entry) => [
-              nodeStatusKey(entry.node_id),
+              hostStatusKey(entry.host_id),
               entry.status,
             ]),
           ),

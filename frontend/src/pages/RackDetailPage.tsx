@@ -3,7 +3,7 @@ import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { ExternalLink, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { RackBuilder } from "@/components/racks/rack-builder";
-import type { PendingNode } from "@/components/racks/rack-builder";
+import type { PendingHost } from "@/components/racks/rack-builder";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,25 +11,25 @@ import { Slider } from "@/components/ui/slider";
 import {
   deleteRack,
   getRackLayout,
-  nodeToRackLayoutNode,
+  hostToRackLayoutHost,
   updateRack,
   type RackLayout,
   type ZoneSelection,
 } from "@/lib/racks";
 import {
-  createNode,
-  deleteNode,
-  getNode,
-  isManagedNode,
-  isReachableNode,
-  refreshNode,
-  updateNode,
-  type NodeInput,
-} from "@/lib/nodes";
-import { useNodes } from "@/hooks/queries";
+  createHost,
+  deleteHost,
+  getHost,
+  isManagedHost,
+  isReachableHost,
+  refreshHost,
+  updateHost,
+  type HostInput,
+} from "@/lib/hosts";
+import { useHosts } from "@/hooks/queries";
 import { listGroups } from "@/lib/groups";
 
-function makePendingNode(zone: ZoneSelection): PendingNode {
+function makePendingHost(zone: ZoneSelection): PendingHost {
   const bottomU = zone.startU - zone.heightU + 1;
   return {
     id: `pending-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
@@ -48,7 +48,7 @@ function makePendingNode(zone: ZoneSelection): PendingNode {
   };
 }
 
-function pendingToNodeInput(pending: PendingNode, rackId: string): NodeInput {
+function pendingToHostInput(pending: PendingHost, rackId: string): HostInput {
   return {
     name: pending.name,
     ip_address: pending.ip_address,
@@ -68,28 +68,28 @@ function pendingToNodeInput(pending: PendingNode, rackId: string): NodeInput {
   };
 }
 
-function layoutNodeToNodeInput(
-  node: ReturnType<typeof nodeToRackLayoutNode>,
+function layoutHostToHostInput(
+  host: ReturnType<typeof hostToRackLayoutHost>,
   rackId: string,
-): NodeInput {
+): HostInput {
   return {
-    name: node.name,
-    ip_address: node.ip_address,
-    ssh_user: node.ssh_user,
-    ssh_port: node.ssh_port,
-    managed: node.managed,
-    groups: node.groups,
-    labels: node.labels ?? [],
-    os_family: node.os_family ?? null,
-    notes: node.notes,
+    name: host.name,
+    ip_address: host.ip_address,
+    ssh_user: host.ssh_user,
+    ssh_port: host.ssh_port,
+    managed: host.managed,
+    groups: host.groups,
+    labels: host.labels ?? [],
+    os_family: host.os_family ?? null,
+    notes: host.notes,
     placement:
-      node.placement === "rack"
+      host.placement === "rack"
         ? {
             rack: rackId,
-            u_start: node.position_u_start,
-            u_height: node.position_u_height,
-            col_start: node.position_col_start,
-            col_count: node.position_col_count,
+            u_start: host.position_u_start,
+            u_height: host.position_u_height,
+            col_start: host.position_col_start,
+            col_count: host.position_col_count,
           }
         : null,
   };
@@ -99,14 +99,14 @@ export function RackPage() {
   const { rackId: rackIdParam = "" } = useParams();
   const location = useLocation();
   const navigate = useNavigate();
-  const highlightedNodeId = new URLSearchParams(location.search).get("nodeId");
+  const highlightedHostId = new URLSearchParams(location.search).get("hostId");
 
   const [layout, setLayout] = useState<RackLayout | null>(null);
-  const [layoutNodes, setLayoutNodes] = useState<
-    ReturnType<typeof nodeToRackLayoutNode>[]
+  const [layoutHosts, setLayoutHosts] = useState<
+    ReturnType<typeof hostToRackLayoutHost>[]
   >([]);
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
-  const [pending, setPending] = useState<PendingNode | null>(null);
+  const [pending, setPending] = useState<PendingHost | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [rackNameDraft, setRackNameDraft] = useState("");
@@ -117,7 +117,7 @@ export function RackPage() {
   const [editingName, setEditingName] = useState(false);
   const [groups, setGroups] = useState<Array<{ id: string; name: string }>>([]);
 
-  const { data: nodesFromStore = [] } = useNodes();
+  const { data: hostsFromStore = [] } = useHosts();
 
   useEffect(() => {
     listGroups()
@@ -129,29 +129,29 @@ export function RackPage() {
 
   const rack = layout;
 
-  const unplacedNodes = useMemo(() => {
+  const unplacedHosts = useMemo(() => {
     if (!rackIdParam) return [];
-    return nodesFromStore.filter(
-      (n) =>
-        isManagedNode(n) && (!n.placement || n.placement.rack !== rackIdParam),
+    return hostsFromStore.filter(
+      (h) =>
+        isManagedHost(h) && (!h.placement || h.placement.rack !== rackIdParam),
     );
-  }, [nodesFromStore, rackIdParam]);
+  }, [hostsFromStore, rackIdParam]);
 
   const selectedItem = useMemo(
-    () => layoutNodes.find((item) => item.id === selectedItemId) ?? null,
-    [layoutNodes, selectedItemId],
+    () => layoutHosts.find((item) => item.id === selectedItemId) ?? null,
+    [layoutHosts, selectedItemId],
   );
   const managedItemCount = useMemo(
-    () => layoutNodes.filter((item) => item.managed).length,
-    [layoutNodes],
+    () => layoutHosts.filter((item) => item.managed).length,
+    [layoutHosts],
   );
-  const unmanagedItemCount = layoutNodes.length - managedItemCount;
+  const unmanagedItemCount = layoutHosts.length - managedItemCount;
 
   const loadRack = useCallback(
     async (preserveId?: string) => {
       if (!rackIdParam) {
         setLayout(null);
-        setLayoutNodes([]);
+        setLayoutHosts([]);
         return;
       }
 
@@ -161,17 +161,17 @@ export function RackPage() {
       setRackWidthDraft(data.rack_width_inches);
       setRackUnitsDraft(data.rack_units);
       setRackColsDraft(data.rack_cols);
-      const nodes = data.nodes.map(nodeToRackLayoutNode);
-      setLayoutNodes(nodes);
+      const hosts = data.hosts.map(hostToRackLayoutHost);
+      setLayoutHosts(hosts);
       setSelectedItemId((prev) => {
         const idToKeep = preserveId ?? prev;
-        if (idToKeep && nodes.some((n) => n.id === idToKeep)) return idToKeep;
-        if (highlightedNodeId && nodes.some((n) => n.id === highlightedNodeId))
-          return highlightedNodeId;
+        if (idToKeep && hosts.some((h) => h.id === idToKeep)) return idToKeep;
+        if (highlightedHostId && hosts.some((h) => h.id === highlightedHostId))
+          return highlightedHostId;
         return null;
       });
     },
-    [highlightedNodeId, rackIdParam],
+    [highlightedHostId, rackIdParam],
   );
 
   useEffect(() => {
@@ -183,7 +183,7 @@ export function RackPage() {
           error instanceof Error ? error.message : "Failed to load rack",
         );
         setLayout(null);
-        setLayoutNodes([]);
+        setLayoutHosts([]);
       })
       .finally(() => {
         if (active) setLoading(false);
@@ -195,13 +195,13 @@ export function RackPage() {
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
-    const current = params.get("nodeId");
+    const current = params.get("hostId");
     if (selectedItemId) {
       if (current === selectedItemId) return;
-      params.set("nodeId", selectedItemId);
+      params.set("hostId", selectedItemId);
     } else {
       if (!current) return;
-      params.delete("nodeId");
+      params.delete("hostId");
     }
     const nextSearch = params.toString();
     navigate(
@@ -231,7 +231,7 @@ export function RackPage() {
         rack_units: rackUnitsDraft,
         rack_cols: rackColsDraft,
       });
-      setLayout({ ...layout!, ...result.rack, nodes: layout!.nodes });
+      setLayout({ ...layout!, ...result.rack, hosts: layout!.hosts });
       return true;
     } catch (error) {
       toast.error(
@@ -241,18 +241,18 @@ export function RackPage() {
     }
   }, [layout, rack, rackColsDraft, rackUnitsDraft, rackWidthDraft]);
 
-  const unassignAllNodesFromRack = useCallback(async () => {
+  const unassignAllHostsFromRack = useCallback(async () => {
     if (!rack) return;
-    const nodesOnRack = layoutNodes.filter((n) => n.placement === "rack");
-    if (nodesOnRack.length === 0) return;
+    const hostsOnRack = layoutHosts.filter((h) => h.placement === "rack");
+    if (hostsOnRack.length === 0) return;
     setSaving(true);
     try {
       const frameSaved = await ensureFrameDraftSaved();
       if (!frameSaved) return;
       await Promise.all(
-        nodesOnRack.map((node) => {
-          const input = layoutNodeToNodeInput(node, rackIdParam);
-          return updateNode(node.id, { ...input, placement: null });
+        hostsOnRack.map((host) => {
+          const input = layoutHostToHostInput(host, rackIdParam);
+          return updateHost(host.id, { ...input, placement: null });
         }),
       );
       await loadRack();
@@ -264,11 +264,11 @@ export function RackPage() {
     } finally {
       setSaving(false);
     }
-  }, [ensureFrameDraftSaved, layoutNodes, loadRack, rack, rackIdParam]);
+  }, [ensureFrameDraftSaved, layoutHosts, loadRack, rack, rackIdParam]);
 
-  const handlePlaceUnplacedNode = useCallback(
+  const handlePlaceUnplacedHost = useCallback(
     async (
-      nodeId: string,
+      hostId: string,
       position: {
         position_u_start: number;
         position_u_height: number;
@@ -281,17 +281,17 @@ export function RackPage() {
       try {
         const frameSaved = await ensureFrameDraftSaved();
         if (!frameSaved) return;
-        const { node } = await getNode(nodeId);
-        await updateNode(nodeId, {
-          name: node.name ?? "",
-          ip_address: node.ip_address ?? "",
-          ssh_user: node.ssh_user ?? "",
-          ssh_port: node.ssh_port ?? 22,
-          managed: node.managed ?? true,
-          groups: node.groups ?? [],
-          labels: node.labels ?? [],
-          os_family: node.os_family ?? null,
-          notes: node.notes ?? "",
+        const { host } = await getHost(hostId);
+        await updateHost(hostId, {
+          name: host.name ?? "",
+          ip_address: host.ip_address ?? "",
+          ssh_user: host.ssh_user ?? "",
+          ssh_port: host.ssh_port ?? 22,
+          managed: host.managed ?? true,
+          groups: host.groups ?? [],
+          labels: host.labels ?? [],
+          os_family: host.os_family ?? null,
+          notes: host.notes ?? "",
           placement: {
             rack: rackIdParam,
             u_start: position.position_u_start,
@@ -301,10 +301,10 @@ export function RackPage() {
           },
         });
         await loadRack();
-        toast.success("Node placed on rack");
+        toast.success("Host placed on rack");
       } catch (error) {
         toast.error(
-          error instanceof Error ? error.message : "Failed to place node",
+          error instanceof Error ? error.message : "Failed to place host",
         );
       } finally {
         setSaving(false);
@@ -313,18 +313,18 @@ export function RackPage() {
     [ensureFrameDraftSaved, loadRack, rack, rackIdParam],
   );
 
-  const handleUnplaceNode = useCallback(
-    async (nodeId: string) => {
-      const existing = layoutNodes.find((n) => n.id === nodeId);
+  const handleUnplaceHost = useCallback(
+    async (hostId: string) => {
+      const existing = layoutHosts.find((h) => h.id === hostId);
       if (!existing || !rack) return;
       setSaving(true);
       try {
         const frameSaved = await ensureFrameDraftSaved();
         if (!frameSaved) return;
-        const input = layoutNodeToNodeInput(existing, rackIdParam);
-        await updateNode(nodeId, { ...input, placement: null });
+        const input = layoutHostToHostInput(existing, rackIdParam);
+        await updateHost(hostId, { ...input, placement: null });
         await loadRack();
-        toast.success("Node unplaced");
+        toast.success("Host unplaced");
       } catch (error) {
         toast.error(
           error instanceof Error ? error.message : "Failed to unplace node",
@@ -333,7 +333,7 @@ export function RackPage() {
         setSaving(false);
       }
     },
-    [ensureFrameDraftSaved, layoutNodes, loadRack, rack, rackIdParam],
+    [ensureFrameDraftSaved, layoutHosts, loadRack, rack, rackIdParam],
   );
 
   const onSelectZone = useCallback(
@@ -343,7 +343,7 @@ export function RackPage() {
         toast.error("Selection does not fit rack height");
         return;
       }
-      setPending(makePendingNode(zone));
+      setPending(makePendingHost(zone));
     },
     [rackIdParam],
   );
@@ -359,15 +359,15 @@ export function RackPage() {
       },
     ) => {
       if (!rack) return;
-      const existing = layoutNodes.find((n) => n.id === itemId);
+      const existing = layoutHosts.find((n) => n.id === itemId);
       if (!existing) return;
 
       setSaving(true);
       try {
         const frameSaved = await ensureFrameDraftSaved();
         if (!frameSaved) return;
-        const input = layoutNodeToNodeInput(existing, rackIdParam);
-        await updateNode(itemId, {
+        const input = layoutHostToHostInput(existing, rackIdParam);
+        await updateHost(itemId, {
           ...input,
           placement: {
             rack: rackIdParam,
@@ -386,7 +386,7 @@ export function RackPage() {
         setSaving(false);
       }
     },
-    [ensureFrameDraftSaved, layoutNodes, loadRack, rack, rackIdParam],
+    [ensureFrameDraftSaved, layoutHosts, loadRack, rack, rackIdParam],
   );
 
   const persistRackFrame = useCallback(
@@ -398,7 +398,7 @@ export function RackPage() {
           rack_units: nextUnits,
           rack_cols: nextCols,
         });
-        setLayout({ ...layout!, ...result.rack, nodes: layout!.nodes });
+        setLayout({ ...layout!, ...result.rack, hosts: layout!.hosts });
         setRackWidthDraft(result.rack.rack_width_inches);
         setRackUnitsDraft(result.rack.rack_units);
         setRackColsDraft(result.rack.rack_cols);
@@ -428,7 +428,7 @@ export function RackPage() {
     setSaving(true);
     try {
       const result = await updateRack(rack.id, { name: trimmedName });
-      setLayout({ ...layout!, ...result.rack, nodes: layout!.nodes });
+      setLayout({ ...layout!, ...result.rack, hosts: layout!.hosts });
       setRackNameDraft(result.rack.name);
       return true;
     } catch (error) {
@@ -443,7 +443,7 @@ export function RackPage() {
 
   const activateFrameEdit = useCallback(async () => {
     if (!rack) return;
-    const placedCount = layoutNodes.filter(
+    const placedCount = layoutHosts.filter(
       (n) => n.placement === "rack",
     ).length;
     const confirmed =
@@ -454,10 +454,10 @@ export function RackPage() {
     if (!confirmed) return;
 
     if (placedCount > 0) {
-      await unassignAllNodesFromRack();
+      await unassignAllHostsFromRack();
     }
     setFrameControlsVisible(true);
-  }, [layoutNodes, rack, unassignAllNodesFromRack]);
+  }, [layoutHosts, rack, unassignAllHostsFromRack]);
 
   if (loading) {
     return (
@@ -581,7 +581,7 @@ export function RackPage() {
           rackUnits={rackUnitsDraft}
           rackCols={rackColsDraft}
           rackName={rackNameDraft}
-          items={layoutNodes}
+          items={layoutHosts}
           selectedItemId={selectedItemId}
           pending={pending}
           saving={saving}
@@ -704,10 +704,10 @@ export function RackPage() {
             try {
               const frameSaved = await ensureFrameDraftSaved();
               if (!frameSaved) return;
-              const { node } = await createNode(
-                pendingToNodeInput(pending, rackIdParam),
+              const { host } = await createHost(
+                pendingToHostInput(pending, rackIdParam),
               );
-              await loadRack(node.id);
+              await loadRack(host.id);
               setPending(null);
               toast.success("Item added");
             } catch (error) {
@@ -719,17 +719,17 @@ export function RackPage() {
             }
           }}
           onCancelPending={() => setPending(null)}
-          unplacedNodes={unplacedNodes.map((n) => ({
+          unplacedHosts={unplacedHosts.map((n) => ({
             id: n.id,
             name: n.name ?? "",
             hostname: n.hostname ?? "",
             ip_address: n.ip_address ?? "",
           }))}
-          onPlaceUnplacedNode={handlePlaceUnplacedNode}
-          onUnplaceNode={handleUnplaceNode}
+          onPlaceUnplacedHost={handlePlaceUnplacedHost}
+          onUnplaceHost={handleUnplaceHost}
           onSelectedItemChange={(patch) => {
             if (!selectedItem) return;
-            setLayoutNodes((prev) =>
+            setLayoutHosts((prev) =>
               prev.map((item) =>
                 item.id === selectedItem.id ? { ...item, ...patch } : item,
               ),
@@ -742,13 +742,13 @@ export function RackPage() {
                   size="icon"
                   variant="outline"
                   className="h-8 w-8"
-                  disabled={saving || !isReachableNode(selectedItem)}
+                  disabled={saving || !isReachableHost(selectedItem)}
                   aria-label="Rediscover item"
                   title="Rediscover item"
                   onClick={async () => {
                     setSaving(true);
                     try {
-                      await refreshNode(selectedItem.id);
+                      await refreshHost(selectedItem.id);
                       await loadRack();
                       toast.success("Item rediscovered");
                     } catch (error) {
@@ -769,9 +769,9 @@ export function RackPage() {
                   variant="outline"
                   className="h-8 w-8"
                   disabled={saving}
-                  aria-label="Open node page"
-                  title="Open node page"
-                  onClick={() => navigate(`/nodes/${selectedItem.id}`)}
+                  aria-label="Open host page"
+                  title="Open host page"
+                  onClick={() => navigate(`/hosts/${selectedItem.id}`)}
                 >
                   <ExternalLink className="size-3.5" />
                 </Button>
@@ -783,7 +783,7 @@ export function RackPage() {
             const idToKeep = selectedItem.id;
             setSaving(true);
             try {
-              const input = layoutNodeToNodeInput(selectedItem, rackIdParam);
+              const input = layoutHostToHostInput(selectedItem, rackIdParam);
               const placement =
                 selectedItem.placement === "rack"
                   ? {
@@ -794,7 +794,7 @@ export function RackPage() {
                       col_count: selectedItem.position_col_count,
                     }
                   : null;
-              await updateNode(idToKeep, { ...input, placement });
+              await updateHost(idToKeep, { ...input, placement });
               await loadRack(idToKeep);
               toast.success("Item updated");
             } catch (error) {
@@ -811,7 +811,7 @@ export function RackPage() {
             if (!selectedItem) return;
             setSaving(true);
             try {
-              await deleteNode(selectedItem.id);
+              await deleteHost(selectedItem.id);
               await loadRack();
               setSelectedItemId(null);
               toast.success("Item deleted");

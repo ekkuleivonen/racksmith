@@ -1,6 +1,6 @@
 import { apiDelete, apiGet, apiPatch, apiPost } from "@/lib/api";
 import { queryClient, queryKeys } from "@/lib/queryClient";
-import type { NodeSummary } from "@/lib/nodes";
+import type { HostSummary } from "@/lib/hosts";
 
 export type GroupInput = {
   name: string;
@@ -12,7 +12,7 @@ export type Group = GroupInput & {
 };
 
 export type GroupWithMembers = Group & {
-  nodes: NodeSummary[];
+  hosts: HostSummary[];
 };
 
 function invalidateAfterGroupMutation() {

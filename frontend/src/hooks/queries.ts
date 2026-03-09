@@ -1,24 +1,24 @@
 import { useQuery } from "@tanstack/react-query";
 import { queryKeys } from "@/lib/queryClient";
-import { listNodes } from "@/lib/nodes";
+import { listHosts } from "@/lib/hosts";
 import { listRacks, getRackLayout } from "@/lib/racks";
 import { listGroups } from "@/lib/groups";
-import { listStacks } from "@/lib/stacks";
+import { listPlaybooks } from "@/lib/playbooks";
 import { apiGet } from "@/lib/api";
-import type { Node } from "@/lib/nodes";
+import type { Host } from "@/lib/hosts";
 import type { RackSummary } from "@/lib/racks";
 import type { Group } from "@/lib/groups";
 import type { TreeEntry } from "@/components/code/file-tree";
 
 export type RackNavEntry = {
   rack: RackSummary;
-  nodes: Node[];
+  hosts: Host[];
 };
 
-export function useNodes() {
+export function useHosts() {
   return useQuery({
-    queryKey: queryKeys.nodes,
-    queryFn: () => listNodes().catch(() => [] as Node[]),
+    queryKey: queryKeys.hosts,
+    queryFn: () => listHosts().catch(() => [] as Host[]),
   });
 }
 
@@ -30,7 +30,7 @@ export function useRackEntries() {
       const entries: RackNavEntry[] = await Promise.all(
         racks.map(async (rack) => {
           const { layout } = await getRackLayout(rack.id);
-          return { rack, nodes: layout.nodes.filter((n) => n.managed) };
+          return { rack, hosts: layout.hosts.filter((n) => n.managed) };
         }),
       );
       return entries;
@@ -45,15 +45,15 @@ export function useGroups() {
   });
 }
 
-export function useStacks() {
+export function usePlaybooks() {
   return useQuery({
-    queryKey: queryKeys.stacks,
+    queryKey: queryKeys.playbooks,
     queryFn: async () => {
-      const result = await listStacks().catch(() => ({
-        stacks: [],
-        actions: [],
+      const result = await listPlaybooks().catch(() => ({
+        playbooks: [],
+        roles: [],
       }));
-      return result.stacks;
+      return result.playbooks;
     },
   });
 }

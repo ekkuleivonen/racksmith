@@ -20,9 +20,9 @@ import {
 import { Sidebar } from "@/components/sidebar/sidebar";
 import { useAuth } from "@/context/auth-context";
 import { useSetupStore } from "@/stores/setup";
-import { useNodes } from "@/hooks/queries";
+import { useHosts } from "@/hooks/queries";
 import { usePingStore } from "@/stores/ping";
-import { isManagedNode } from "@/lib/nodes";
+import { isManagedHost } from "@/lib/hosts";
 
 function useAppShellState() {
   const loading = useSetupStore((s) => s.loading);
@@ -35,8 +35,8 @@ function useAppShellState() {
   const generatingKey = useSetupStore((s) => s.generatingKey);
   const loadSetup = useSetupStore((s) => s.load);
 
-  const { data: nodes = [] } = useNodes();
-  const managedNodes = nodes.filter(isManagedNode);
+  const { data: hosts = [] } = useHosts();
+  const managedHosts = hosts.filter(isManagedHost);
   const startPolling = usePingStore((s) => s.startPolling);
   const stopPolling = usePingStore((s) => s.stopPolling);
 
@@ -45,11 +45,11 @@ function useAppShellState() {
   }, [loadSetup]);
 
   useEffect(() => {
-    if (!status?.repo_ready || managedNodes.length === 0) {
+    if (!status?.repo_ready || managedHosts.length === 0) {
       stopPolling();
       return;
     }
-    const targets = managedNodes.map((node) => ({ node_id: node.id }));
+    const targets = managedHosts.map((host) => ({ host_id: host.id }));
     startPolling(targets);
     return () => {
       stopPolling();
@@ -57,7 +57,7 @@ function useAppShellState() {
   }, [
     status?.repo_ready,
     status?.repo?.full_name,
-    managedNodes,
+    managedHosts,
     startPolling,
     stopPolling,
   ]);
@@ -98,7 +98,7 @@ function useAppShellState() {
           {!loadingPublicKey && !publicKey ? (
             <p className="text-[11px] text-zinc-500">
               No SSH key found. Generate one to allow Racksmith to connect to
-              your nodes.
+              your hosts.
             </p>
           ) : null}
         </div>

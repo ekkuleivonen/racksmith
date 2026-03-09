@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
-import type { RackLayoutNode, ZoneSelection } from "@/lib/racks";
+import type { RackLayoutHost, ZoneSelection } from "@/lib/racks";
 
 const ROW_HEIGHT = 28;
 const RESIZE_HANDLE_SIZE = 8;
@@ -25,19 +25,19 @@ export function RackCanvas({
   onSelectZone,
   onMoveItem,
   onResizeItem,
-  onPlaceUnplacedNode,
+  onPlaceUnplacedHost,
   selectionMode = false,
 }: {
   rackUnits: number;
   cols: number;
-  items: RackLayoutNode[];
+  items: RackLayoutHost[];
   selectedItemId?: string | null;
   pendingItemId?: string | null;
   onSelectItem?: (itemId: string) => void;
   onSelectZone?: (zone: ZoneSelection) => void;
   onMoveItem?: (itemId: string, position: MovePosition) => void;
   onResizeItem?: (itemId: string, position: MovePosition) => void;
-  onPlaceUnplacedNode?: (nodeSlug: string, position: MovePosition) => void;
+  onPlaceUnplacedHost?: (hostId: string, position: MovePosition) => void;
   selectionMode?: boolean;
 }) {
   const totalHeight = rackUnits * ROW_HEIGHT;
@@ -52,7 +52,7 @@ export function RackCanvas({
   const [dropPreviewTarget, setDropPreviewTarget] = useState<{ topU: number; dropCol: number } | null>(null);
   const [dropPreviewUnplaced, setDropPreviewUnplaced] = useState(false);
   const [resizing, setResizing] = useState<{
-    item: RackLayoutNode;
+    item: RackLayoutHost;
     handle: ResizeHandle;
   } | null>(null);
   const resizePreviewRef = useRef<MovePosition | null>(null);
@@ -137,7 +137,7 @@ export function RackCanvas({
     [placedItems]
   );
 
-  const handleItemDragStart = useCallback((e: React.DragEvent, item: RackLayoutNode) => {
+  const handleItemDragStart = useCallback((e: React.DragEvent, item: RackLayoutHost) => {
     e.dataTransfer.setData(
       "application/x-racksmith-item",
       JSON.stringify({
@@ -165,17 +165,17 @@ export function RackCanvas({
       setDropPreviewTarget(null);
       setDropPreviewUnplaced(false);
 
-      const unplacedRaw = e.dataTransfer.getData("application/x-racksmith-unplaced-node");
-      if (unplacedRaw && onPlaceUnplacedNode) {
+      const unplacedRaw = e.dataTransfer.getData("application/x-racksmith-unplaced-host");
+      if (unplacedRaw && onPlaceUnplacedHost) {
         try {
-          const { nodeId } = JSON.parse(unplacedRaw);
+          const { hostId } = JSON.parse(unplacedRaw);
           const topU = dropU;
           const bottomU = topU;
           const position_u_height = 1;
           const position_col_count = 1;
           if (bottomU < 1 || topU > rackUnits || dropCol >= cols) return;
           if (isCellOccupied(bottomU, dropCol)) return;
-          onPlaceUnplacedNode(nodeId, {
+          onPlaceUnplacedHost(hostId, {
             position_u_start: bottomU,
             position_u_height,
             position_col_start: dropCol,
@@ -211,13 +211,13 @@ export function RackCanvas({
         // ignore invalid data
       }
     },
-    [cols, isCellOccupied, onMoveItem, onPlaceUnplacedNode, rackUnits]
+    [cols, isCellOccupied, onMoveItem, onPlaceUnplacedHost, rackUnits]
   );
 
   const handleCellDragOver = useCallback(
     (e: React.DragEvent, topU?: number, dropCol?: number) => {
       const hasItem = e.dataTransfer.types.includes("application/x-racksmith-item");
-      const hasUnplaced = e.dataTransfer.types.includes("application/x-racksmith-unplaced-node");
+      const hasUnplaced = e.dataTransfer.types.includes("application/x-racksmith-unplaced-host");
       if (hasItem || hasUnplaced) {
         e.preventDefault();
         e.dataTransfer.dropEffect = "move";
@@ -252,7 +252,7 @@ export function RackCanvas({
   const [resizePreview, setResizePreview] = useState<MovePosition | null>(null);
 
   const handleResizeMouseDown = useCallback(
-    (e: React.MouseEvent, item: RackLayoutNode, handle: ResizeHandle) => {
+    (e: React.MouseEvent, item: RackLayoutHost, handle: ResizeHandle) => {
       e.preventDefault();
       e.stopPropagation();
       if (!onResizeItem) return;

@@ -163,7 +163,7 @@ class ReposManager:
         repo_path = self.active_repo_path(session)
         sync_racksmith_branch(repo_path)
 
-    def status(self, session, *, nodes_ready: bool) -> dict:
+    def status(self, session, *, hosts_ready: bool) -> dict:
         binding = self.current_repo(session)
         if binding:
             repo_path = user_repo_dir(binding.user_id, binding.owner, binding.repo)
@@ -178,7 +178,7 @@ class ReposManager:
                 "avatar_url": session.user.get("avatar_url"),
             },
             "repo_ready": binding is not None,
-            "nodes_ready": nodes_ready,
+            "hosts_ready": hosts_ready,
             "repo": repo,
         }
 

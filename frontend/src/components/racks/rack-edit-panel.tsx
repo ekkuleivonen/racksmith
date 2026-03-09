@@ -1,9 +1,9 @@
 import { ItemHardwareFields } from "./item-hardware-fields";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import type { RackLayoutNode } from "@/lib/racks";
+import type { RackLayoutHost } from "@/lib/racks";
 
-function toItemLike(item: RackLayoutNode) {
+function toItemLike(item: RackLayoutHost) {
   return {
     managed: item.managed ?? true,
     name: item.name,
@@ -17,13 +17,13 @@ function toItemLike(item: RackLayoutNode) {
 }
 
 interface RackEditPanelProps {
-  pending: RackLayoutNode | null;
-  selectedItem: RackLayoutNode | null;
+  pending: RackLayoutHost | null;
+  selectedItem: RackLayoutHost | null;
   saving: boolean;
-  onPendingChange: (patch: Partial<RackLayoutNode>) => void;
+  onPendingChange: (patch: Partial<RackLayoutHost>) => void;
   onPlacePending: () => Promise<void>;
   onCancelPending: () => void;
-  onSelectedItemChange: (patch: Partial<RackLayoutNode>) => void;
+  onSelectedItemChange: (patch: Partial<RackLayoutHost>) => void;
   onSaveSelected: () => Promise<void>;
   onDeleteSelected: () => Promise<void>;
 }

@@ -1,4 +1,4 @@
-"""arq job functions for stack execution."""
+"""arq job functions for playbook and role execution."""
 
 from __future__ import annotations
 
@@ -12,23 +12,20 @@ from pathlib import Path
 import yaml
 import aiosqlite
 import settings
+from ansible import resolve_layout
 from ssh.misc import _racksmith_ssh_dir
-from stacks.managers import (
-    ACTIONS_DIR,
-    INVENTORY_DIR,
-    STACKS_DIR,
-    RUN_EVENTS_CHANNEL_PREFIX,
-)
+
+RUN_EVENTS_CHANNEL_PREFIX = "racksmith:run:"
 
 
 def _now_iso() -> str:
     return datetime.now(UTC).isoformat()
 
 
-def _ansible_env(ansible_config_path: str, actions_dir: Path) -> dict[str, str]:
+def _ansible_env(ansible_config_path: str, roles_path: Path) -> dict[str, str]:
     env = os.environ.copy()
     env["ANSIBLE_CONFIG"] = ansible_config_path
-    env["ANSIBLE_ROLES_PATH"] = str(actions_dir)
+    env["ANSIBLE_ROLES_PATH"] = str(roles_path)
     if settings.SSH_DISABLE_HOST_KEY_CHECK:
         env["ANSIBLE_HOST_KEY_CHECKING"] = "False"
     env["ANSIBLE_FORCE_COLOR"] = "True"
@@ -40,12 +37,12 @@ def _ansible_env(ansible_config_path: str, actions_dir: Path) -> dict[str, str]:
     return env
 
 
-async def execute_run(
+async def execute_playbook_run(
     ctx,
     *,
     run_id: str,
     repo_path: str,
-    stack_id: str,
+    playbook_id: str,
     hosts: list[str],
     runtime_vars: dict | None = None,
     become: bool = False,
@@ -56,22 +53,22 @@ async def execute_run(
     channel = f"{RUN_EVENTS_CHANNEL_PREFIX}{run_id}:events"
 
     repo = Path(repo_path)
-    stack_path = repo / STACKS_DIR / f"{stack_id}.yml"
-    inventory_dir = repo / INVENTORY_DIR
-    actions_dir = (repo / ACTIONS_DIR).resolve()
+    layout = resolve_layout(repo)
+    playbook_path = layout.playbooks_path / f"{playbook_id}.yml"
+    if not playbook_path.exists():
+        playbook_path = layout.playbooks_path / f"{playbook_id}.yaml"
+    inventory_path = layout.inventory_path
+    roles_path = layout.roles_path.resolve()
 
-    # Write a minimal ansible.cfg that sets roles_path to our actions dir.
-    # This overrides any ansible.cfg in the repo (e.g. roles_path = .racksmith/actions).
     with tempfile.NamedTemporaryFile(
         mode="w", suffix=".cfg", delete=False, prefix="racksmith_ansible_"
     ) as f:
-        f.write(f"[defaults]\nroles_path = {actions_dir}\n")
+        f.write(f"[defaults]\nroles_path = {roles_path}\n")
         ansible_config_path = f.name
 
     async with aiosqlite.connect(settings.DB_PATH) as db:
-        # Update status to running
         await db.execute(
-            "UPDATE runs SET status = ?, started_at = ? WHERE id = ?",
+            "UPDATE playbook_runs SET status = ?, started_at = ? WHERE id = ?",
             ("running", _now_iso(), run_id),
         )
         await db.commit()
@@ -80,9 +77,9 @@ async def execute_run(
 
     command = [
         "ansible-playbook",
-        str(stack_path),
+        str(playbook_path),
         "-i",
-        str(inventory_dir),
+        str(inventory_path),
         "--limit",
         ",".join(hosts),
     ]
@@ -107,8 +104,7 @@ async def execute_run(
     output = command_line
 
     try:
-        env = _ansible_env(ansible_config_path, actions_dir)
-
+        env = _ansible_env(ansible_config_path, roles_path)
         process = await asyncio.create_subprocess_exec(
             *command,
             cwd=repo_path,
@@ -122,7 +118,7 @@ async def execute_run(
         await redis.publish(channel, json.dumps({"type": "output", "data": error_msg}))
         async with aiosqlite.connect(settings.DB_PATH) as db:
             await db.execute(
-                """UPDATE runs SET status = ?, started_at = ?, finished_at = ?, exit_code = ?, output = ?
+                """UPDATE playbook_runs SET status = ?, started_at = ?, finished_at = ?, exit_code = ?, output = ?
                    WHERE id = ?""",
                 ("failed", _now_iso(), _now_iso(), 127, output, run_id),
             )
@@ -146,7 +142,7 @@ async def execute_run(
 
     async with aiosqlite.connect(settings.DB_PATH) as db:
         await db.execute(
-            """UPDATE runs SET status = ?, finished_at = ?, exit_code = ?, output = ? WHERE id = ?""",
+            """UPDATE playbook_runs SET status = ?, finished_at = ?, exit_code = ?, output = ? WHERE id = ?""",
             (status, finished_at, exit_code, output, run_id),
         )
         await db.commit()
@@ -164,33 +160,34 @@ async def execute_run(
             pass
 
 
-async def execute_action_run(
+async def execute_role_run(
     ctx,
     *,
     run_id: str,
     repo_path: str,
-    action_slug: str,
+    role_slug: str,
     hosts: list[str],
-    action_vars: dict | None = None,
+    role_vars: dict | None = None,
     become: bool = False,
     runtime_vars: dict | None = None,
     become_password: str | None = None,
 ) -> None:
-    """Execute a single action as an ansible-playbook run."""
+    """Execute a single role as an ansible-playbook run."""
     redis = ctx["redis"]
     channel = f"{RUN_EVENTS_CHANNEL_PREFIX}{run_id}:events"
 
     repo = Path(repo_path)
-    inventory_dir = repo / INVENTORY_DIR
-    actions_dir = (repo / ACTIONS_DIR).resolve()
+    layout = resolve_layout(repo)
+    inventory_path = layout.inventory_path
+    roles_path = layout.roles_path.resolve()
 
-    role_entry: dict | str = action_slug
-    if action_vars:
-        role_entry = {"role": action_slug, "vars": dict(action_vars)}
+    role_entry: dict | str = role_slug
+    if role_vars:
+        role_entry = {"role": role_slug, "vars": dict(role_vars)}
 
     playbook = [
         {
-            "name": f"Run action: {action_slug}",
+            "name": f"Run role: {role_slug}",
             "hosts": "all",
             "gather_facts": True,
             "become": become,
@@ -199,7 +196,7 @@ async def execute_action_run(
     ]
 
     tmp_playbook = tempfile.NamedTemporaryFile(
-        mode="w", suffix=".yml", delete=False, prefix="racksmith_action_"
+        mode="w", suffix=".yml", delete=False, prefix="racksmith_role_"
     )
     tmp_playbook.write(yaml.safe_dump(playbook, sort_keys=False))
     tmp_playbook.close()
@@ -208,12 +205,12 @@ async def execute_action_run(
     with tempfile.NamedTemporaryFile(
         mode="w", suffix=".cfg", delete=False, prefix="racksmith_ansible_"
     ) as f:
-        f.write(f"[defaults]\nroles_path = {actions_dir}\n")
+        f.write(f"[defaults]\nroles_path = {roles_path}\n")
         ansible_config_path = f.name
 
     async with aiosqlite.connect(settings.DB_PATH) as db:
         await db.execute(
-            "UPDATE action_runs SET status = ?, started_at = ? WHERE id = ?",
+            "UPDATE role_runs SET status = ?, started_at = ? WHERE id = ?",
             ("running", _now_iso(), run_id),
         )
         await db.commit()
@@ -224,7 +221,7 @@ async def execute_action_run(
         "ansible-playbook",
         playbook_path,
         "-i",
-        str(inventory_dir),
+        str(inventory_path),
         "--limit",
         ",".join(hosts),
     ]
@@ -239,16 +236,15 @@ async def execute_action_run(
         tmp.write_text(yaml.safe_dump(extra))
         tmp_vars_path = str(tmp)
         command += ["--extra-vars", f"@{tmp_vars_path}"]
-        command_line = f"$ ansible-playbook [action: {action_slug}] [runtime vars redacted]\n"
+        command_line = f"$ ansible-playbook [role: {role_slug}] [runtime vars redacted]\n"
     else:
-        command_line = f"$ ansible-playbook [action: {action_slug}]\n"
+        command_line = f"$ ansible-playbook [role: {role_slug}]\n"
 
     await redis.publish(channel, json.dumps({"type": "output", "data": command_line}))
     output = command_line
 
     try:
-        env = _ansible_env(ansible_config_path, actions_dir)
-
+        env = _ansible_env(ansible_config_path, roles_path)
         process = await asyncio.create_subprocess_exec(
             *command,
             cwd=repo_path,
@@ -262,7 +258,7 @@ async def execute_action_run(
         await redis.publish(channel, json.dumps({"type": "output", "data": error_msg}))
         async with aiosqlite.connect(settings.DB_PATH) as db:
             await db.execute(
-                """UPDATE action_runs SET status = ?, started_at = ?, finished_at = ?, exit_code = ?, output = ?
+                """UPDATE role_runs SET status = ?, started_at = ?, finished_at = ?, exit_code = ?, output = ?
                    WHERE id = ?""",
                 ("failed", _now_iso(), _now_iso(), 127, output, run_id),
             )
@@ -287,7 +283,7 @@ async def execute_action_run(
 
     async with aiosqlite.connect(settings.DB_PATH) as db:
         await db.execute(
-            """UPDATE action_runs SET status = ?, finished_at = ?, exit_code = ?, output = ? WHERE id = ?""",
+            """UPDATE role_runs SET status = ?, finished_at = ?, exit_code = ?, output = ? WHERE id = ?""",
             (status, finished_at, exit_code, output, run_id),
         )
         await db.commit()

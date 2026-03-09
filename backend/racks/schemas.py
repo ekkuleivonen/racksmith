@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field
 
-from nodes.schemas import Node
+from hosts.schemas import Host
 
 
 class RackCreate(BaseModel):
@@ -41,4 +41,4 @@ class RackSummary(BaseModel):
 
 
 class RackLayout(Rack):
-    nodes: list[Node] = Field(default_factory=list)
+    hosts: list[Host] = Field(default_factory=list)

@@ -15,7 +15,7 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { Slider } from "@/components/ui/slider";
 import {
-  type RackLayoutNode,
+  type RackLayoutHost,
   type RackWidthInches,
   type ZoneSelection,
 } from "@/lib/racks";
@@ -28,7 +28,7 @@ type MovePosition = {
   position_col_count: number;
 };
 
-export type PendingNode = RackLayoutNode & { id: string };
+export type PendingHost = RackLayoutHost & { id: string };
 
 type RackBuilderProps = {
   title?: string;
@@ -41,9 +41,9 @@ type RackBuilderProps = {
   rackUnits: number;
   rackCols: number;
   rackName: string;
-  items: RackLayoutNode[];
+  items: RackLayoutHost[];
   selectedItemId: string | null;
-  pending: PendingNode | null;
+  pending: PendingHost | null;
   saving?: boolean;
   actionSlot?: ReactNode;
   selectedItemActionSlot?: ReactNode;
@@ -58,15 +58,15 @@ type RackBuilderProps = {
   onSelectZone: (zone: ZoneSelection) => void;
   onMoveItem: (itemId: string, position: MovePosition) => void;
   onResizeItem: (itemId: string, position: MovePosition) => void;
-  onPendingChange: (patch: Partial<PendingNode>) => void;
+  onPendingChange: (patch: Partial<PendingHost>) => void;
   onPlacePending: () => Promise<void>;
   onCancelPending: () => void;
-  onSelectedItemChange: (patch: Partial<RackLayoutNode>) => void;
+  onSelectedItemChange: (patch: Partial<RackLayoutHost>) => void;
   onSaveSelected: () => Promise<void>;
   onDeleteSelected: () => Promise<void>;
-  unplacedNodes?: Array<{ id: string; name: string; hostname?: string; ip_address?: string }>;
-  onPlaceUnplacedNode?: (nodeId: string, position: MovePosition) => void;
-  onUnplaceNode?: (nodeId: string) => void;
+  unplacedHosts?: Array<{ id: string; name: string; hostname?: string; ip_address?: string }>;
+  onPlaceUnplacedHost?: (hostId: string, position: MovePosition) => void;
+  onUnplaceHost?: (hostId: string) => void;
 };
 
 export function RackBuilder({
@@ -103,9 +103,9 @@ export function RackBuilder({
   onSelectedItemChange,
   onSaveSelected,
   onDeleteSelected,
-  unplacedNodes = [],
-  onPlaceUnplacedNode,
-  onUnplaceNode,
+  unplacedHosts = [],
+  onPlaceUnplacedHost,
+  onUnplaceHost,
 }: RackBuilderProps) {
   const showFrameEditorInRightPanel = showFrameControls && !!frameEditorSlot;
   const canvasItems = useMemo(
@@ -118,11 +118,11 @@ export function RackBuilder({
     [items, selectedItemId]
   );
 
-  const handleUnplacedNodeDragStart = useCallback(
-    (event: React.DragEvent, node: { id: string }) => {
+  const handleUnplacedHostDragStart = useCallback(
+    (event: React.DragEvent, host: { id: string }) => {
       event.dataTransfer.setData(
-        "application/x-racksmith-unplaced-node",
-        JSON.stringify({ nodeId: node.id })
+        "application/x-racksmith-unplaced-host",
+        JSON.stringify({ hostId: host.id })
       );
       event.dataTransfer.effectAllowed = "move";
     },
@@ -131,17 +131,17 @@ export function RackBuilder({
 
   const handleUnplaceDrop = useCallback(
     (e: React.DragEvent) => {
-      if (!onUnplaceNode) return;
+      if (!onUnplaceHost) return;
       const raw = e.dataTransfer.getData("application/x-racksmith-item");
       if (!raw) return;
       try {
         const { itemId } = JSON.parse(raw);
-        if (itemId) onUnplaceNode(itemId);
+        if (itemId) onUnplaceHost(itemId);
       } catch {
         // ignore
       }
     },
-    [onUnplaceNode]
+    [onUnplaceHost]
   );
 
   const handleUnplaceDragOver = useCallback((e: React.DragEvent) => {
@@ -155,7 +155,7 @@ export function RackBuilder({
     () => items.filter((item) => item.placement === "rack"),
     [items]
   );
-  const showUnplaceZone = onUnplaceNode && placedItems.length > 0;
+  const showUnplaceZone = onUnplaceHost && placedItems.length > 0;
 
   const [unassignedSearch, setUnassignedSearch] = useState("");
   const [isDraggingOverUnplace, setIsDraggingOverUnplace] = useState(false);
@@ -180,18 +180,18 @@ export function RackBuilder({
     [handleUnplaceDrop]
   );
 
-  const filteredUnplacedNodes = useMemo(() => {
+  const filteredUnplacedHosts = useMemo(() => {
     const q = unassignedSearch.trim().toLowerCase();
-    if (!q) return unplacedNodes;
-    return unplacedNodes.filter(
-      (n) =>
-        (n.name ?? "").toLowerCase().includes(q) ||
-        (n.ip_address ?? "").toLowerCase().includes(q) ||
-        (n.id ?? "").toLowerCase().includes(q)
+    if (!q) return unplacedHosts;
+    return unplacedHosts.filter(
+      (h) =>
+        (h.name ?? "").toLowerCase().includes(q) ||
+        (h.ip_address ?? "").toLowerCase().includes(q) ||
+        (h.id ?? "").toLowerCase().includes(q)
     );
-  }, [unplacedNodes, unassignedSearch]);
+  }, [unplacedHosts, unassignedSearch]);
 
-  const itemToItemLike = (item: RackLayoutNode | PendingNode) => ({
+  const itemToItemLike = (item: RackLayoutHost | PendingHost) => ({
     managed: item.managed ?? true,
     name: item.name,
     ip_address: item.ip_address ?? "",
@@ -314,7 +314,7 @@ export function RackBuilder({
             onSelectZone={onSelectZone}
             onMoveItem={onMoveItem}
             onResizeItem={onResizeItem}
-            onPlaceUnplacedNode={onPlaceUnplacedNode}
+            onPlaceUnplacedHost={onPlaceUnplacedHost}
             selectionMode
           />
           <p className="text-xs text-zinc-400">
@@ -496,7 +496,7 @@ export function RackBuilder({
           )}
         </section>
 
-          {(unplacedNodes.length > 0 || showUnplaceZone) ? (
+          {(unplacedHosts.length > 0 || showUnplaceZone) ? (
             <div
               className={cn(
                 "border p-3 flex flex-col min-h-0 transition-colors",
@@ -509,11 +509,11 @@ export function RackBuilder({
               onDragOver={showUnplaceZone ? handleUnplaceDragOver : undefined}
               onDrop={showUnplaceZone ? handleUnplaceDropWithReset : undefined}
             >
-              <h3 className="text-sm text-zinc-100 font-semibold shrink-0">Unassigned nodes</h3>
+              <h3 className="text-sm text-zinc-100 font-semibold shrink-0">Unassigned hosts</h3>
               <p className="text-xs text-zinc-500 shrink-0">
                 Drag onto the rack to place. Drop here to unplace.
               </p>
-              {unplacedNodes.length > 0 ? (
+              {unplacedHosts.length > 0 ? (
                 <>
                   <Input
                     placeholder="Search..."
@@ -522,24 +522,24 @@ export function RackBuilder({
                     className="mt-2 h-8 text-xs"
                   />
                   <div className="mt-2 flex flex-col gap-1 overflow-y-auto min-h-0 max-h-80 flex-1">
-                    {filteredUnplacedNodes.map((node) => (
+                    {filteredUnplacedHosts.map((host) => (
                       <button
-                        key={node.id}
+                        key={host.id}
                         type="button"
                         draggable
-                        onDragStart={(e) => handleUnplacedNodeDragStart(e, node)}
+                        onDragStart={(e) => handleUnplacedHostDragStart(e, host)}
                         className="border border-zinc-800 bg-zinc-950/60 px-2 py-1.5 text-left hover:border-zinc-700 cursor-grab active:cursor-grabbing text-xs truncate"
                       >
-                        {node.name || node.hostname || node.ip_address || node.id}
+                        {host.name || host.hostname || host.ip_address || host.id}
                       </button>
                     ))}
-                    {filteredUnplacedNodes.length === 0 && unassignedSearch.trim() ? (
+                    {filteredUnplacedHosts.length === 0 && unassignedSearch.trim() ? (
                       <p className="text-xs text-zinc-500 py-2">No matches</p>
                     ) : null}
                   </div>
                 </>
               ) : (
-                <p className="text-xs text-zinc-500 mt-2">Drop nodes here to unplace.</p>
+                <p className="text-xs text-zinc-500 mt-2">Drop hosts here to unplace.</p>
               )}
             </div>
           ) : null}
