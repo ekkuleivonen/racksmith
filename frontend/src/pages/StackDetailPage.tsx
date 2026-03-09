@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { Checkbox } from "@/components/ui/checkbox";
 import { ChevronDown, LoaderCircle, Play, Search } from "lucide-react";
 import { toast } from "sonner";
 import { StackEditorForm } from "@/components/stacks/stack-editor-form";
@@ -13,6 +14,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { formatRelativeTime } from "@/lib/format";
 import { nodeDisplayLabel } from "@/lib/nodes";
 import { useGroups, useNodes, useRackEntries } from "@/hooks/queries";
@@ -54,6 +56,90 @@ const EMPTY_TARGETS: StackTargetSelection = {
   nodes: [],
   racks: [],
 };
+
+function HeaderEditableTitle({
+  value,
+  placeholder,
+  onChange,
+}: {
+  value: string;
+  placeholder: string;
+  onChange: (v: string) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const ref = useRef<HTMLInputElement | null>(null);
+  useEffect(() => {
+    if (editing) {
+      ref.current?.focus();
+      ref.current?.select();
+    }
+  }, [editing]);
+  if (editing) {
+    return (
+      <Input
+        ref={ref}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        onBlur={() => setEditing(false)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") setEditing(false);
+          if (e.key === "Escape") setEditing(false);
+        }}
+        className="text-zinc-100 font-semibold h-auto py-1 px-2 -mx-2"
+      />
+    );
+  }
+  return (
+    <h1
+      className="text-zinc-100 font-semibold cursor-text rounded px-2 -mx-2 py-0.5 hover:bg-zinc-800/50"
+      onDoubleClick={() => setEditing(true)}
+      title="Double-click to edit"
+    >
+      {value || placeholder}
+    </h1>
+  );
+}
+
+function HeaderEditableDescription({
+  value,
+  placeholder,
+  onChange,
+}: {
+  value: string;
+  placeholder: string;
+  onChange: (v: string) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const ref = useRef<HTMLTextAreaElement | null>(null);
+  useEffect(() => {
+    if (editing) ref.current?.focus();
+  }, [editing]);
+  if (editing) {
+    return (
+      <Textarea
+        ref={ref}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        onBlur={() => setEditing(false)}
+        onKeyDown={(e) => {
+          if ((e.metaKey || e.ctrlKey) && e.key === "Enter") setEditing(false);
+          if (e.key === "Escape") setEditing(false);
+        }}
+        placeholder={placeholder}
+        className="text-xs text-zinc-500 min-h-16 mt-1 -mx-2 px-2"
+      />
+    );
+  }
+  return (
+    <p
+      className="text-xs text-zinc-500 cursor-text rounded px-2 -mx-2 py-0.5 hover:bg-zinc-800/50 min-h-[1.25rem]"
+      onDoubleClick={() => setEditing(true)}
+      title="Double-click to edit"
+    >
+      {value || placeholder}
+    </p>
+  );
+}
 
 function toggleValue(values: string[], value: string): string[] {
   return values.includes(value)
@@ -131,8 +217,11 @@ function SearchableFilterDropdown({
 export function StackDetailPage() {
   const { stackId = "" } = useParams();
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const prefilledNode = searchParams.get("node") ?? undefined;
+  const tabParam = searchParams.get("tab") ?? (prefilledNode ? "run" : "actions");
+  const validTab = ["actions", "history", "run"].includes(tabParam) ? tabParam : "actions";
+  const [activeTab, setActiveTab] = useState(validTab);
   const [draft, setDraft] = useState<StackUpsertRequest | null>(null);
   const [actions, setActions] = useState<Action[]>([]);
   const [targets, setTargets] = useState<StackTargetSelection>(
@@ -148,6 +237,8 @@ export function StackDetailPage() {
   const [resolving, setResolving] = useState(false);
   const [running, setRunning] = useState(false);
   const [runtimeDialogOpen, setRuntimeDialogOpen] = useState(false);
+  const [runBecome, setRunBecome] = useState(false);
+  const savedDraftRef = useRef<StackUpsertRequest | null>(null);
 
   const { data: groups = [] } = useGroups();
   const { data: nodes = [] } = useNodes();
@@ -169,12 +260,13 @@ export function StackDetailPage() {
         getStack(stackId),
         listStackRuns(stackId),
       ]);
-      setDraft({
+      const loaded = {
         name: stackResult.stack.name,
         description: stackResult.stack.description,
-        become: stackResult.stack.become,
         roles: stackResult.stack.role_entries,
-      });
+      };
+      setDraft(loaded);
+      savedDraftRef.current = loaded;
       setActions(stackResult.stack.actions);
       setRuns(runsResult.runs);
       const activeRun = runsResult.runs.find(
@@ -194,6 +286,54 @@ export function StackDetailPage() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    const tab = searchParams.get("tab") ?? (prefilledNode ? "run" : "actions");
+    if (["actions", "history", "run"].includes(tab)) {
+      setActiveTab(tab);
+    }
+  }, [searchParams, prefilledNode]);
+
+  const handleTabChange = useCallback(
+    (value: string) => {
+      setActiveTab(value);
+      const next = new URLSearchParams(searchParams);
+      next.set("tab", value);
+      setSearchParams(next, { replace: true });
+    },
+    [searchParams, setSearchParams],
+  );
+
+  useEffect(() => {
+    if (!draft || !stackId || !savedDraftRef.current) return;
+    if (
+      draft.name === savedDraftRef.current.name &&
+      draft.description === savedDraftRef.current.description &&
+      JSON.stringify(draft.roles) === JSON.stringify(savedDraftRef.current.roles)
+    ) {
+      return;
+    }
+    const timer = setTimeout(async () => {
+      setSaving(true);
+      try {
+        const result = await updateStack(stackId, draft);
+        const next = {
+          name: result.stack.name,
+          description: result.stack.description,
+          roles: result.stack.role_entries,
+        };
+        setDraft(next);
+        savedDraftRef.current = next;
+        setActions(result.stack.actions);
+        toast.success("Stack saved");
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "Failed to save stack");
+      } finally {
+        setSaving(false);
+      }
+    }, 800);
+    return () => clearTimeout(timer);
+  }, [draft, stackId]);
 
   const tagOptions = useMemo(
     () =>
@@ -279,15 +419,25 @@ export function StackDetailPage() {
       <div className="mx-auto max-w-5xl space-y-4">
         <section className="border border-zinc-800 bg-zinc-900/30 p-4">
           <div className="flex flex-wrap items-start justify-between gap-3">
-            <div className="space-y-1">
-              <h1 className="text-zinc-100 font-semibold">{draft.name || stackId}</h1>
-              {draft.description ? (
-                <p className="text-xs text-zinc-500">{draft.description}</p>
-              ) : null}
+            <div className="min-w-0 flex-1 space-y-1">
+              <HeaderEditableTitle
+                value={draft.name || stackId}
+                placeholder="Stack name"
+                onChange={(name) => setDraft((d) => (d ? { ...d, name } : d))}
+              />
+              <HeaderEditableDescription
+                value={draft.description}
+                placeholder="Double-click to add a description"
+                onChange={(description) =>
+                  setDraft((d) => (d ? { ...d, description } : d))
+                }
+              />
             </div>
             <div className="flex flex-wrap items-center gap-2">
+              {saving ? (
+                <span className="text-xs text-zinc-500">Saving...</span>
+              ) : null}
               <Badge variant="outline">{draft.roles.length} roles</Badge>
-              <Badge variant="outline">{draft.become ? "become" : "no become"}</Badge>
               <Button
                 size="sm"
                 variant="outline"
@@ -313,12 +463,21 @@ export function StackDetailPage() {
           </div>
         </section>
 
-        <Tabs defaultValue="run">
+        <Tabs value={activeTab} onValueChange={handleTabChange}>
           <TabsList variant="line">
-            <TabsTrigger value="run">Run</TabsTrigger>
+            <TabsTrigger value="actions">Actions</TabsTrigger>
             <TabsTrigger value="history">History</TabsTrigger>
-            <TabsTrigger value="editor">Editor</TabsTrigger>
+            <TabsTrigger value="run">Run</TabsTrigger>
           </TabsList>
+
+          <TabsContent value="actions">
+            <StackEditorForm
+              draft={draft}
+              actions={actions}
+              compact
+              onChange={setDraft}
+            />
+          </TabsContent>
 
           <TabsContent value="run">
             <div className="space-y-4">
@@ -329,6 +488,14 @@ export function StackDetailPage() {
                     Narrow targets with searchable filters, then run the stack below.
                   </p>
                 </div>
+
+                <label className="flex items-center gap-2 text-xs text-zinc-300">
+                  <Checkbox
+                    checked={runBecome}
+                    onCheckedChange={(checked) => setRunBecome(checked === true)}
+                  />
+                  Run with privilege escalation (will prompt for sudo password)
+                </label>
 
                 <div className="grid gap-3 xl:grid-cols-4">
                   <SearchableFilterDropdown
@@ -406,7 +573,7 @@ export function StackDetailPage() {
                   <RuntimeVarsDialog
                     open={runtimeDialogOpen}
                     actions={actions}
-                    needsBecomePassword={draft.become}
+                    needsBecomePassword={runBecome}
                     onConfirm={async (runtimeVars, becomePassword) => {
                       setRuntimeDialogOpen(false);
                       setRunning(true);
@@ -414,7 +581,8 @@ export function StackDetailPage() {
                         const result = await createStackRun(stackId, {
                           targets,
                           runtime_vars: Object.keys(runtimeVars).length > 0 ? runtimeVars : undefined,
-                          become_password: becomePassword ?? undefined,
+                          become: runBecome,
+                          become_password: runBecome ? becomePassword ?? undefined : undefined,
                         });
                         setRuns((prev) => [result.run, ...prev]);
                         setViewingRunId(result.run.id);
@@ -431,13 +599,16 @@ export function StackDetailPage() {
                     size="sm"
                     disabled={running || resolving || resolvedHosts.length === 0}
                     onClick={async () => {
-                      if (needsRuntimeVarsDialog(actions, draft.become)) {
+                      if (needsRuntimeVarsDialog(actions, runBecome)) {
                         setRuntimeDialogOpen(true);
                         return;
                       }
                       setRunning(true);
                       try {
-                        const result = await createStackRun(stackId, { targets });
+                        const result = await createStackRun(stackId, {
+                          targets,
+                          become: runBecome,
+                        });
                         setRuns((prev) => [result.run, ...prev]);
                         setViewingRunId(result.run.id);
                         toast.success("Stack started");
@@ -538,36 +709,6 @@ export function StackDetailPage() {
                 </ResizablePanel>
               </ResizablePanelGroup>
             )}
-          </TabsContent>
-
-          <TabsContent value="editor">
-            <StackEditorForm
-              draft={draft}
-              actions={actions}
-              submitLabel={saving ? "Saving..." : "Save stack"}
-              submitting={saving}
-              inlineTextFields
-              compact
-              onChange={setDraft}
-              onSubmit={async () => {
-                setSaving(true);
-                try {
-                  const result = await updateStack(stackId, draft);
-                  setDraft({
-                    name: result.stack.name,
-                    description: result.stack.description,
-                    become: result.stack.become,
-                    roles: result.stack.role_entries,
-                  });
-                  setActions(result.stack.actions);
-                  toast.success("Stack saved");
-                } catch (error) {
-                  toast.error(error instanceof Error ? error.message : "Failed to save stack");
-                } finally {
-                  setSaving(false);
-                }
-              }}
-            />
           </TabsContent>
         </Tabs>
       </div>

@@ -882,7 +882,7 @@ export function NodePage() {
                     className="shrink-0 gap-1.5"
                     onClick={() =>
                       navigate(
-                        `/stacks/${stack.id}?node=${encodeURIComponent(node.id)}`,
+                        `/stacks/${stack.id}?tab=run&node=${encodeURIComponent(node.id)}`,
                       )
                     }
                   >

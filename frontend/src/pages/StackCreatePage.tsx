@@ -2,13 +2,15 @@ import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { StackEditorForm } from "@/components/stacks/stack-editor-form";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import type { Action, StackUpsertRequest } from "@/lib/stacks";
 import { createStack, listStacks } from "@/lib/stacks";
 
 const EMPTY_DRAFT: StackUpsertRequest = {
   name: "",
   description: "",
-  become: false,
   roles: [],
 };
 
@@ -53,25 +55,58 @@ export function StackCreatePage() {
           </p>
         </section>
 
+        <section className="space-y-4 border border-zinc-800 bg-zinc-900/30 p-4">
+          <div className="space-y-1">
+            <p className="text-xs text-zinc-400">Name</p>
+            <Input
+              value={draft.name}
+              onChange={(e) =>
+                setDraft((d) => ({ ...d, name: e.target.value }))
+              }
+              placeholder="Stack name"
+            />
+          </div>
+          <div className="space-y-1">
+            <p className="text-xs text-zinc-400">Description</p>
+            <Textarea
+              value={draft.description}
+              onChange={(e) =>
+                setDraft((d) => ({ ...d, description: e.target.value }))
+              }
+              placeholder="Short description shown in the UI."
+              className="min-h-20"
+            />
+          </div>
+        </section>
+
         <StackEditorForm
           draft={draft}
           actions={actions}
-          submitLabel={saving ? "Creating..." : "Create stack"}
-          submitting={saving}
           onChange={setDraft}
-          onSubmit={async () => {
-            setSaving(true);
-            try {
-              const result = await createStack(draft);
-              toast.success("Stack created");
-              navigate(`/stacks/${result.stack.id}`);
-            } catch (error) {
-              toast.error(error instanceof Error ? error.message : "Failed to create stack");
-            } finally {
-              setSaving(false);
-            }
-          }}
         />
+
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            size="sm"
+            disabled={saving || !draft.name.trim() || draft.roles.length === 0}
+            onClick={async () => {
+              setSaving(true);
+              try {
+                const result = await createStack(draft);
+                toast.success("Stack created");
+                navigate(`/stacks/${result.stack.id}`);
+              } catch (error) {
+                toast.error(
+                  error instanceof Error ? error.message : "Failed to create stack",
+                );
+              } finally {
+                setSaving(false);
+              }
+            }}
+          >
+            {saving ? "Creating..." : "Create stack"}
+          </Button>
+        </div>
       </div>
     </div>
   );

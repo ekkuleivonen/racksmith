@@ -30,7 +30,6 @@ export type StackSummary = {
   path: string;
   name: string;
   description: string;
-  become: boolean;
   roles: string[];
   updated_at: string;
 };
@@ -51,7 +50,6 @@ export type StackTargetSelection = {
 export type StackUpsertRequest = {
   name: string;
   description: string;
-  become: boolean;
   roles: StackRoleEntry[];
 };
 
@@ -108,6 +106,7 @@ export async function resolveStackTargets(targets: StackTargetSelection) {
 export type StackRunRequest = {
   targets: StackTargetSelection;
   runtime_vars?: Record<string, string>;
+  become?: boolean;
   become_password?: string | null;
 };
 

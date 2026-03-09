@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   DndContext,
   PointerSensor,
@@ -43,8 +43,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Separator } from "@/components/ui/separator";
-import { Textarea } from "@/components/ui/textarea";
 import type {
   Action,
   StackRoleEntry,
@@ -54,13 +52,7 @@ import type {
 interface StackEditorFormProps {
   draft: StackUpsertRequest;
   actions: Action[];
-  submitLabel: string;
-  submitting: boolean;
   onChange: (next: StackUpsertRequest) => void;
-  onSubmit: () => Promise<void>;
-  onDelete?: () => Promise<void>;
-  deleteLabel?: string;
-  inlineTextFields?: boolean;
   compact?: boolean;
 }
 
@@ -217,13 +209,7 @@ function SortableRoleCard({
 export function StackEditorForm({
   draft,
   actions,
-  submitLabel,
-  submitting,
   onChange,
-  onSubmit,
-  onDelete,
-  deleteLabel = "Delete",
-  inlineTextFields = false,
   compact = false,
 }: StackEditorFormProps) {
   const actionsById = actionMap(actions);
@@ -231,9 +217,6 @@ export function StackEditorForm({
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
   );
   const actionPickerAnchor = useComboboxAnchor();
-  const [editingField, setEditingField] = useState<
-    "name" | "description" | null
-  >(null);
   const [actionPickerValue, setActionPickerValue] = useState<string | null>(
     null,
   );
@@ -241,8 +224,6 @@ export function StackEditorForm({
   const [activeRoleId, setActiveRoleId] = useState<string | undefined>(
     undefined,
   );
-  const playNameInputRef = useRef<HTMLInputElement | null>(null);
-  const descriptionInputRef = useRef<HTMLTextAreaElement | null>(null);
 
   const actionPickerValueBySlug = useMemo(
     () =>
@@ -304,17 +285,6 @@ export function StackEditorForm({
       }))
       .filter((group) => group.actions.length > 0);
   }, [actionsByLabel, actionQuery, draft.roles]);
-
-  useEffect(() => {
-    if (editingField === "name") {
-      playNameInputRef.current?.focus();
-      playNameInputRef.current?.select();
-    }
-    if (editingField === "description") {
-      descriptionInputRef.current?.focus();
-      descriptionInputRef.current?.select();
-    }
-  }, [editingField]);
 
   useEffect(() => {
     if (!activeRoleId) return;
@@ -383,91 +353,6 @@ export function StackEditorForm({
           </p>
         </div>
       ) : null}
-
-      <div className="space-y-1">
-        <p className="text-xs text-zinc-400">Name</p>
-        {inlineTextFields && editingField !== "name" ? (
-          <button
-            type="button"
-            className="w-full border border-zinc-800 bg-zinc-950/40 px-3 py-2 text-left text-sm text-zinc-100 hover:border-zinc-700"
-            onDoubleClick={() => setEditingField("name")}
-          >
-            {draft.name || "Double-click to name this stack"}
-          </button>
-        ) : (
-          <Input
-            ref={playNameInputRef}
-            value={draft.name}
-            onChange={(event) =>
-              onChange({ ...draft, name: event.target.value })
-            }
-            onBlur={() => {
-              if (inlineTextFields) setEditingField(null);
-            }}
-            onKeyDown={(event) => {
-              if (!inlineTextFields) return;
-              if (event.key === "Enter") {
-                event.preventDefault();
-                setEditingField(null);
-              }
-              if (event.key === "Escape") {
-                event.preventDefault();
-                setEditingField(null);
-              }
-            }}
-            placeholder="Get info"
-          />
-        )}
-      </div>
-
-      <div className="space-y-1">
-        <p className="text-xs text-zinc-400">Description</p>
-        {inlineTextFields && editingField !== "description" ? (
-          <button
-            type="button"
-            className="w-full border border-zinc-800 bg-zinc-950/40 px-3 py-2 text-left text-sm text-zinc-300 hover:border-zinc-700"
-            onDoubleClick={() => setEditingField("description")}
-          >
-            {draft.description || "Double-click to add a description"}
-          </button>
-        ) : (
-          <Textarea
-            ref={descriptionInputRef}
-            value={draft.description}
-            onChange={(event) =>
-              onChange({ ...draft, description: event.target.value })
-            }
-            onBlur={() => {
-              if (inlineTextFields) setEditingField(null);
-            }}
-            onKeyDown={(event) => {
-              if (!inlineTextFields) return;
-              if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
-                event.preventDefault();
-                setEditingField(null);
-              }
-              if (event.key === "Escape") {
-                event.preventDefault();
-                setEditingField(null);
-              }
-            }}
-            placeholder="Short description shown in the UI."
-            className="min-h-20"
-          />
-        )}
-      </div>
-
-      <label className="flex items-center gap-2 text-xs text-zinc-300">
-        <Checkbox
-          checked={draft.become}
-          onCheckedChange={(checked) =>
-            onChange({ ...draft, become: checked === true })
-          }
-        />
-        Run with privilege escalation (`become: true`)
-      </label>
-
-      <Separator />
 
       <div className="space-y-3">
         <div className="space-y-1">
@@ -590,22 +475,6 @@ export function StackEditorForm({
             </SortableContext>
           </DndContext>
         )}
-      </div>
-
-      <div className="flex flex-wrap items-center gap-2">
-        <Button size="sm" disabled={submitting} onClick={() => void onSubmit()}>
-          {submitLabel}
-        </Button>
-        {onDelete ? (
-          <Button
-            size="sm"
-            variant="outline"
-            disabled={submitting}
-            onClick={() => void onDelete()}
-          >
-            {deleteLabel}
-          </Button>
-        ) : null}
       </div>
     </section>
   );

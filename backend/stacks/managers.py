@@ -127,7 +127,6 @@ class StackManager:
             "name": body.name.strip(),
             "hosts": "all",
             "gather_facts": True,
-            "become": body.become,
             "roles": roles,
         }
         if body.description.strip():
@@ -175,7 +174,6 @@ class StackManager:
             path=str(STACKS_DIR / path.name),
             name=str(play.get("name") or path.stem),
             description=description,
-            become=bool(play.get("become", False)),
             roles=role_ids,
             updated_at=datetime.fromtimestamp(stat.st_mtime, tz=UTC).isoformat(),
         )
@@ -338,6 +336,7 @@ class StackManager:
             stack_id=stack.id,
             hosts=hosts,
             runtime_vars=body.runtime_vars or {},
+            become=body.become,
             become_password=body.become_password,
         )
         return run

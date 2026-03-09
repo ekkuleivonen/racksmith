@@ -48,6 +48,7 @@ async def execute_run(
     stack_id: str,
     hosts: list[str],
     runtime_vars: dict | None = None,
+    become: bool = False,
     become_password: str | None = None,
 ) -> None:
     """Execute ansible-playbook in worker process, publishing output via Redis pub/sub."""
@@ -85,6 +86,8 @@ async def execute_run(
         "--limit",
         ",".join(hosts),
     ]
+    if become:
+        command.append("--become")
 
     extra: dict[str, str] = dict(runtime_vars or {})
     if become_password:

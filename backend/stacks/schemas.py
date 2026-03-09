@@ -36,7 +36,6 @@ class StackRoleInput(BaseModel):
 class StackUpsertRequest(BaseModel):
     name: str = Field(min_length=1, max_length=160)
     description: str = Field(default="", max_length=500)
-    become: bool = False
     roles: list[StackRoleInput] = Field(default_factory=list)
 
 
@@ -45,7 +44,6 @@ class StackSummary(BaseModel):
     path: str
     name: str
     description: str = ""
-    become: bool = False
     roles: list[str] = Field(default_factory=list)
     updated_at: str
 
@@ -74,6 +72,7 @@ class StackResolveTargetsResponse(BaseModel):
 class StackRunRequest(BaseModel):
     targets: StackTargetSelection
     runtime_vars: dict[str, str] = Field(default_factory=dict)
+    become: bool = False
     become_password: str | None = None
 
 
