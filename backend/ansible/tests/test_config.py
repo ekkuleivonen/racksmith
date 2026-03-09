@@ -19,6 +19,7 @@ class TestResolveLayoutDefaults:
         assert layout.roles_path == repo_path / "roles"
         assert layout.playbooks_path == repo_path / "playbooks"
         assert layout.racks_file == repo_path / ".racksmith" / "racks.yml"
+        assert layout.devices_file == repo_path / ".racksmith" / "devices.yml"
 
     def test_host_vars_file_helper(self, repo_path: Path) -> None:
         layout = resolve_layout(repo_path)
@@ -114,3 +115,4 @@ class TestResolveLayoutRacksFile:
         )
         layout = resolve_layout(repo_path)
         assert layout.racks_file == repo_path / ".racksmith" / "racks.yml"
+        assert layout.devices_file == repo_path / ".racksmith" / "devices.yml"
