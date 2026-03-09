@@ -44,10 +44,10 @@ Optional top-level keys:
 Each input item has these fields:
   key         – variable name (snake_case)
   label       – human-readable label
-  type        – MUST be exactly one of: "string", "boolean", "select", "secret"
-                (never use "str", "bool", "int", or any other type name)
+  type        – MUST be exactly one of: "string", "bool", "select", "secret"
+                (never use "str", "boolean", "int", or any other type name)
   placeholder – hint text (string, use "" if not applicable)
-  default     – default value (string for string/select/secret, true/false for boolean)
+  default     – default value (string for string/select/secret, true/false for bool)
   required    – true or false
   options     – list of choices (only for type: select, use [] otherwise)
   interactive – true if the value should be prompted at runtime, false otherwise
@@ -69,7 +69,7 @@ inputs:
     required: true
   - key: enable_ssl
     label: Enable SSL
-    type: boolean
+    type: bool
     default: true
     required: true
 tasks:

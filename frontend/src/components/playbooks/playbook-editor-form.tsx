@@ -23,7 +23,6 @@ import {
 } from "@/components/ui/accordion";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import {
   Combobox,
   ComboboxContent,
@@ -165,23 +164,33 @@ function SortableRoleCard({
                         ))}
                       </SelectContent>
                     </Select>
-                  ) : field.type === "boolean" ? (
-                    <Checkbox
-                      checked={
-                        role.vars[field.key] !== undefined
-                          ? Boolean(role.vars[field.key])
-                          : field.default === true
+                  ) : field.type === "bool" || field.type === "boolean" ? (
+                    <Select
+                      value={
+                        String(
+                          role.vars[field.key] !== undefined
+                            ? role.vars[field.key] === true
+                            : field.default === true,
+                        )
                       }
-                      onCheckedChange={(checked) =>
+                      onValueChange={(value) =>
                         updateRole(index, {
                           ...role,
                           vars: {
                             ...role.vars,
-                            [field.key]: checked === true,
+                            [field.key]: value === "true",
                           },
                         })
                       }
-                    />
+                    >
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder={field.placeholder || "Select..."} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="true">true</SelectItem>
+                        <SelectItem value="false">false</SelectItem>
+                      </SelectContent>
+                    </Select>
                   ) : (
                     <Input
                       value={String(

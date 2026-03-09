@@ -52,7 +52,7 @@ class RoleData:
 
 
 def _action_type_to_ansible(t: str) -> str:
-    mapping = {"string": "str", "boolean": "bool", "select": "str", "secret": "str"}
+    mapping = {"string": "str", "bool": "bool", "boolean": "bool", "select": "str", "secret": "str"}
     return mapping.get(t, "str")
 
 

@@ -62,7 +62,7 @@ def _request_input_to_role_input(inp: dict) -> RoleInput:
     return RoleInput(
         key=inp.get("key", ""),
         description=inp.get("label", ""),
-        type={"string": "str", "boolean": "bool", "select": "str", "secret": "str"}.get(
+        type={"string": "str", "bool": "bool", "boolean": "bool", "select": "str", "secret": "str"}.get(
             t, "str"
         ),
         default=inp.get("default"),
