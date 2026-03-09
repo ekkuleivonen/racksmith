@@ -156,10 +156,12 @@ async def update_role(
 
 
 async def delete_role(session: AsyncSession, slug: str, user: User) -> None:
-    if user.access_level != "admin":
-        raise HTTPException(status_code=403, detail="Only admins can delete roles")
-
     role = await get_role(session, slug)
+    is_owner = role.owner_id == user.id
+    is_admin = user.access_level in ("admin", "system")
+    if not (is_owner or is_admin):
+        raise HTTPException(status_code=403, detail="Only the owner or an admin can delete this role")
+
     await session.delete(role)
     await session.commit()
 

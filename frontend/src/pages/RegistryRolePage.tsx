@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { Link, useParams } from "react-router-dom";
-import { Download, Loader2 } from "lucide-react";
+import { Link, useNavigate, useParams } from "react-router-dom";
+import { Download, Loader2, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -20,14 +20,18 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useRegistryRole, useRegistryRoleVersions } from "@/hooks/queries";
-import { importFromRegistry } from "@/lib/registry";
+import { importFromRegistry, deleteRegistryRole } from "@/lib/registry";
 import { useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "@/lib/queryClient";
+import { useSetupStore } from "@/stores/setup";
 
 export function RegistryRolePage() {
   const { slug } = useParams<{ slug: string }>();
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [importing, setImporting] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const currentUserLogin = useSetupStore((s) => s.status?.user?.login);
 
   const { data: role, isLoading } = useRegistryRole(slug ?? null);
   const { data: versions = [] } = useRegistryRoleVersions(slug ?? null);
@@ -46,6 +50,24 @@ export function RegistryRolePage() {
       setImporting(false);
     }
   };
+
+  const handleDelete = async () => {
+    if (!slug) return;
+    if (!confirm("Delete this role from the registry? This cannot be undone.")) return;
+    setDeleting(true);
+    try {
+      await deleteRegistryRole(slug);
+      toast.success("Role deleted from registry");
+      queryClient.invalidateQueries({ queryKey: queryKeys.registry });
+      navigate("/registry");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Delete failed");
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const isOwner = !!currentUserLogin && currentUserLogin === role?.owner?.username;
 
   if (!slug) {
     return (
@@ -110,14 +132,31 @@ export function RegistryRolePage() {
                 </span>
               </div>
             </div>
-            <Button onClick={handleImport} disabled={importing}>
-              {importing ? (
-                <Loader2 className="size-4 animate-spin" />
-              ) : (
-                <Download className="size-4" />
+            <div className="flex gap-2">
+              <Button onClick={handleImport} disabled={importing}>
+                {importing ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <Download className="size-4" />
+                )}
+                Import to my repo
+              </Button>
+              {isOwner && (
+                <Button
+                  variant="outline"
+                  onClick={handleDelete}
+                  disabled={deleting}
+                  className="text-red-400 hover:text-red-300"
+                >
+                  {deleting ? (
+                    <Loader2 className="size-3.5 animate-spin" />
+                  ) : (
+                    <Trash2 className="size-3.5" />
+                  )}
+                  Delete
+                </Button>
               )}
-              Import to my repo
-            </Button>
+            </div>
           </div>
 
           {version?.tags?.length ? (
