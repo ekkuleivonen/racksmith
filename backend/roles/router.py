@@ -102,31 +102,45 @@ async def _generate_with_validation(prompt: str) -> AsyncGenerator[str]:
 
     for attempt in range(MAX_GENERATE_RETRIES + 1):
         is_last = attempt == MAX_GENERATE_RETRIES
+        use_stream = attempt == 0 or is_last
 
-        if is_last:
+        if use_stream:
             response = await client.chat.completions.create(
                 model="gpt-4o-mini", messages=messages, stream=True,
             )
+            accumulated = ""
             async for chunk in response:
                 delta = chunk.choices[0].delta.content
                 if delta:
+                    accumulated += delta
                     yield f"data: {delta}\n\n"
-            yield "data: [DONE]\n\n"
-            return
 
-        response = await client.chat.completions.create(
-            model="gpt-4o-mini", messages=messages, stream=False,
-        )
-        yaml_text = response.choices[0].message.content or ""
+            if is_last:
+                yield "data: [DONE]\n\n"
+                return
 
-        errors = _validate_role_yaml(yaml_text)
-        if not errors:
-            yield f"data: {json.dumps(yaml_text)}\n\n"
-            yield "data: [DONE]\n\n"
-            return
+            errors = _validate_role_yaml(accumulated)
+            if not errors:
+                yield "data: [DONE]\n\n"
+                return
 
-        yield "data: [RETRY]\n\n"
-        messages.append({"role": "assistant", "content": yaml_text})
+            yield "data: [RETRY]\n\n"
+            messages.append({"role": "assistant", "content": accumulated})
+        else:
+            response = await client.chat.completions.create(
+                model="gpt-4o-mini", messages=messages, stream=False,
+            )
+            yaml_text = response.choices[0].message.content or ""
+
+            errors = _validate_role_yaml(yaml_text)
+            if not errors:
+                yield f"data: {json.dumps(yaml_text)}\n\n"
+                yield "data: [DONE]\n\n"
+                return
+
+            yield "data: [RETRY]\n\n"
+            messages.append({"role": "assistant", "content": yaml_text})
+
         messages.append({"role": "user", "content": (
             f"This YAML has validation errors:\n{errors}\n\n"
             "Fix them and output only the corrected YAML."

@@ -9,7 +9,6 @@ from ansible.roles import (
     RoleData,
     RoleInput,
     read_role,
-    read_role_defaults,
     read_role_tasks,
     write_role,
 )
@@ -183,22 +182,26 @@ async def import_role(session, slug: str) -> RoleImportResponse:
     repo_path = repos_manager.active_repo_path(session)
     layout = resolve_layout(repo_path)
 
-    platforms = [{"name": p} if isinstance(p, str) else p for p in (version.platforms or [])]
+    platforms = [
+        {"name": p} if isinstance(p, str) else p for p in (version.platforms or [])
+    ]
     inputs = []
     for inp in version.inputs or []:
         if isinstance(inp, dict):
-            inputs.append(RoleInput(
-                key=inp.get("key", ""),
-                description=inp.get("description", ""),
-                type=inp.get("type", "str"),
-                default=inp.get("default"),
-                required=inp.get("required", False),
-                choices=inp.get("choices", []) or [],
-                no_log=inp.get("no_log", False),
-                racksmith_label=inp.get("racksmith_label", ""),
-                racksmith_placeholder=inp.get("racksmith_placeholder", ""),
-                racksmith_interactive=inp.get("racksmith_interactive", False),
-            ))
+            inputs.append(
+                RoleInput(
+                    key=inp.get("key", ""),
+                    description=inp.get("description", ""),
+                    type=inp.get("type", "str"),
+                    default=inp.get("default"),
+                    required=inp.get("required", False),
+                    choices=inp.get("choices", []) or [],
+                    no_log=inp.get("no_log", False),
+                    racksmith_label=inp.get("racksmith_label", ""),
+                    racksmith_placeholder=inp.get("racksmith_placeholder", ""),
+                    racksmith_interactive=inp.get("racksmith_interactive", False),
+                )
+            )
 
     role_data = RoleData(
         slug=slug,
@@ -229,9 +232,13 @@ async def import_role(session, slug: str) -> RoleImportResponse:
         run_git(
             repo_path,
             [
-                "-c", f"user.name={settings.GIT_COMMIT_USER_NAME}",
-                "-c", f"user.email={settings.GIT_COMMIT_USER_EMAIL}",
-                "commit", "-m", f"Import role from registry: {slug}",
+                "-c",
+                f"user.name={settings.GIT_COMMIT_USER_NAME}",
+                "-c",
+                f"user.email={settings.GIT_COMMIT_USER_EMAIL}",
+                "commit",
+                "-m",
+                f"Import role from registry: {slug}",
             ],
             check=False,
         )
