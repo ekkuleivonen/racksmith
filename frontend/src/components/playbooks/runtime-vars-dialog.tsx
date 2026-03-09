@@ -13,6 +13,13 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import type { RoleCatalogEntry, RoleInput } from "@/lib/playbooks";
 
 export type InteractiveInput = {
@@ -20,6 +27,7 @@ export type InteractiveInput = {
   label: string;
   type: string;
   required: boolean;
+  options: string[];
 };
 
 function collectInteractiveInputs(roles: RoleCatalogEntry[]): InteractiveInput[] {
@@ -34,6 +42,7 @@ function collectInteractiveInputs(roles: RoleCatalogEntry[]): InteractiveInput[]
           label: inp.label,
           type: inp.type ?? "string",
           required: (inp as RoleInput & { required?: boolean }).required ?? false,
+          options: (inp as RoleInput & { options?: string[] }).options ?? [],
         });
       }
     }
@@ -88,6 +97,9 @@ export function RuntimeVarsDialog({
 
   if (!hasInteractiveInputs) return null;
 
+  const isBoolType = (type: string) => type === "bool" || type === "boolean";
+  const isListType = (type: string) => type === "list" || type === "select";
+
   return (
     <AlertDialog open={open} onOpenChange={(o) => !o && handleCancel()}>
       <AlertDialogContent size="md" className="sm:max-w-md">
@@ -106,13 +118,50 @@ export function RuntimeVarsDialog({
                   {inp.label}
                   {inp.required ? " *" : ""}
                 </Label>
-                <Input
-                  id={inp.key}
-                  type={inp.type === "secret" ? "password" : "text"}
-                  value={vars[inp.key] ?? ""}
-                  onChange={(e) => setVars((prev) => ({ ...prev, [inp.key]: e.target.value }))}
-                  autoComplete="off"
-                />
+                {isBoolType(inp.type) ? (
+                  <Select
+                    value={vars[inp.key] ?? ""}
+                    onValueChange={(value) =>
+                      setVars((prev) => ({ ...prev, [inp.key]: value }))
+                    }
+                  >
+                    <SelectTrigger id={inp.key} className="w-full">
+                      <SelectValue placeholder="Select..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="true">true</SelectItem>
+                      <SelectItem value="false">false</SelectItem>
+                    </SelectContent>
+                  </Select>
+                ) : isListType(inp.type) && inp.options.length > 0 ? (
+                  <Select
+                    value={vars[inp.key] ?? ""}
+                    onValueChange={(value) =>
+                      setVars((prev) => ({ ...prev, [inp.key]: value }))
+                    }
+                  >
+                    <SelectTrigger id={inp.key} className="w-full">
+                      <SelectValue placeholder="Select..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {inp.options.map((option) => (
+                        <SelectItem key={option} value={option}>
+                          {option}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <Input
+                    id={inp.key}
+                    type={inp.type === "secret" ? "password" : "text"}
+                    value={vars[inp.key] ?? ""}
+                    onChange={(e) =>
+                      setVars((prev) => ({ ...prev, [inp.key]: e.target.value }))
+                    }
+                    autoComplete="off"
+                  />
+                )}
               </div>
             ))}
             {needsBecomePassword ? (
