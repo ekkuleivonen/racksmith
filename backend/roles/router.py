@@ -52,6 +52,10 @@ Each input item has these fields:
   options     – list of choices (only for type: select, use [] otherwise)
   interactive – true if the value should be prompted at runtime, false otherwise
 
+Validation rule:
+  If an input has a default value, required MUST be false.
+  Use required: true only when there is no default.
+
 Example output:
 
 slug: install-nginx
@@ -65,13 +69,12 @@ inputs:
     label: Port
     type: string
     placeholder: "80"
-    default: "80"
     required: true
   - key: enable_ssl
     label: Enable SSL
     type: bool
     default: true
-    required: true
+    required: false
 tasks:
   - name: Install nginx
     ansible.builtin.package:

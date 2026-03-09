@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from playbooks.schemas import TargetSelection
 
@@ -28,6 +28,23 @@ class RoleCreateRequest(BaseModel):
         default_factory=list,
         description="Ansible task list written to tasks/main.yml",
     )
+
+    @model_validator(mode="after")
+    def validate_inputs(self) -> "RoleCreateRequest":
+        for index, inp in enumerate(self.inputs):
+            if not isinstance(inp, dict):
+                continue
+
+            key = str(inp.get("key") or f"inputs[{index}]")
+            has_default = "default" in inp and inp.get("default") is not None
+            is_required = bool(inp.get("required", False))
+
+            if has_default and is_required:
+                raise ValueError(
+                    f"Input '{key}' cannot set both required=true and a default value"
+                )
+
+        return self
 
 
 class RoleFromYamlRequest(BaseModel):
