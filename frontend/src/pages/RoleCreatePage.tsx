@@ -71,7 +71,8 @@ export function RoleCreatePage() {
           }
           if (payload.startsWith('"')) {
             try {
-              setYaml(JSON.parse(payload));
+              const decoded = JSON.parse(payload);
+              setYaml((prev) => prev + decoded);
               continue;
             } catch {
               /* fall through to plain append */

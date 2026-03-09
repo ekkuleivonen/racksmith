@@ -126,7 +126,7 @@ async def _generate_with_validation(prompt: str) -> AsyncGenerator[str]:
                 delta = chunk.choices[0].delta.content
                 if delta:
                     accumulated += delta
-                    yield f"data: {delta}\n\n"
+                    yield f"data: {json.dumps(delta)}\n\n"
 
             if is_last:
                 yield "data: [DONE]\n\n"
