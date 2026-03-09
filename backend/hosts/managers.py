@@ -8,6 +8,13 @@ from pathlib import Path
 
 import settings
 from ansible import resolve_layout
+from ansible.devices import (
+    DeviceData,
+    read_device,
+    read_devices,
+    remove_device,
+    write_device,
+)
 from ansible.inventory import HostData, read_host, read_hosts, remove_host, write_host
 from hosts.schemas import Host, HostInput, HostSummary
 from repos.managers import repos_manager
@@ -39,12 +46,21 @@ def _slugify(name: str) -> str:
 
 
 def _generate_host_id(repo_path: Path, layout) -> str:
-    """Generate unique host ID for new hosts."""
+    """Generate unique host ID for new managed hosts."""
     for _ in range(100):
         candidate = f"h_{secrets.token_hex(3)}"
         if read_host(layout, candidate) is None:
             return candidate
     raise RuntimeError("Failed to generate unique host ID")
+
+
+def _generate_device_id(repo_path: Path, layout) -> str:
+    """Generate unique device ID for new unmanaged devices."""
+    for _ in range(100):
+        candidate = f"d_{secrets.token_hex(3)}"
+        if read_device(layout, candidate) is None:
+            return candidate
+    raise RuntimeError("Failed to generate unique device ID")
 
 
 def _host_data_to_host(h: HostData) -> Host:
@@ -76,6 +92,34 @@ def _host_data_to_host(h: HostData) -> Host:
     )
 
 
+def _device_data_to_host(d: DeviceData) -> Host:
+    """Convert DeviceData to Host schema."""
+    placement = None
+    if d.rack:
+        placement = {
+            "rack": d.rack,
+            "u_start": d.position_u_start,
+            "u_height": d.position_u_height,
+            "col_start": d.position_col_start,
+            "col_count": d.position_col_count,
+        }
+    return Host(
+        id=d.id,
+        hostname="",
+        name=d.name,
+        ip_address="",
+        ssh_user="",
+        ssh_port=22,
+        managed=False,
+        groups=[],
+        labels=d.labels,
+        os_family=None,
+        notes=d.notes,
+        placement=placement,
+        mac_address=d.mac_address,
+    )
+
+
 def _host_input_to_host_data(host_id: str, data: HostInput) -> HostData:
     """Convert HostInput to HostData for writing."""
     racksmith: dict = {
@@ -101,6 +145,40 @@ def _host_input_to_host_data(host_id: str, data: HostInput) -> HostData:
         ansible_vars={},
         racksmith=racksmith,
         groups=data.groups,
+    )
+
+
+def _host_input_to_device_data(device_id: str, data: HostInput) -> DeviceData:
+    """Convert HostInput to DeviceData for unmanaged devices."""
+    placement = data.placement
+    return DeviceData(
+        id=device_id,
+        name=data.name.strip(),
+        notes=data.notes,
+        labels=data.labels,
+        mac_address="",
+        rack=placement.rack if placement else "",
+        position_u_start=placement.u_start if placement else 1,
+        position_u_height=placement.u_height if placement else 1,
+        position_col_start=placement.col_start if placement else 0,
+        position_col_count=placement.col_count if placement else 1,
+    )
+
+
+def _device_data_from_host(host: Host) -> DeviceData:
+    """Convert Host back to DeviceData for updates."""
+    placement = host.placement
+    return DeviceData(
+        id=host.id,
+        name=host.name,
+        notes=host.notes,
+        labels=host.labels or [],
+        mac_address=host.mac_address or "",
+        rack=placement.rack if placement else "",
+        position_u_start=placement.u_start if placement else 1,
+        position_u_height=placement.u_height if placement else 1,
+        position_col_start=placement.col_start if placement else 0,
+        position_col_count=placement.col_count if placement else 1,
     )
 
 
@@ -142,8 +220,8 @@ class HostManager:
         except FileNotFoundError:
             return []
         layout = resolve_layout(repo_path)
-        hosts_data = read_hosts(layout)
-        hosts = [_host_data_to_host(h) for h in hosts_data]
+        hosts = [_host_data_to_host(h) for h in read_hosts(layout)]
+        hosts += [_device_data_to_host(d) for d in read_devices(layout)]
         return sorted(
             hosts,
             key=lambda h: (
@@ -156,75 +234,118 @@ class HostManager:
         repo_path = repos_manager.active_repo_path(session)
         layout = resolve_layout(repo_path)
         host_data = read_host(layout, host_id)
-        if host_data is None:
-            raise KeyError(f"Host {host_id} not found")
-        return _host_data_to_host(host_data)
+        if host_data is not None:
+            return _host_data_to_host(host_data)
+        device_data = read_device(layout, host_id)
+        if device_data is not None:
+            return _device_data_to_host(device_data)
+        raise KeyError(f"Host {host_id} not found")
 
     async def create_host(self, session, data: HostInput) -> Host:
         repo_path = repos_manager.active_repo_path(session)
         layout = resolve_layout(repo_path)
 
-        slug = _slugify(data.name) if data.name.strip() else ""
-        if slug and read_host(layout, slug) is None:
-            host_id = slug
+        if data.managed:
+            slug = _slugify(data.name) if data.name.strip() else ""
+            if slug and read_host(layout, slug) is None and read_device(layout, slug) is None:
+                host_id = slug
+            else:
+                host_id = _generate_host_id(repo_path, layout)
+            host_data = _host_input_to_host_data(host_id, data)
+            write_host(layout, host_data)
+            host = _host_data_to_host(host_data)
+            if host.ip_address and host.ssh_user:
+                try:
+                    host = await self.probe_host(session, host_id)
+                except Exception:
+                    pass
         else:
-            host_id = _generate_host_id(repo_path, layout)
-
-        host_data = _host_input_to_host_data(host_id, data)
-        write_host(layout, host_data)
-
-        host = _host_data_to_host(host_data)
-        if host.managed and host.ip_address and host.ssh_user:
-            try:
-                host = await self.probe_host(session, host_id)
-            except Exception:
-                pass
+            host_id = _generate_device_id(repo_path, layout)
+            device_data = _host_input_to_device_data(host_id, data)
+            write_device(layout, device_data)
+            host = _device_data_to_host(device_data)
         return host
 
     def update_host(self, session, host_id: str, data: HostInput) -> Host:
         repo_path = repos_manager.active_repo_path(session)
         layout = resolve_layout(repo_path)
         existing = self.get_host(session, host_id)
-        name = data.name.strip() if data.name and data.name.strip() else existing.name
-        ip_address = (
-            data.ip_address.strip()
-            if data.ip_address and data.ip_address.strip()
-            else existing.ip_address
-        )
-        ssh_user = (
-            data.ssh_user.strip()
-            if data.ssh_user and data.ssh_user.strip()
-            else existing.ssh_user
-        )
-        ssh_port = (
-            data.ssh_port
-            if data.ssh_port != 22 or existing.ssh_port == 22
-            else existing.ssh_port
-        )
-        host = Host(
-            id=host_id,
-            hostname=existing.hostname,
-            name=name,
-            ip_address=ip_address,
-            ssh_user=ssh_user,
-            ssh_port=ssh_port,
-            managed=data.managed,
-            groups=data.groups,
-            labels=data.labels,
-            os_family=data.os_family or existing.os_family,
-            notes=data.notes,
-            placement=data.placement,
-            mac_address=existing.mac_address,
-        )
-        write_host(layout, _host_to_host_data(host))
+        in_inventory = read_host(layout, host_id) is not None
+        managed_changed = data.managed != existing.managed
+        migrate_unmanaged_to_devices = (
+            not data.managed and in_inventory
+        )  # was in inventory, now unmanaged -> migrate to devices
+
+        if managed_changed or migrate_unmanaged_to_devices:
+            if in_inventory:
+                remove_host(layout, host_id)
+            if read_device(layout, host_id) is not None:
+                remove_device(layout, host_id)
+
+        if data.managed:
+            name = data.name.strip() if data.name and data.name.strip() else existing.name
+            ip_address = (
+                data.ip_address.strip()
+                if data.ip_address and data.ip_address.strip()
+                else existing.ip_address
+            )
+            ssh_user = (
+                data.ssh_user.strip()
+                if data.ssh_user and data.ssh_user.strip()
+                else existing.ssh_user
+            )
+            ssh_port = (
+                data.ssh_port
+                if data.ssh_port != 22 or existing.ssh_port == 22
+                else existing.ssh_port
+            )
+            placement = data.placement if data.placement is not None else existing.placement
+            host = Host(
+                id=host_id,
+                hostname=existing.hostname,
+                name=name,
+                ip_address=ip_address,
+                ssh_user=ssh_user,
+                ssh_port=ssh_port,
+                managed=True,
+                groups=data.groups,
+                labels=data.labels,
+                os_family=data.os_family or existing.os_family,
+                notes=data.notes,
+                placement=placement,
+                mac_address=existing.mac_address,
+            )
+            write_host(layout, _host_to_host_data(host))
+        else:
+            name = data.name.strip() if data.name and data.name.strip() else existing.name
+            placement = data.placement if data.placement is not None else existing.placement
+            device = DeviceData(
+                id=host_id,
+                name=name,
+                notes=data.notes,
+                labels=data.labels,
+                mac_address=existing.mac_address or "",
+                rack=placement.rack if placement else "",
+                position_u_start=placement.u_start if placement else 1,
+                position_u_height=placement.u_height if placement else 1,
+                position_col_start=placement.col_start if placement else 0,
+                position_col_count=placement.col_count if placement else 1,
+            )
+            write_device(layout, device)
+            host = _device_data_to_host(device)
         return host
 
     def delete_host(self, session, host_id: str) -> None:
         repo_path = repos_manager.active_repo_path(session)
         layout = resolve_layout(repo_path)
-        if read_host(layout, host_id) is None:
+        in_inventory = read_host(layout, host_id) is not None
+        in_devices = read_device(layout, host_id) is not None
+        if not in_inventory and not in_devices:
             raise KeyError(f"Host {host_id} not found")
-        remove_host(layout, host_id)
+        if in_inventory:
+            remove_host(layout, host_id)
+        if in_devices:
+            remove_device(layout, host_id)
 
     async def probe_host(self, session, host_id: str) -> Host:
         host = self.get_host(session, host_id)

@@ -19,6 +19,7 @@ class AnsibleLayout:
     roles_path: Path
     playbooks_path: Path
     racks_file: Path
+    devices_file: Path
 
     def host_vars_file(self, host_id: str) -> Path:
         return self.host_vars_path / f"{host_id}.yml"
@@ -101,4 +102,5 @@ def resolve_layout(repo_path: Path) -> AnsibleLayout:
         roles_path=roles_path,
         playbooks_path=_path("playbooks_path", None, "playbooks"),
         racks_file=repo_path / ".racksmith" / "racks.yml",
+        devices_file=repo_path / ".racksmith" / "devices.yml",
     )
