@@ -27,6 +27,7 @@ class PlaybookUpsertRequest(BaseModel):
     name: str = Field(min_length=1, max_length=160)
     description: str = Field(default="", max_length=500)
     roles: list[PlaybookRoleEntry] = Field(default_factory=list)
+    become: bool = Field(default=False, description="Requires privilege escalation (sudo)")
 
 
 class PlaybookSummary(BaseModel):
@@ -42,6 +43,7 @@ class PlaybookDetail(PlaybookSummary):
     roles_catalog: list[RoleCatalogEntry] = Field(default_factory=list)
     role_entries: list[PlaybookRoleEntry] = Field(default_factory=list)
     raw_content: str
+    become: bool = Field(default=False, description="Requires privilege escalation (sudo)")
 
 
 class TargetSelection(BaseModel):
@@ -62,8 +64,7 @@ class ResolveTargetsResponse(BaseModel):
 class PlaybookRunRequest(BaseModel):
     targets: TargetSelection
     runtime_vars: dict[str, str] = Field(default_factory=dict)
-    become: bool = False
-    become_password: str | None = None
+    become_password: str | None = Field(default=None, description="Sudo password when playbook has become")
 
 
 class PlaybookRun(BaseModel):

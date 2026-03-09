@@ -169,6 +169,7 @@ class PlaybookManager:
             roles_catalog=[_role_data_to_catalog(r) for r in roles_data],
             role_entries=role_entries,
             raw_content=p.raw_content,
+            become=p.become,
         )
 
     def create_playbook(self, session, body: PlaybookUpsertRequest) -> PlaybookDetail:
@@ -194,7 +195,7 @@ class PlaybookManager:
             description=body.description.strip(),
             hosts="all",
             gather_facts=True,
-            become=False,
+            become=body.become,
             roles=ansible_roles,
             raw_content="",
         )
@@ -230,7 +231,7 @@ class PlaybookManager:
             description=body.description.strip(),
             hosts="all",
             gather_facts=True,
-            become=False,
+            become=body.become,
             roles=ansible_roles,
             raw_content="",
         )
@@ -315,7 +316,7 @@ class PlaybookManager:
         if not hosts:
             raise ValueError("No hosts matched the selected targets")
 
-        if body.become and body.become_password:
+        if playbook.become and body.become_password:
             await validate_become_password(
                 repo_path, hosts, body.become_password
             )
@@ -358,7 +359,7 @@ class PlaybookManager:
             playbook_id=playbook.id,
             hosts=hosts,
             runtime_vars=body.runtime_vars or {},
-            become=body.become,
+            become=playbook.become,
             become_password=body.become_password,
         )
         return run

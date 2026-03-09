@@ -237,7 +237,7 @@ export function PlaybookDetailPage() {
   const [resolving, setResolving] = useState(false);
   const [running, setRunning] = useState(false);
   const [runtimeDialogOpen, setRuntimeDialogOpen] = useState(false);
-  const [runBecome, setRunBecome] = useState(false);
+  const [playbookBecome, setPlaybookBecome] = useState(false);
   const savedDraftRef = useRef<PlaybookUpsertRequest | null>(null);
 
   const { data: groups = [] } = useGroups();
@@ -263,9 +263,11 @@ export function PlaybookDetailPage() {
         name: playbookResult.playbook.name,
         description: playbookResult.playbook.description,
         roles: playbookResult.playbook.role_entries,
+        become: playbookResult.playbook.become ?? false,
       };
       setDraft(loaded);
       savedDraftRef.current = loaded;
+      setPlaybookBecome(playbookResult.playbook.become ?? false);
       setRolesCatalog(playbookResult.playbook.roles_catalog);
       setRuns(runsResult.runs);
       const activeRun = runsResult.runs.find(
@@ -307,7 +309,8 @@ export function PlaybookDetailPage() {
     if (
       draft.name === savedDraftRef.current.name &&
       draft.description === savedDraftRef.current.description &&
-      JSON.stringify(draft.roles) === JSON.stringify(savedDraftRef.current.roles)
+      JSON.stringify(draft.roles) === JSON.stringify(savedDraftRef.current.roles) &&
+      (draft.become ?? false) === (savedDraftRef.current.become ?? false)
     ) {
       return;
     }
@@ -319,9 +322,11 @@ export function PlaybookDetailPage() {
           name: result.playbook.name,
           description: result.playbook.description,
           roles: result.playbook.role_entries,
+          become: result.playbook.become ?? false,
         };
         setDraft(next);
         savedDraftRef.current = next;
+        setPlaybookBecome(result.playbook.become ?? false);
         setRolesCatalog(result.playbook.roles_catalog);
         toast.success("Playbook saved");
       } catch (error) {
@@ -487,14 +492,6 @@ export function PlaybookDetailPage() {
                   </p>
                 </div>
 
-                <label className="flex items-center gap-2 text-xs text-zinc-300">
-                  <Checkbox
-                    checked={runBecome}
-                    onCheckedChange={(checked) => setRunBecome(checked === true)}
-                  />
-                  Run with privilege escalation (will prompt for sudo password)
-                </label>
-
                 <div className="grid gap-3 xl:grid-cols-4">
                   <SearchableFilterDropdown
                     label="Racks"
@@ -571,7 +568,7 @@ export function PlaybookDetailPage() {
                   <RuntimeVarsDialog
                     open={runtimeDialogOpen}
                     roles={roles_catalog}
-                    needsBecomePassword={runBecome}
+                    needsBecomePassword={playbookBecome}
                     onConfirm={async (runtimeVars, becomePassword) => {
                       setRuntimeDialogOpen(false);
                       setRunning(true);
@@ -579,8 +576,7 @@ export function PlaybookDetailPage() {
                         const result = await createPlaybookRun(playbookId, {
                           targets,
                           runtime_vars: Object.keys(runtimeVars).length > 0 ? runtimeVars : undefined,
-                          become: runBecome,
-                          become_password: runBecome ? becomePassword ?? undefined : undefined,
+                          become_password: playbookBecome ? becomePassword ?? undefined : undefined,
                         });
                         setRuns((prev) => [result.run, ...prev]);
                         setViewingRunId(result.run.id);
@@ -597,7 +593,7 @@ export function PlaybookDetailPage() {
                     size="sm"
                     disabled={running || resolving || resolvedHosts.length === 0}
                     onClick={async () => {
-                      if (needsRuntimeVarsDialog(roles_catalog, runBecome)) {
+                      if (needsRuntimeVarsDialog(roles_catalog, playbookBecome)) {
                         setRuntimeDialogOpen(true);
                         return;
                       }
@@ -605,7 +601,6 @@ export function PlaybookDetailPage() {
                       try {
                         const result = await createPlaybookRun(playbookId, {
                           targets,
-                          become: runBecome,
                         });
                         setRuns((prev) => [result.run, ...prev]);
                         setViewingRunId(result.run.id);

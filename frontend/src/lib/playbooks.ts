@@ -38,6 +38,7 @@ export type PlaybookDetail = PlaybookSummary & {
   roles_catalog: RoleCatalogEntry[];
   role_entries: PlaybookRoleEntry[];
   raw_content: string;
+  become: boolean;
 };
 
 export type TargetSelection = {
@@ -51,6 +52,7 @@ export type PlaybookUpsertRequest = {
   name: string;
   description: string;
   roles: PlaybookRoleEntry[];
+  become?: boolean;
 };
 
 export type PlaybookRun = {
@@ -114,7 +116,6 @@ export async function resolveTargets(targets: TargetSelection) {
 export type PlaybookRunRequest = {
   targets: TargetSelection;
   runtime_vars?: Record<string, string>;
-  become?: boolean;
   become_password?: string | null;
 };
 

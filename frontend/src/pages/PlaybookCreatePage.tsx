@@ -12,6 +12,7 @@ const EMPTY_DRAFT: PlaybookUpsertRequest = {
   name: "",
   description: "",
   roles: [],
+  become: false,
 };
 
 export function PlaybookCreatePage() {

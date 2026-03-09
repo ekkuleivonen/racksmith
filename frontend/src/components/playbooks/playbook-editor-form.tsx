@@ -15,6 +15,7 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { GripVertical, Trash2 } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Accordion,
   AccordionContent,
@@ -378,6 +379,16 @@ export function PlaybookEditorForm({
           </p>
         </div>
       ) : null}
+
+      <label className="flex items-center gap-2 text-xs text-zinc-400">
+        <Checkbox
+          checked={draft.become ?? false}
+          onCheckedChange={(checked) =>
+            onChange({ ...draft, become: checked === true })
+          }
+        />
+        Requires privilege escalation (sudo)
+      </label>
 
       <div className="space-y-3">
         <div className="space-y-1">
