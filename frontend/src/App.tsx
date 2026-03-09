@@ -25,8 +25,9 @@ import { RackOnboardingPage } from "@/pages/RackOnboardingPage";
 import { RacksPage } from "@/pages/RacksPage";
 import { HostsPage } from "@/pages/HostsPage";
 import { HostCreatePage } from "@/pages/HostCreatePage";
-import { RoleImportPage } from "@/pages/RoleImportPage";
-
+import { RolesPage } from "@/pages/RolesPage";
+import { RoleCreatePage } from "@/pages/RoleCreatePage";
+import { RoleDetailPage } from "@/pages/RoleDetailPage";
 import { RegistryPage } from "@/pages/RegistryPage";
 import { RegistryRolePage } from "@/pages/RegistryRolePage";
 
@@ -265,11 +266,31 @@ function AppRoutes() {
               }
             />
             <Route
-              path="/roles/import"
+              path="/roles"
               element={
                 <ProtectedRoute>
-                  <AppShell title="Import role">
-                    <RoleImportPage />
+                  <AppShell title="Roles">
+                    <RolesPage />
+                  </AppShell>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/roles/create"
+              element={
+                <ProtectedRoute>
+                  <AppShell title="Create Role">
+                    <RoleCreatePage />
+                  </AppShell>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/roles/:slug"
+              element={
+                <ProtectedRoute>
+                  <AppShell title="Roles">
+                    <RoleDetailPage />
                   </AppShell>
                 </ProtectedRoute>
               }

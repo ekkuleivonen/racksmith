@@ -2,11 +2,10 @@
 
 from contextlib import asynccontextmanager
 
+import settings
 import structlog
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-
-import settings
 from roles.router import router as roles_router
 
 logger = structlog.get_logger()

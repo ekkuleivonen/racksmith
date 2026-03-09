@@ -2,14 +2,19 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-
 import httpx
 import settings
-import yaml
+from ansible import resolve_layout
+from ansible.roles import (
+    RoleData,
+    RoleInput,
+    read_role,
+    read_role_defaults,
+    read_role_tasks,
+    write_role,
+)
 from github.misc import RACKSMITH_BRANCH, run_git
 from repos.managers import repos_manager
-from roles.managers import role_manager
 
 from registry.schemas import (
     RegistryRole,
@@ -19,8 +24,6 @@ from registry.schemas import (
     RoleImportResponse,
     RoleUpdate,
 )
-
-ROLES_DIR = Path(".racksmith/roles")
 
 
 def _headers(session) -> dict[str, str]:
@@ -82,29 +85,52 @@ async def get_versions(session, slug: str) -> list[RegistryVersion]:
 
 
 async def push_role(session, slug: str) -> RegistryRole:
-    """Read local action, serialize, POST (new) or PUT (update) to registry."""
-    detail = role_manager.get_role_detail(session, slug)
+    """Read local role via ansible module, serialize, POST or PUT to registry."""
     repo_path = repos_manager.active_repo_path(session)
-    role_dir = repo_path / ROLES_DIR / slug
+    layout = resolve_layout(repo_path)
+    role_dir = layout.roles_path / slug
 
-    tasks_yaml = detail.tasks_content
+    role = read_role(role_dir)
+    if role is None:
+        raise FileNotFoundError(f"Local role '{slug}' not found")
+
+    tasks_yaml = read_role_tasks(role_dir)
     defaults_yaml = ""
-    defaults_file = role_dir / "defaults" / "main.yml"
-    if defaults_file.is_file():
-        defaults_yaml = defaults_file.read_text(encoding="utf-8")
+    for name in ("main.yml", "main.yaml"):
+        p = role_dir / "defaults" / name
+        if p.is_file():
+            defaults_yaml = p.read_text(encoding="utf-8")
+            break
 
     meta_yaml = ""
-    meta_file = role_dir / "meta" / "main.yml"
-    if meta_file.is_file():
-        meta_yaml = meta_file.read_text(encoding="utf-8")
+    meta_path = role_dir / "meta" / "main.yml"
+    if meta_path.is_file():
+        meta_yaml = meta_path.read_text(encoding="utf-8")
+
+    platforms = [p.get("name", "") for p in role.platforms]
+    inputs_list = [
+        {
+            "key": inp.key,
+            "description": inp.description,
+            "type": inp.type,
+            "default": inp.default,
+            "required": inp.required,
+            "choices": inp.choices,
+            "no_log": inp.no_log,
+            "racksmith_label": inp.racksmith_label,
+            "racksmith_placeholder": inp.racksmith_placeholder,
+            "racksmith_interactive": inp.racksmith_interactive,
+        }
+        for inp in role.inputs
+    ]
 
     payload = RoleCreate(
-        name=detail.name,
+        name=role.name,
         racksmith_version=settings.RACKSMITH_VERSION,
-        description=detail.description,
-        platforms=detail.compatibility.get("os_family", []),
-        tags=detail.labels,
-        inputs=detail.inputs,
+        description=role.description,
+        platforms=platforms,
+        tags=role.tags,
+        inputs=inputs_list,
         tasks_yaml=tasks_yaml,
         defaults_yaml=defaults_yaml,
         meta_yaml=meta_yaml,
@@ -144,7 +170,7 @@ async def push_role(session, slug: str) -> RegistryRole:
 
 
 async def import_role(session, slug: str) -> RoleImportResponse:
-    """Download from registry, write to local repo as action."""
+    """Download from registry, write to local repo using ansible/roles module."""
     async with httpx.AsyncClient() as client:
         resp = await client.post(
             f"{settings.REGISTRY_URL}/roles/{slug}/download",
@@ -155,43 +181,43 @@ async def import_role(session, slug: str) -> RoleImportResponse:
 
     version = RegistryVersion.model_validate(resp.json())
     repo_path = repos_manager.active_repo_path(session)
-    dest = repo_path / ROLES_DIR / slug
+    layout = resolve_layout(repo_path)
 
-    dest.mkdir(parents=True, exist_ok=True)
+    platforms = [{"name": p} if isinstance(p, str) else p for p in (version.platforms or [])]
+    inputs = []
+    for inp in version.inputs or []:
+        if isinstance(inp, dict):
+            inputs.append(RoleInput(
+                key=inp.get("key", ""),
+                description=inp.get("description", ""),
+                type=inp.get("type", "str"),
+                default=inp.get("default"),
+                required=inp.get("required", False),
+                choices=inp.get("choices", []) or [],
+                no_log=inp.get("no_log", False),
+                racksmith_label=inp.get("racksmith_label", ""),
+                racksmith_placeholder=inp.get("racksmith_placeholder", ""),
+                racksmith_interactive=inp.get("racksmith_interactive", False),
+            ))
 
-    manifest = {
-        "slug": slug,
-        "name": version.name,
-        "description": version.description,
-        "inputs": version.inputs,
-        "labels": version.tags,
-        "compatibility": {"os_family": version.platforms},
-    }
-    (dest / "action.yaml").write_text(
-        yaml.safe_dump(manifest, sort_keys=False, allow_unicode=True),
-        encoding="utf-8",
+    role_data = RoleData(
+        slug=slug,
+        name=version.name,
+        description=version.description,
+        platforms=platforms,
+        tags=version.tags or [],
+        inputs=inputs,
+        has_tasks=bool(version.tasks_yaml and version.tasks_yaml.strip()),
     )
 
-    (dest / "tasks").mkdir(exist_ok=True)
-    (dest / "tasks" / "main.yml").write_text(
-        version.tasks_yaml or "---\n# Add tasks here\n",
-        encoding="utf-8",
-    )
+    write_role(layout, role_data, tasks_yaml=version.tasks_yaml or None)
 
     if version.defaults_yaml:
-        (dest / "defaults").mkdir(exist_ok=True)
-        (dest / "defaults" / "main.yml").write_text(
-            version.defaults_yaml,
-            encoding="utf-8",
-        )
+        defaults_dir = layout.roles_path / slug / "defaults"
+        defaults_dir.mkdir(parents=True, exist_ok=True)
+        (defaults_dir / "main.yml").write_text(version.defaults_yaml, encoding="utf-8")
 
-    if version.meta_yaml:
-        (dest / "meta").mkdir(exist_ok=True)
-        (dest / "meta" / "main.yml").write_text(
-            version.meta_yaml,
-            encoding="utf-8",
-        )
-
+    role_dir = layout.roles_path / slug
     binding = repos_manager.current_repo(session)
     if binding:
         remote_url = (
@@ -199,17 +225,13 @@ async def import_role(session, slug: str) -> RoleImportResponse:
             f"@github.com/{binding.owner}/{binding.repo}.git"
         )
         run_git(repo_path, ["remote", "set-url", "origin", remote_url], check=False)
-        run_git(repo_path, ["add", str(dest.relative_to(repo_path))])
+        run_git(repo_path, ["add", str(role_dir.relative_to(repo_path))])
         run_git(
             repo_path,
             [
-                "-c",
-                f"user.name={settings.GIT_COMMIT_USER_NAME}",
-                "-c",
-                f"user.email={settings.GIT_COMMIT_USER_EMAIL}",
-                "commit",
-                "-m",
-                f"Import role from registry: {slug}",
+                "-c", f"user.name={settings.GIT_COMMIT_USER_NAME}",
+                "-c", f"user.email={settings.GIT_COMMIT_USER_EMAIL}",
+                "commit", "-m", f"Import role from registry: {slug}",
             ],
             check=False,
         )

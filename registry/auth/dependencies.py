@@ -3,12 +3,11 @@ import time
 
 import httpx
 import structlog
+from db.engine import get_db
+from db.models import User
 from fastapi import Depends, Header, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-
-from db.engine import get_db
-from db.models import User
 
 logger = structlog.get_logger()
 
@@ -39,9 +38,7 @@ async def _verify_github_token(token: str) -> dict:
 
 
 async def _upsert_user(session: AsyncSession, gh_user: dict) -> User:
-    result = await session.execute(
-        select(User).where(User.github_id == gh_user["id"])
-    )
+    result = await session.execute(select(User).where(User.github_id == gh_user["id"]))
     user = result.scalar_one_or_none()
 
     if user is None:
