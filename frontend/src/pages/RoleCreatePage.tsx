@@ -2,10 +2,11 @@ import { useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Loader2, Square, Wand2 } from "lucide-react";
 import { toast } from "sonner";
+import jsYaml from "js-yaml";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
+import { YamlCodeView } from "@/components/code/yaml-code-view";
 import { queryKeys } from "@/lib/queryClient";
 import { createRoleFromYaml } from "@/lib/roles";
 
@@ -73,6 +74,14 @@ export function RoleCreatePage() {
     } finally {
       setGenerating(false);
       abortRef.current = null;
+      setYaml((raw) => {
+        try {
+          const parsed = jsYaml.load(raw);
+          return parsed ? jsYaml.dump(parsed, { lineWidth: -1, noRefs: true }) : raw;
+        } catch {
+          return raw;
+        }
+      });
     }
   }
 
@@ -155,14 +164,14 @@ export function RoleCreatePage() {
             </div>
           )}
 
-          <Textarea
-            value={yaml}
-            onChange={(e) => setYaml(e.target.value)}
-            rows={22}
-            readOnly={generating}
-            className={`font-mono text-xs bg-zinc-950/60 ${generating ? "opacity-80" : ""}`}
-            placeholder="Your role YAML will appear here..."
-          />
+          <div className={`border border-zinc-800 rounded-md overflow-hidden ${generating ? "opacity-80" : ""}`}>
+            <YamlCodeView
+              value={yaml}
+              onChange={setYaml}
+              readOnly={generating}
+              height="400px"
+            />
+          </div>
 
           {generating && (
             <div className="flex items-center gap-2 text-xs text-zinc-500">

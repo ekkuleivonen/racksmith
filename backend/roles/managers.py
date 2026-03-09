@@ -12,6 +12,7 @@ import yaml
 import redis.asyncio as aioredis
 import settings
 from ansible import resolve_layout
+from github.misc import RepoNotAvailableError
 from ansible.roles import (
     RoleData,
     RoleInput,
@@ -108,7 +109,7 @@ class RoleManager:
     def list_roles(self, session) -> list[RoleSummary]:
         try:
             repo_path = repos_manager.active_repo_path(session)
-        except FileNotFoundError:
+        except RepoNotAvailableError:
             return []
         layout = resolve_layout(repo_path)
         return [_role_data_to_summary(r) for r in list_roles(layout)]

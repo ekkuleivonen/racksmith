@@ -5,6 +5,7 @@ from __future__ import annotations
 from ansible import resolve_layout
 from ansible.inventory import GroupData, read_group, read_groups, remove_group, write_group
 
+from github.misc import RepoNotAvailableError
 from groups.schemas import Group, GroupInput, GroupWithMembers
 from hosts.managers import host_manager
 from hosts.schemas import HostSummary
@@ -23,7 +24,7 @@ class GroupManager:
     def list_groups(self, session) -> list[Group]:
         try:
             repo_path = repos_manager.active_repo_path(session)
-        except FileNotFoundError:
+        except RepoNotAvailableError:
             return []
         layout = resolve_layout(repo_path)
         groups_data = read_groups(layout)

@@ -7,8 +7,10 @@ import settings
 from _utils.logging import configure_logging, get_logger
 from dotenv import load_dotenv
 from code.router import router as code_router
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from github.misc import RepoNotAvailableError
 from fastapi.staticfiles import StaticFiles
 from github.router import auth_router
 from groups.router import router as groups_router
@@ -75,6 +77,12 @@ app.include_router(playbooks_router, prefix="/api/playbooks", tags=["playbooks"]
 app.include_router(code_router, prefix="/api/code", tags=["code"])
 app.include_router(ssh_router, prefix="/api/ssh", tags=["ssh"])
 app.include_router(registry_router, prefix="/api/registry", tags=["registry"])
+
+
+@app.exception_handler(RepoNotAvailableError)
+async def repo_not_available_handler(_request: Request, exc: RepoNotAvailableError):
+    return JSONResponse(status_code=409, content={"detail": str(exc)})
+
 
 logger = get_logger(__name__)
 

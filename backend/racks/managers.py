@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 
 from ansible import resolve_layout
+from github.misc import RepoNotAvailableError
 from ansible.racks import RackData, read_rack, read_racks, remove_rack, write_rack
 
 from hosts.managers import host_manager
@@ -35,7 +36,7 @@ class RackManager:
     def list_racks(self, session) -> list[RackSummary]:
         try:
             repo_path = repos_manager.active_repo_path(session)
-        except FileNotFoundError:
+        except RepoNotAvailableError:
             return []
         layout = resolve_layout(repo_path)
         racks_data = read_racks(layout)

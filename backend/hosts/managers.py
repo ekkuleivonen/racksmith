@@ -16,6 +16,7 @@ from ansible.devices import (
     write_device,
 )
 from ansible.inventory import HostData, read_host, read_hosts, remove_host, write_host
+from github.misc import RepoNotAvailableError
 from hosts.schemas import Host, HostInput, HostSummary
 from repos.managers import repos_manager
 from ssh.misc import probe_ssh_target
@@ -217,7 +218,7 @@ class HostManager:
     def list_hosts(self, session) -> list[Host]:
         try:
             repo_path = repos_manager.active_repo_path(session)
-        except FileNotFoundError:
+        except RepoNotAvailableError:
             return []
         layout = resolve_layout(repo_path)
         hosts = [_host_data_to_host(h) for h in read_hosts(layout)]

@@ -9,7 +9,7 @@ from datetime import UTC, datetime
 
 import asyncssh
 from _utils.redis import Redis
-from github.misc import user_storage_id
+from github.misc import RepoNotAvailableError, user_storage_id
 from hosts.managers import host_manager
 
 from ssh.misc import _connect_kwargs, generate_ssh_key_pair, machine_public_key
@@ -127,7 +127,7 @@ class SSHManager:
         async def check_target(target: PingStatusTarget) -> PingStatusEntry:
             try:
                 host = self._find_host(session, target.host_id)
-            except KeyError:
+            except (KeyError, RepoNotAvailableError):
                 return PingStatusEntry(
                     host_id=target.host_id,
                     status="unknown",

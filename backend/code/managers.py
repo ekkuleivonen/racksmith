@@ -5,6 +5,7 @@ from __future__ import annotations
 import shutil
 
 from github.misc import (
+    RepoNotAvailableError,
     commit_and_push as git_commit_and_push,
     discard_changes as git_discard_changes,
     ensure_racksmith_branch,
@@ -102,7 +103,7 @@ class CodeManager:
     def commit_and_push(self, session, message: str) -> str | None:
         binding = repos_manager.current_repo(session)
         if not binding:
-            raise FileNotFoundError("Active repo is not configured")
+            raise RepoNotAvailableError("Active repo is not configured")
         repo_path = repos_manager.active_repo_path(session)
         return git_commit_and_push(
             repo_path,

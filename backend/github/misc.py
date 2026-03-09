@@ -26,6 +26,10 @@ RACK_TOPIC = "racksmith-rack"
 RACKSMITH_BRANCH = "racksmith"
 
 
+class RepoNotAvailableError(Exception):
+    """Raised when the active repo is not configured or missing from disk."""
+
+
 # ---------------------------------------------------------------------------
 # Session management
 # ---------------------------------------------------------------------------
@@ -209,10 +213,10 @@ def clear_active_repo(user_id: str) -> None:
 def resolve_active_repo_path(user_id: str) -> Path:
     binding = read_active_repo(user_id)
     if not binding:
-        raise FileNotFoundError("Active repo is not configured")
+        raise RepoNotAvailableError("Active repo is not configured")
     repo_path = user_repo_dir(binding.user_id, binding.owner, binding.repo)
     if not repo_path.exists() or not repo_path.is_dir():
-        raise FileNotFoundError("Active repo is missing on disk")
+        raise RepoNotAvailableError("Active repo is missing on disk")
     return repo_path
 
 
