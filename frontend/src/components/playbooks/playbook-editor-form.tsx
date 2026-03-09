@@ -14,7 +14,7 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { GripVertical, Trash2, Upload } from "lucide-react";
+import { GripVertical, Trash2 } from "lucide-react";
 import {
   Accordion,
   AccordionContent,
@@ -43,14 +43,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { pushToRegistry } from "@/lib/registry";
 import type {
   RoleCatalogEntry,
   PlaybookRoleEntry,
   PlaybookUpsertRequest,
 } from "@/lib/playbooks";
-
-import { toast } from "sonner";
 
 interface PlaybookEditorFormProps {
   draft: PlaybookUpsertRequest;
@@ -88,25 +85,10 @@ function SortableRoleCard({
   updateRole,
   removeRole,
 }: SortableRoleCardProps) {
-  const [pushing, setPushing] = useState(false);
   const { attributes, listeners, setNodeRef, transform, transition } =
     useSortable({
       id: roleId,
     });
-
-  const handlePush = async (e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setPushing(true);
-    try {
-      await pushToRegistry(roleEntry.slug);
-      toast.success(`Pushed ${roleEntry.name} to registry`);
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Push failed");
-    } finally {
-      setPushing(false);
-    }
-  };
 
   return (
     <AccordionItem
@@ -138,21 +120,6 @@ function SortableRoleCard({
             </div>
           </AccordionTrigger>
         </div>
-        <Button
-          type="button"
-          size="icon"
-          variant="ghost"
-          className="h-8 w-8 shrink-0"
-          title="Push to Registry"
-          onClick={handlePush}
-          disabled={pushing}
-        >
-          {pushing ? (
-            <span className="size-3.5 animate-spin rounded-full border border-zinc-500 border-t-transparent" />
-          ) : (
-            <Upload className="size-3.5" />
-          )}
-        </Button>
         <Button
           type="button"
           size="icon"
@@ -421,6 +388,11 @@ export function PlaybookEditorForm({
                 setRoleQuery("");
               }}
               items={rolePickerItems}
+              itemToStringLabel={(value) => {
+                if (!value) return "";
+                const parts = String(value).split("|||");
+                return parts[1] || parts[0];
+              }}
             >
               <ComboboxInput
                 className="w-full"

@@ -41,8 +41,16 @@ Optional top-level keys:
   inputs        – list of variable definitions (see below)
   tasks         – list of Ansible tasks (written to tasks/main.yml)
 
-Each input item: key, label, type (string|boolean|select|secret), \
-placeholder, default, required, options (for select), interactive (for runtime prompts).
+Each input item has these fields:
+  key         – variable name (snake_case)
+  label       – human-readable label
+  type        – MUST be exactly one of: "string", "boolean", "select", "secret"
+                (never use "str", "bool", "int", or any other type name)
+  placeholder – hint text (string, use "" if not applicable)
+  default     – default value (string for string/select/secret, true/false for boolean)
+  required    – true or false
+  options     – list of choices (only for type: select, use [] otherwise)
+  interactive – true if the value should be prompted at runtime, false otherwise
 
 Example output:
 
@@ -58,6 +66,11 @@ inputs:
     type: string
     placeholder: "80"
     default: "80"
+    required: true
+  - key: enable_ssl
+    label: Enable SSL
+    type: boolean
+    default: true
     required: true
 tasks:
   - name: Install nginx
@@ -106,7 +119,7 @@ async def _generate_with_validation(prompt: str) -> AsyncGenerator[str]:
 
         if use_stream:
             response = await client.chat.completions.create(
-                model="gpt-4o-mini", messages=messages, stream=True,
+                model=settings.OPENAI_MODEL, messages=messages, stream=True,
             )
             accumulated = ""
             async for chunk in response:
@@ -128,7 +141,7 @@ async def _generate_with_validation(prompt: str) -> AsyncGenerator[str]:
             messages.append({"role": "assistant", "content": accumulated})
         else:
             response = await client.chat.completions.create(
-                model="gpt-4o-mini", messages=messages, stream=False,
+                model=settings.OPENAI_MODEL, messages=messages, stream=False,
             )
             yaml_text = response.choices[0].message.content or ""
 

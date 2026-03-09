@@ -15,6 +15,7 @@ REPOS_WORKSPACE: str = env.str("REPOS_WORKSPACE", default="./workspace")
 REGISTRY_URL: str = env.str("REGISTRY_URL", default="http://localhost:8001")
 RACKSMITH_VERSION: str = env.str("RACKSMITH_VERSION", default="1.0.0")
 OPENAI_API_KEY: str = env.str("OPENAI_API_KEY", default="")
+OPENAI_MODEL: str = env.str("OPENAI_MODEL", default="gpt-4o-mini")
 
 # =============================================================================
 # Database

@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
+import { YamlCodeView } from "@/components/code/yaml-code-view";
 import {
   Table,
   TableBody,
@@ -225,12 +225,14 @@ export function RoleDetailPage() {
 
           {editing ? (
             <>
-              <Textarea
-                value={yamlText}
-                onChange={(e) => setYamlText(e.target.value)}
-                rows={20}
-                className="font-mono text-xs bg-zinc-950/60"
-              />
+              <div className="border border-zinc-800 rounded-md overflow-hidden">
+                <YamlCodeView
+                  value={yamlText}
+                  onChange={setYamlText}
+                  readOnly={false}
+                  height="400px"
+                />
+              </div>
               <div className="flex justify-end gap-2">
                 <Button
                   variant="outline"
