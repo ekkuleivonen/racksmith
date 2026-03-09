@@ -10,7 +10,7 @@ from datetime import UTC, datetime
 import asyncssh
 from _utils.redis import Redis
 from github.misc import user_storage_id
-from nodes.managers import node_manager
+from hosts.managers import host_manager
 
 from ssh.misc import _connect_kwargs, generate_ssh_key_pair, machine_public_key
 from ssh.schemas import CommandHistoryEntry, PingStatusEntry, PingStatusTarget
@@ -31,19 +31,19 @@ class SSHManager:
     def generate_key(self, _session) -> str:
         return generate_ssh_key_pair()
 
-    def _history_key(self, user_id: str, node_id: str) -> str:
-        return f"{_HISTORY_PREFIX}:{user_id}:{node_id}"
+    def _history_key(self, user_id: str, host_id: str) -> str:
+        return f"{_HISTORY_PREFIX}:{user_id}:{host_id}"
 
-    def _find_node(self, session, node_id: str):
-        return node_manager.get_node(session, node_id)
+    def _find_host(self, session, host_id: str):
+        return host_manager.get_host(session, host_id)
 
-    def _require_ssh_node(self, session, node_id: str):
-        node = self._find_node(session, node_id)
-        if not node.managed:
-            raise ValueError("Node is not managed")
-        if not node.ip_address or not node.ssh_user:
-            raise ValueError("Node is missing IP address or ssh_user")
-        return node
+    def _require_ssh_host(self, session, host_id: str):
+        host = self._find_host(session, host_id)
+        if not host.managed:
+            raise ValueError("Host is not managed")
+        if not host.ip_address or not host.ssh_user:
+            raise ValueError("Host is missing IP address or ssh_user")
+        return host
 
     async def _ping_host(self, host: str) -> bool:
         process = await asyncio.create_subprocess_exec(
@@ -74,39 +74,39 @@ class SSHManager:
             return []
         return [CommandHistoryEntry.model_validate(entry) for entry in data]
 
-    def list_history(self, session, node_id: str) -> list[CommandHistoryEntry]:
-        self._find_node(session, node_id)
+    def list_history(self, session, host_id: str) -> list[CommandHistoryEntry]:
+        self._find_host(session, host_id)
         user_id = user_storage_id(session.user)
-        return list(reversed(self._load_history(user_id, node_id)))
+        return list(reversed(self._load_history(user_id, host_id)))
 
-    def record_command(self, session, node_id: str, command: str) -> None:
-        node = self._find_node(session, node_id)
+    def record_command(self, session, host_id: str, command: str) -> None:
+        host = self._find_host(session, host_id)
         normalized = command.strip()
         if not normalized:
             return
         user_id = user_storage_id(session.user)
-        history = self._load_history(user_id, node_id)
+        history = self._load_history(user_id, host_id)
         history.append(
             CommandHistoryEntry(
                 command=normalized,
                 created_at=_now_iso(),
-                node_id=node.id,
-                node_name=node.name or node.hostname or node.ip_address,
-                ip_address=node.ip_address,
+                host_id=host.id,
+                host_name=host.name or host.hostname or host.ip_address,
+                ip_address=host.ip_address,
             )
         )
         payload = json.dumps([entry.model_dump() for entry in history[-HISTORY_LIMIT:]])
-        Redis.setex(self._history_key(user_id, node_id), HISTORY_TTL, payload)
+        Redis.setex(self._history_key(user_id, host_id), HISTORY_TTL, payload)
 
-    async def reboot_node(self, session, node_id: str) -> None:
-        node = self._require_ssh_node(session, node_id)
-        self.record_command(session, node_id, "sudo reboot")
+    async def reboot_node(self, session, host_id: str) -> None:
+        host = self._require_ssh_host(session, host_id)
+        self.record_command(session, host_id, "sudo reboot")
         conn = await asyncssh.connect(
-            **_connect_kwargs(node.ip_address, node.ssh_user, node.ssh_port)
+            **_connect_kwargs(host.ip_address, host.ssh_user, host.ssh_port)
         )
         try:
+            process = await conn.create_process("sudo reboot", term_type="xterm")
             try:
-                process = await conn.create_process("sudo reboot", term_type="xterm")
                 await asyncio.wait_for(process.wait_closed(), timeout=2)
                 if process.exit_status not in (0, None):
                     stderr = (await process.stderr.read()).strip()
@@ -126,42 +126,42 @@ class SSHManager:
 
         async def check_target(target: PingStatusTarget) -> PingStatusEntry:
             try:
-                node = self._find_node(session, target.node_id)
+                host = self._find_host(session, target.host_id)
             except KeyError:
                 return PingStatusEntry(
-                    node_id=target.node_id,
+                    host_id=target.host_id,
                     status="unknown",
                 )
 
-            if not node.managed:
+            if not host.managed:
                 return PingStatusEntry(
-                    node_id=target.node_id,
+                    host_id=target.host_id,
                     status="unknown",
                 )
 
-            host = (node.ip_address or "").strip()
-            if not host:
+            ip_addr = (host.ip_address or "").strip()
+            if not ip_addr:
                 return PingStatusEntry(
-                    node_id=target.node_id,
+                    host_id=target.host_id,
                     status="unknown",
                 )
 
-            task = host_checks.get(host)
+            task = host_checks.get(ip_addr)
             if task is None:
-                task = asyncio.create_task(self._ping_host(host))
-                host_checks[host] = task
+                task = asyncio.create_task(self._ping_host(ip_addr))
+                host_checks[ip_addr] = task
 
             return PingStatusEntry(
-                node_id=target.node_id,
+                host_id=target.host_id,
                 status="online" if await task else "offline",
             )
 
         return await asyncio.gather(*(check_target(target) for target in targets))
 
-    async def proxy_terminal(self, session, node_id: str, websocket) -> None:
-        node = self._require_ssh_node(session, node_id)
+    async def proxy_terminal(self, session, host_id: str, websocket) -> None:
+        host = self._require_ssh_host(session, host_id)
         conn = await asyncssh.connect(
-            **_connect_kwargs(node.ip_address, node.ssh_user, node.ssh_port)
+            **_connect_kwargs(host.ip_address, host.ssh_user, host.ssh_port)
         )
         process = await conn.create_process(term_type="xterm")
 
@@ -179,7 +179,7 @@ class SSHManager:
                 if event_type == "input":
                     data = str(message.get("data") or "")
                     if data.endswith("\n"):
-                        self.record_command(session, node_id, data.rstrip("\r\n"))
+                        self.record_command(session, host_id, data.rstrip("\r\n"))
                     process.stdin.write(data)
                 elif event_type == "resize":
                     cols = int(message.get("cols") or 120)
@@ -197,9 +197,9 @@ class SSHManager:
             await websocket.send_json(
                 {
                     "type": "connected",
-                    "ip_address": node.ip_address,
-                    "ssh_user": node.ssh_user,
-                    "ssh_port": node.ssh_port,
+                    "ip_address": host.ip_address,
+                    "ssh_user": host.ssh_user,
+                    "ssh_port": host.ssh_port,
                 }
             )
             done, pending = await asyncio.wait(

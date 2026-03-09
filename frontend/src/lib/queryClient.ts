@@ -11,10 +11,10 @@ export const queryClient = new QueryClient({
 });
 
 export const queryKeys = {
-  nodes: ["nodes"] as const,
+  hosts: ["hosts"] as const,
   racks: ["racks"] as const,
   groups: ["groups"] as const,
-  stacks: ["stacks"] as const,
+  playbooks: ["playbooks"] as const,
   codeTree: ["code", "tree"] as const,
   codeStatuses: ["code", "statuses"] as const,
 };

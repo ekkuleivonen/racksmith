@@ -27,10 +27,10 @@ import {
 } from "@/lib/setup";
 import { fetchMachinePublicKey, generateMachineKey } from "@/lib/ssh";
 import { useSetupStore } from "@/stores/setup";
-import { useNodes, useRackEntries } from "@/hooks/queries";
-import { isManagedNode } from "@/lib/nodes";
+import { useHosts, useRackEntries } from "@/hooks/queries";
+import { isManagedHost } from "@/lib/hosts";
 import { RackOnboardingPage } from "@/pages/RackOnboardingPage";
-import { SetupNodesStep } from "@/components/setup/setup-nodes-step";
+import { SetupHostsStep } from "@/components/setup/setup-hosts-step";
 
 const WANTS_RACK_KEY = "racksmith_wants_rack";
 
@@ -78,8 +78,8 @@ export function SetupPage() {
   const { isLoading: authLoading, isAuthenticated, login } = useAuth();
   const status = useSetupStore((s) => s.status);
   const loadSetup = useSetupStore((s) => s.load);
-  const { data: nodes = [] } = useNodes();
-  const managedCount = nodes.filter(isManagedNode).length;
+  const { data: hosts = [] } = useHosts();
+  const managedCount = hosts.filter(isManagedHost).length;
   const { data: rackEntries = [] } = useRackEntries();
 
   const [wantsRack, setWantsRackState] = useState<boolean | null>(
@@ -495,8 +495,8 @@ export function SetupPage() {
               Step 3 — Add hardware
             </h1>
             <p className="text-sm text-zinc-500">
-              Add at least one node. Each node is a machine you can SSH into and
-              run stacks on.
+              Add at least one host. Each host is a machine you can SSH into and
+              run playbooks on.
             </p>
           </div>
 
@@ -585,7 +585,7 @@ export function SetupPage() {
             </CardContent>
           </Card>
 
-          <SetupNodesStep
+          <SetupHostsStep
             onContinue={() => {}}
             canContinue={managedCount > 0}
           />
@@ -607,7 +607,7 @@ export function SetupPage() {
               <CardHeader>
                 <CardTitle>Place on rack?</CardTitle>
                 <p className="text-sm text-zinc-500">
-                  You have {managedCount} node{managedCount !== 1 ? "s" : ""}.
+                  You have {managedCount} host{managedCount !== 1 ? "s" : ""}.
                   Would you like to visualize them on a rack? You can skip and
                   do this later.
                 </p>
@@ -659,7 +659,7 @@ export function SetupPage() {
           <div className="space-y-1">
             <h1 className="text-zinc-100 text-xl font-semibold">Create rack</h1>
             <p className="text-sm text-zinc-500">
-              Define a rack and place your nodes. You can add more racks later.
+              Define a rack and place your hosts. You can add more racks later.
             </p>
           </div>
           <RackOnboardingPage

@@ -2,16 +2,16 @@ import { type ReactNode, useEffect } from "react";
 import { Navigate } from "react-router-dom";
 import { useAuth } from "@/context/auth-context";
 import { useSetupStore } from "@/stores/setup";
-import { useNodes } from "@/hooks/queries";
-import { isManagedNode } from "@/lib/nodes";
+import { useHosts } from "@/hooks/queries";
+import { isManagedHost } from "@/lib/hosts";
 
 export function ProtectedRoute({ children }: { children: ReactNode }) {
   const { isAuthenticated, isLoading: authLoading } = useAuth();
   const loading = useSetupStore((s) => s.loading);
   const status = useSetupStore((s) => s.status);
   const loadSetup = useSetupStore((s) => s.load);
-  const { data: nodes = [] } = useNodes();
-  const managedCount = nodes.filter(isManagedNode).length;
+  const { data: hosts = [] } = useHosts();
+  const managedCount = hosts.filter(isManagedHost).length;
 
   useEffect(() => {
     if (isAuthenticated) {

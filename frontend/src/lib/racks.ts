@@ -1,11 +1,11 @@
 import { apiDelete, apiGet, apiPatch, apiPost } from "@/lib/api";
 import { queryClient, queryKeys } from "@/lib/queryClient";
-import type { Node } from "@/lib/nodes";
+import type { Host } from "@/lib/hosts";
 
 export type RackWidthInches = 10 | 19;
 
-/** Canvas-compatible node shape (flat placement fields). Layout only has nodes on the rack. */
-export type RackLayoutNode = Omit<Node, "placement"> & {
+/** Canvas-compatible host shape (flat placement fields). Layout only has hosts on the rack. */
+export type RackLayoutHost = Omit<Host, "placement"> & {
   placement: "rack";
   position_u_start: number;
   position_u_height: number;
@@ -13,10 +13,10 @@ export type RackLayoutNode = Omit<Node, "placement"> & {
   position_col_count: number;
 };
 
-export function nodeToRackLayoutNode(node: Node): RackLayoutNode {
-  const p = node.placement!;
+export function hostToRackLayoutHost(host: Host): RackLayoutHost {
+  const p = host.placement!;
   return {
-    ...node,
+    ...host,
     placement: "rack",
     position_u_start: p.u_start ?? 1,
     position_u_height: p.u_height ?? 1,
@@ -50,7 +50,7 @@ export type RackDetail = {
 };
 
 export type RackLayout = RackDetail & {
-  nodes: Node[];
+  hosts: Host[];
 };
 
 export type ZoneSelection = {

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field
 
-from nodes.schemas import NodeSummary
+from hosts.schemas import HostSummary
 
 
 class GroupInput(BaseModel):
@@ -17,4 +17,4 @@ class Group(GroupInput):
 
 
 class GroupWithMembers(Group):
-    nodes: list[NodeSummary] = Field(default_factory=list)
+    hosts: list[HostSummary] = Field(default_factory=list)

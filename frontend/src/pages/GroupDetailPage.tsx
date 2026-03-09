@@ -14,23 +14,23 @@ import {
 import { deleteGroup, getGroup } from "@/lib/groups";
 import type { GroupWithMembers } from "@/lib/groups";
 import {
-  getNode,
-  listNodes,
-  nodeDisplayLabel,
-  updateNode,
-} from "@/lib/nodes";
-import type { Node } from "@/lib/nodes";
+  getHost,
+  listHosts,
+  hostDisplayLabel,
+  updateHost,
+} from "@/lib/hosts";
+import type { Host } from "@/lib/hosts";
 import { NavLink } from "react-router-dom";
 
 export function GroupDetailPage() {
   const { groupId = "" } = useParams();
   const navigate = useNavigate();
   const [group, setGroup] = useState<GroupWithMembers | null>(null);
-  const [allNodes, setAllNodes] = useState<Node[]>([]);
+  const [allHosts, setAllHosts] = useState<Host[]>([]);
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState(false);
-  const [addingNode, setAddingNode] = useState(false);
-  const [removingNodeId, setRemovingNodeId] = useState<string | null>(null);
+  const [addingHost, setAddingHost] = useState(false);
+  const [removingHostId, setRemovingHostId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     if (!groupId) {
@@ -53,7 +53,7 @@ export function GroupDetailPage() {
   }, [load]);
 
   useEffect(() => {
-    listNodes().then(setAllNodes).catch(() => setAllNodes([]));
+    listHosts().then(setAllHosts).catch(() => setAllHosts([]));
   }, []);
 
   if (loading) {
@@ -101,7 +101,7 @@ export function GroupDetailPage() {
                 disabled={deleting}
                 className="text-red-400 hover:text-red-300 hover:bg-red-500/10"
                 onClick={async () => {
-                  if (!window.confirm("Delete this group? Nodes will no longer be assigned to it."))
+                  if (!window.confirm("Delete this group? Hosts will no longer be assigned to it."))
                     return;
                   setDeleting(true);
                   try {
@@ -119,125 +119,125 @@ export function GroupDetailPage() {
               </Button>
             </div>
           </div>
-          <Badge variant="outline">{group.nodes.length} node{group.nodes.length === 1 ? "" : "s"}</Badge>
+          <Badge variant="outline">{group.hosts.length} host{group.hosts.length === 1 ? "" : "s"}</Badge>
         </section>
 
         <section className="space-y-2">
           <h2 className="text-sm font-medium text-zinc-400">Members</h2>
           <div className="flex flex-wrap items-center gap-2">
-            <span className="text-xs text-zinc-500">Add node:</span>
+            <span className="text-xs text-zinc-500">Add host:</span>
             <Select
               value=""
-              onValueChange={async (nodeId) => {
-                if (!nodeId) return;
-                setAddingNode(true);
+              onValueChange={async (hostId) => {
+                if (!hostId) return;
+                setAddingHost(true);
                 try {
-                  const { node } = await getNode(nodeId);
-                  await updateNode(nodeId, {
-                    name: node.name ?? "",
-                    ip_address: node.ip_address ?? "",
-                    ssh_user: node.ssh_user ?? "",
-                    ssh_port: node.ssh_port ?? 22,
-                    managed: node.managed ?? true,
-                    labels: node.labels ?? [],
-                    groups: [...(node.groups ?? []), groupId],
-                    os_family: node.os_family ?? null,
-                    notes: node.notes ?? "",
-                    placement: node.placement ?? null,
+                  const { host } = await getHost(hostId);
+                  await updateHost(hostId, {
+                    name: host.name ?? "",
+                    ip_address: host.ip_address ?? "",
+                    ssh_user: host.ssh_user ?? "",
+                    ssh_port: host.ssh_port ?? 22,
+                    managed: host.managed ?? true,
+                    labels: host.labels ?? [],
+                    groups: [...(host.groups ?? []), groupId],
+                    os_family: host.os_family ?? null,
+                    notes: host.notes ?? "",
+                    placement: host.placement ?? null,
                   });
                   await load();
-                  toast.success("Node added to group");
+                  toast.success("Host added to group");
                 } catch (error) {
                   toast.error(
                     error instanceof Error
                       ? error.message
-                      : "Failed to add node to group",
+                      : "Failed to add host to group",
                   );
                 } finally {
-                  setAddingNode(false);
+                  setAddingHost(false);
                 }
               }}
             >
               <SelectTrigger
                 size="sm"
                 className="h-8 w-[200px]"
-                disabled={addingNode}
+                disabled={addingHost}
               >
-                <SelectValue placeholder="Add node" />
+                <SelectValue placeholder="Add host" />
               </SelectTrigger>
               <SelectContent>
-                {allNodes
-                  .filter((n) => !group.nodes.some((m) => m.id === n.id))
+                {allHosts
+                  .filter((n) => !group.hosts.some((m) => m.id === n.id))
                   .map((n) => (
                     <SelectItem key={n.id} value={n.id}>
-                      {nodeDisplayLabel(n)}
+                      {hostDisplayLabel(n)}
                     </SelectItem>
                   ))}
-                {allNodes.filter((n) => !group.nodes.some((m) => m.id === n.id))
+                {allHosts.filter((n) => !group.hosts.some((m) => m.id === n.id))
                   .length === 0 ? (
                   <div className="px-2 py-4 text-xs text-zinc-500">
-                    All nodes are already in this group
+                    All hosts are already in this group
                   </div>
                 ) : null}
               </SelectContent>
             </Select>
           </div>
-          {group.nodes.length === 0 ? (
+          {group.hosts.length === 0 ? (
             <div className="border border-zinc-800 bg-zinc-900/30 p-4">
-              <p className="text-zinc-500 text-sm">No nodes in this group</p>
+              <p className="text-zinc-500 text-sm">No hosts in this group</p>
             </div>
           ) : (
             <div className="space-y-1">
-              {group.nodes.map((node) => (
+              {group.hosts.map((host) => (
                 <div
-                  key={node.id}
+                  key={host.id}
                   className="flex items-center gap-2 border border-zinc-800 bg-zinc-900/30 p-3 hover:border-zinc-700 transition-colors"
                 >
                   <NavLink
-                    to={`/nodes/${node.id}`}
+                    to={`/hosts/${host.id}`}
                     className="flex-1 min-w-0"
                   >
                     <p className="text-zinc-100 font-medium">
-                      {node.name || node.hostname || node.ip_address || node.id}
+                      {host.name || host.hostname || host.ip_address || host.id}
                     </p>
-                    <p className="text-xs text-zinc-500">{node.ip_address}</p>
+                    <p className="text-xs text-zinc-500">{host.ip_address}</p>
                   </NavLink>
                   <Button
                     size="icon"
                     variant="ghost"
                     className="h-7 w-7 shrink-0 text-zinc-500 hover:text-red-400 hover:bg-red-500/10"
-                    disabled={removingNodeId === node.id}
+                    disabled={removingHostId === host.id}
                     aria-label="Remove from group"
                     onClick={async (e) => {
                       e.preventDefault();
                       e.stopPropagation();
-                      setRemovingNodeId(node.id);
+                      setRemovingHostId(host.id);
                       try {
-                        const { node: fullNode } = await getNode(node.id);
-                        await updateNode(node.id, {
-                          name: fullNode.name ?? "",
-                          ip_address: fullNode.ip_address ?? "",
-                          ssh_user: fullNode.ssh_user ?? "",
-                          ssh_port: fullNode.ssh_port ?? 22,
-                          managed: fullNode.managed ?? true,
-                          labels: fullNode.labels ?? [],
-                          groups: (fullNode.groups ?? []).filter(
+                        const { host: fullHost } = await getHost(host.id);
+                        await updateHost(host.id, {
+                          name: fullHost.name ?? "",
+                          ip_address: fullHost.ip_address ?? "",
+                          ssh_user: fullHost.ssh_user ?? "",
+                          ssh_port: fullHost.ssh_port ?? 22,
+                          managed: fullHost.managed ?? true,
+                          labels: fullHost.labels ?? [],
+                          groups: (fullHost.groups ?? []).filter(
                             (g) => g !== groupId,
                           ),
-                          os_family: fullNode.os_family ?? null,
-                          notes: fullNode.notes ?? "",
-                          placement: fullNode.placement ?? null,
+                          os_family: fullHost.os_family ?? null,
+                          notes: fullHost.notes ?? "",
+                          placement: fullHost.placement ?? null,
                         });
                         await load();
-                        toast.success("Node removed from group");
+                        toast.success("Host removed from group");
                       } catch (error) {
                         toast.error(
                           error instanceof Error
                             ? error.message
-                            : "Failed to remove node from group",
+                            : "Failed to remove host from group",
                         );
                       } finally {
-                        setRemovingNodeId(null);
+                        setRemovingHostId(null);
                       }
                     }}
                   >

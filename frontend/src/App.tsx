@@ -13,19 +13,19 @@ import { DiffReviewPage } from "@/pages/DiffReviewPage";
 import { HomePage } from "@/pages/HomePage";
 import { ReposPage } from "@/pages/ReposPage";
 import { SetupPage } from "@/pages/SetupPage";
-import { StackCreatePage } from "@/pages/StackCreatePage";
-import { StackDetailPage } from "@/pages/StackDetailPage";
-import { StacksPage } from "@/pages/StacksPage";
+import { PlaybookCreatePage } from "@/pages/PlaybookCreatePage";
+import { PlaybookDetailPage } from "@/pages/PlaybookDetailPage";
+import { PlaybooksPage } from "@/pages/PlaybooksPage";
 import { RackPage } from "@/pages/RackDetailPage";
-import { NodePage } from "@/pages/NodePage";
+import { HostPage } from "@/pages/HostPage";
 import { GroupsPage } from "@/pages/GroupsPage";
 import { GroupDetailPage } from "@/pages/GroupDetailPage";
 import { GroupCreatePage } from "@/pages/GroupCreatePage";
 import { RackOnboardingPage } from "@/pages/RackOnboardingPage";
 import { RacksPage } from "@/pages/RacksPage";
-import { NodesPage } from "@/pages/NodesPage";
-import { NodeCreatePage } from "@/pages/NodeCreatePage";
-import { ActionNewPage } from "@/pages/ActionNewPage";
+import { HostsPage } from "@/pages/HostsPage";
+import { HostCreatePage } from "@/pages/HostCreatePage";
+import { RoleImportPage } from "@/pages/RoleImportPage";
 
 class ErrorBoundary extends Component<
   { children: ReactNode },
@@ -132,31 +132,31 @@ function AppRoutes() {
               }
             />
             <Route
-              path="/nodes"
+              path="/hosts"
               element={
                 <ProtectedRoute>
-                  <AppShell title="Nodes">
-                    <NodesPage />
+                  <AppShell title="Hosts">
+                    <HostsPage />
                   </AppShell>
                 </ProtectedRoute>
               }
             />
             <Route
-              path="/nodes/create"
+              path="/hosts/create"
               element={
                 <ProtectedRoute>
                   <OnboardingShell>
-                    <NodeCreatePage />
+                    <HostCreatePage />
                   </OnboardingShell>
                 </ProtectedRoute>
               }
             />
             <Route
-              path="/nodes/:id"
+              path="/hosts/:id"
               element={
                 <ProtectedRoute>
-                  <AppShell title="Nodes">
-                    <NodePage />
+                  <AppShell title="Hosts">
+                    <HostPage />
                   </AppShell>
                 </ProtectedRoute>
               }
@@ -212,31 +212,31 @@ function AppRoutes() {
               }
             />
             <Route
-              path="/stacks"
+              path="/playbooks"
               element={
                 <ProtectedRoute>
-                  <AppShell title="Stacks">
-                    <StacksPage />
+                  <AppShell title="Playbooks">
+                    <PlaybooksPage />
                   </AppShell>
                 </ProtectedRoute>
               }
             />
             <Route
-              path="/stacks/create"
+              path="/playbooks/create"
               element={
                 <ProtectedRoute>
-                  <AppShell title="Stacks">
-                    <StackCreatePage />
+                  <AppShell title="Playbooks">
+                    <PlaybookCreatePage />
                   </AppShell>
                 </ProtectedRoute>
               }
             />
             <Route
-              path="/stacks/:stackId"
+              path="/playbooks/:playbookId"
               element={
                 <ProtectedRoute>
-                  <AppShell title="Stacks">
-                    <StackDetailPage />
+                  <AppShell title="Playbooks">
+                    <PlaybookDetailPage />
                   </AppShell>
                 </ProtectedRoute>
               }
@@ -262,11 +262,11 @@ function AppRoutes() {
               }
             />
             <Route
-              path="/actions/import"
+              path="/roles/import"
               element={
                 <ProtectedRoute>
-                  <AppShell title="Import action">
-                    <ActionNewPage />
+                  <AppShell title="Import role">
+                    <RoleImportPage />
                   </AppShell>
                 </ProtectedRoute>
               }

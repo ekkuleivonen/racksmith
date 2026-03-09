@@ -5,7 +5,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException
 
 from github.managers import auth_manager
-from nodes.managers import node_manager
+from hosts.managers import host_manager
 from repos.managers import repos_manager
 from repos.schemas import RepoActivationRequest, RepoCreateRequest, RepoSelectionRequest
 
@@ -14,9 +14,9 @@ router = APIRouter()
 
 @router.get("/status")
 async def get_status(session=Depends(auth_manager.get_current_session)):
-    nodes = node_manager.list_nodes(session)
+    hosts = host_manager.list_hosts(session)
     return repos_manager.status(
-        session, nodes_ready=len(nodes) > 0
+        session, hosts_ready=len(hosts) > 0
     )
 
 

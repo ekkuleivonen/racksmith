@@ -3,18 +3,18 @@ import { Terminal } from "xterm";
 import { FitAddon } from "xterm-addon-fit";
 import { Button } from "@/components/ui/button";
 import { sshTerminalUrl } from "@/lib/ssh";
-import type { Node } from "@/lib/nodes";
+import type { Host } from "@/lib/hosts";
 
 interface SshTerminalProps {
-  nodeId: string;
-  node: Node;
+  hostId: string;
+  host: Host;
   title?: string;
   description?: string;
 }
 
 export function SshTerminal({
-  nodeId,
-  node,
+  hostId,
+  host,
   title,
   description,
 }: SshTerminalProps) {
@@ -46,10 +46,10 @@ export function SshTerminal({
     terminal.open(hostRef.current);
     fitAddon.fit();
     terminal.writeln(
-      `Opening SSH session to ${node.ssh_user}@${node.ip_address}:${node.ssh_port}...`,
+      `Opening SSH session to ${host.ssh_user}@${host.ip_address}:${host.ssh_port}...`,
     );
 
-    const socket = new WebSocket(sshTerminalUrl(nodeId));
+    const socket = new WebSocket(sshTerminalUrl(hostId));
     socketRef.current = socket;
     terminalRef.current = terminal;
     fitAddonRef.current = fitAddon;
@@ -128,7 +128,7 @@ export function SshTerminal({
       terminalRef.current = null;
       fitAddonRef.current = null;
     };
-  }, [enabled, node.ip_address, node.id, node.ssh_port, node.ssh_user, nodeId]);
+  }, [enabled, host.ip_address, host.id, host.ssh_port, host.ssh_user, hostId]);
 
   useEffect(() => {
     setEnabled(false);
@@ -138,7 +138,7 @@ export function SshTerminal({
     socketRef.current = null;
     terminalRef.current = null;
     fitAddonRef.current = null;
-  }, [node.id]);
+  }, [host.id]);
 
   const closeSession = () => {
     if (socketRef.current?.readyState === WebSocket.OPEN) {

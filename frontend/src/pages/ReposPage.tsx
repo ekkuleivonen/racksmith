@@ -18,7 +18,7 @@ import { RepoCombobox } from "@/components/repo-combobox";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/context/auth-context";
-import { listNodes } from "@/lib/nodes";
+import { listHosts } from "@/lib/hosts";
 import {
   createGithubRepo,
   getSetupStatus,
@@ -48,11 +48,11 @@ export function ReposPage() {
     async (next: SetupStatus) => {
       if (!next.repo_ready) return;
       if (!next.nodes_ready) {
-        navigate("/nodes", { replace: true });
+        navigate("/hosts", { replace: true });
         return;
       }
-      const nodes = await listNodes();
-      navigate(nodes[0] ? `/nodes/${nodes[0].id}` : "/nodes", { replace: true });
+      const hosts = await listHosts();
+      navigate(hosts[0] ? `/hosts/${hosts[0].id}` : "/hosts", { replace: true });
     },
     [navigate]
   );

@@ -3,31 +3,31 @@ import { apiGet, apiPost } from "@/lib/api";
 export type CommandHistoryEntry = {
   command: string;
   created_at: string;
-  node_id: string;
-  node_name: string;
+  host_id: string;
+  host_name: string;
   ip_address: string;
 };
 
 export type PingStatus = "online" | "offline" | "unknown";
 
 export type PingStatusTarget = {
-  node_id: string;
+  host_id: string;
 };
 
 export type PingStatusEntry = PingStatusTarget & {
   status: PingStatus;
 };
 
-export function nodeStatusKey(nodeId: string) {
-  return nodeId;
+export function hostStatusKey(hostId: string) {
+  return hostId;
 }
 
-export async function fetchCommandHistory(nodeId: string) {
-  return apiGet<{ history: CommandHistoryEntry[] }>(`/ssh/nodes/${nodeId}/history`);
+export async function fetchCommandHistory(hostId: string) {
+  return apiGet<{ history: CommandHistoryEntry[] }>(`/ssh/hosts/${hostId}/history`);
 }
 
-export async function rebootNode(nodeId: string) {
-  return apiPost<{ status: string }>(`/ssh/nodes/${nodeId}/reboot`);
+export async function rebootHost(hostId: string) {
+  return apiPost<{ status: string }>(`/ssh/hosts/${hostId}/reboot`);
 }
 
 export async function fetchPingStatuses(targets: PingStatusTarget[]) {
@@ -42,7 +42,7 @@ export async function generateMachineKey() {
   return apiPost<{ public_key: string }>("/ssh/generate-key");
 }
 
-export function sshTerminalUrl(nodeId: string) {
+export function sshTerminalUrl(hostId: string) {
   const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-  return `${protocol}//${window.location.host}/api/ssh/nodes/${nodeId}/terminal`;
+  return `${protocol}//${window.location.host}/api/ssh/hosts/${hostId}/terminal`;
 }

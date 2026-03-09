@@ -11,25 +11,25 @@ import aiosqlite
 import settings
 
 if TYPE_CHECKING:
-    from actions.schemas import ActionRun
-    from stacks.schemas import StackRun
+    from playbooks.schemas import PlaybookRun
+    from roles.schemas import RoleRun
 
 _db: aiosqlite.Connection | None = None
 
 
 async def init_db() -> None:
-    """Create the runs table if it does not exist. Opens a persistent connection."""
+    """Create playbook_runs and role_runs tables if they do not exist. Opens a persistent connection."""
     global _db
     Path(settings.DB_PATH).parent.mkdir(parents=True, exist_ok=True)
     _db = await aiosqlite.connect(settings.DB_PATH)
     _db.row_factory = aiosqlite.Row
     await _db.execute(
         """
-        CREATE TABLE IF NOT EXISTS runs (
+        CREATE TABLE IF NOT EXISTS playbook_runs (
             id          TEXT PRIMARY KEY,
             user_id     TEXT NOT NULL,
-            stack_id    TEXT NOT NULL,
-            stack_name  TEXT NOT NULL,
+            playbook_id TEXT NOT NULL,
+            playbook_name TEXT NOT NULL,
             status      TEXT NOT NULL,
             created_at  TEXT NOT NULL,
             started_at  TEXT,
@@ -41,27 +41,13 @@ async def init_db() -> None:
         )
         """
     )
-    await _db.commit()
-    try:
-        await _db.execute("ALTER TABLE runs ADD COLUMN commit_sha TEXT")
-        await _db.commit()
-    except Exception:
-        await _db.rollback()
-    # Migration: rename playbook_id/playbook_name to stack_id/stack_name
-    for old_name, new_name in [("playbook_id", "stack_id"), ("playbook_name", "stack_name")]:
-        try:
-            await _db.execute(f"ALTER TABLE runs RENAME COLUMN {old_name} TO {new_name}")
-            await _db.commit()
-        except Exception:
-            await _db.rollback()
-
     await _db.execute(
         """
-        CREATE TABLE IF NOT EXISTS action_runs (
+        CREATE TABLE IF NOT EXISTS role_runs (
             id          TEXT PRIMARY KEY,
             user_id     TEXT NOT NULL,
-            action_slug TEXT NOT NULL,
-            action_name TEXT NOT NULL,
+            role_slug   TEXT NOT NULL,
+            role_name   TEXT NOT NULL,
             status      TEXT NOT NULL,
             created_at  TEXT NOT NULL,
             started_at  TEXT,
@@ -92,16 +78,16 @@ def _get_db() -> aiosqlite.Connection:
     return _db
 
 
-def row_to_stack_run(row: aiosqlite.Row) -> StackRun:
-    """Convert a database row to a StackRun schema."""
-    from stacks.schemas import StackRun
+def row_to_playbook_run(row: aiosqlite.Row) -> "PlaybookRun":
+    """Convert a database row to a PlaybookRun schema."""
+    from playbooks.schemas import PlaybookRun
 
     hosts = json.loads(row["hosts"]) if isinstance(row["hosts"], str) else row["hosts"]
     commit_sha = row["commit_sha"] if "commit_sha" in row.keys() else None
-    return StackRun(
+    return PlaybookRun(
         id=row["id"],
-        stack_id=row["stack_id"],
-        stack_name=row["stack_name"],
+        playbook_id=row["playbook_id"],
+        playbook_name=row["playbook_name"],
         status=row["status"],
         created_at=row["created_at"],
         started_at=row["started_at"],
@@ -113,16 +99,16 @@ def row_to_stack_run(row: aiosqlite.Row) -> StackRun:
     )
 
 
-def row_to_action_run(row: aiosqlite.Row) -> ActionRun:
-    """Convert a database row to an ActionRun schema."""
-    from actions.schemas import ActionRun
+def row_to_role_run(row: aiosqlite.Row) -> "RoleRun":
+    """Convert a database row to a RoleRun schema."""
+    from roles.schemas import RoleRun
 
     hosts = json.loads(row["hosts"]) if isinstance(row["hosts"], str) else row["hosts"]
     run_vars = json.loads(row["vars"]) if isinstance(row["vars"], str) else row["vars"]
-    return ActionRun(
+    return RoleRun(
         id=row["id"],
-        action_slug=row["action_slug"],
-        action_name=row["action_name"],
+        role_slug=row["role_slug"],
+        role_name=row["role_name"],
         status=row["status"],
         created_at=row["created_at"],
         started_at=row["started_at"],

@@ -18,3 +18,11 @@ dependencies = [
     "ruamel-yaml>=0.19.1",
     "structlog>=25.5.0",
 ]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.2",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["ansible/tests"]

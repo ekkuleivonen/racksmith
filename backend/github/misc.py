@@ -23,7 +23,6 @@ from _utils.redis import Redis
 REPO_NAME_RE = re.compile(r"^[a-zA-Z0-9._-]+$")
 YAML_EXTENSIONS = {".yaml", ".yml"}
 RACK_TOPIC = "racksmith-rack"
-RACK_FILE = ".racksmith/rack.json"
 RACKSMITH_BRANCH = "racksmith"
 
 

@@ -1,13 +1,13 @@
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { useNodes, useRackEntries, useGroups, useStacks } from "@/hooks/queries";
-import { isManagedNode } from "@/lib/nodes";
+import { useHosts, useRackEntries, useGroups, usePlaybooks } from "@/hooks/queries";
+import { isManagedHost } from "@/lib/hosts";
 
 export function HomeDashboard() {
-  const { data: nodes = [] } = useNodes();
+  const { data: hosts = [] } = useHosts();
   const { data: rackEntries = [] } = useRackEntries();
   const { data: groups = [] } = useGroups();
-  const { data: stacks = [] } = useStacks();
+  const { data: playbooks = [] } = usePlaybooks();
 
   return (
     <div className="flex-1 min-h-0 overflow-auto p-6">
@@ -15,16 +15,16 @@ export function HomeDashboard() {
         <div className="space-y-2">
           <h1 className="text-2xl font-semibold text-zinc-100">Welcome to Racksmith</h1>
           <p className="text-zinc-400 text-sm">
-            Your infrastructure is ready. Manage nodes, racks, groups, and stacks from the sidebar.
+            Your infrastructure is ready. Manage hosts, racks, groups, and playbooks from the sidebar.
           </p>
         </div>
 
         <div className="grid grid-cols-2 gap-4">
           <div className="border border-zinc-800 bg-zinc-900/40 p-4 rounded">
-            <p className="text-zinc-500 text-xs font-medium uppercase tracking-wider">Nodes</p>
-            <p className="text-2xl font-semibold text-zinc-100 mt-1">{nodes.filter(isManagedNode).length}</p>
+            <p className="text-zinc-500 text-xs font-medium uppercase tracking-wider">Hosts</p>
+            <p className="text-2xl font-semibold text-zinc-100 mt-1">{hosts.filter(isManagedHost).length}</p>
             <Button variant="outline" size="sm" className="mt-2" asChild>
-              <Link to="/nodes">View nodes</Link>
+              <Link to="/hosts">View hosts</Link>
             </Button>
           </div>
           <div className="border border-zinc-800 bg-zinc-900/40 p-4 rounded">
@@ -42,17 +42,17 @@ export function HomeDashboard() {
             </Button>
           </div>
           <div className="border border-zinc-800 bg-zinc-900/40 p-4 rounded">
-            <p className="text-zinc-500 text-xs font-medium uppercase tracking-wider">Stacks</p>
-            <p className="text-2xl font-semibold text-zinc-100 mt-1">{stacks.length}</p>
+            <p className="text-zinc-500 text-xs font-medium uppercase tracking-wider">Playbooks</p>
+            <p className="text-2xl font-semibold text-zinc-100 mt-1">{playbooks.length}</p>
             <Button variant="outline" size="sm" className="mt-2" asChild>
-              <Link to="/stacks">View stacks</Link>
+              <Link to="/playbooks">View playbooks</Link>
             </Button>
           </div>
         </div>
 
         <div className="flex gap-2">
           <Button asChild>
-            <Link to="/nodes/create">Add node</Link>
+            <Link to="/hosts/create">Add host</Link>
           </Button>
           <Button variant="outline" asChild>
             <Link to="/repos">Manage repos</Link>

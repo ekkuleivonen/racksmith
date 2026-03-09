@@ -10,7 +10,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useSetupStore } from "@/stores/setup";
-import { useGitStatuses, useNodes } from "@/hooks/queries";
+import { useGitStatuses, useHosts } from "@/hooks/queries";
 
 export const MANAGE_REPOS_VALUE = "__manage_repos__";
 
@@ -29,7 +29,7 @@ export function SidebarFooter({ onLogout }: SidebarFooterProps) {
   const switchingRepo = useSetupStore((s) => s.switchingRepo);
   const switchRepo = useSetupStore((s) => s.switchRepo);
   const { data: gitData } = useGitStatuses();
-  const { data: nodes = [] } = useNodes();
+  const { data: hosts = [] } = useHosts();
   const modifiedPaths = gitData?.modifiedPaths ?? {};
   const untrackedPaths = gitData?.untrackedPaths ?? {};
 
@@ -46,10 +46,10 @@ export function SidebarFooter({ onLogout }: SidebarFooterProps) {
     if (!owner || !repo) return;
     await switchRepo(owner, repo);
     const newStatus = useSetupStore.getState().status;
-    const firstManaged = nodes.find((n) => n.managed);
+    const firstManaged = hosts.find((h) => h.managed);
     const path = newStatus?.nodes_ready && firstManaged
-      ? `/nodes/${firstManaged.id}`
-      : "/nodes";
+      ? `/hosts/${firstManaged.id}`
+      : "/hosts";
     navigate(path, { replace: true });
   };
 

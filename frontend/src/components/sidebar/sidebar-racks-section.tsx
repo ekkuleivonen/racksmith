@@ -9,7 +9,7 @@ import {
 } from "@/components/ui/accordion";
 import { useRackEntries } from "@/hooks/queries";
 import { usePingStore } from "@/stores/ping";
-import { nodeStatusKey } from "@/lib/ssh";
+import { hostStatusKey } from "@/lib/ssh";
 
 export function SidebarRacksSection() {
   const location = useLocation();
@@ -57,7 +57,7 @@ export function SidebarRacksSection() {
             defaultValue={defaultExpanded}
             className="w-full border-0"
           >
-            {rackEntries.map(({ rack, nodes }) => (
+            {rackEntries.map(({ rack, hosts }) => (
               <AccordionItem key={rack.id} value={rack.id} className="border-0">
                 <AccordionTrigger
                   hideIcon
@@ -87,18 +87,18 @@ export function SidebarRacksSection() {
                 </AccordionTrigger>
                 <AccordionContent className="pt-0 !pb-0 !h-auto [&_a]:no-underline">
                   <div className="space-y-0.5 border-l border-zinc-800 ml-2 pl-2">
-                    {nodes.length === 0 ? (
+                    {hosts.length === 0 ? (
                       <p className="px-2 py-0.5 text-[10px] text-zinc-600">
                         No hardware yet
                       </p>
                     ) : (
-                      nodes.map((node) => {
-                        const nodeStatus =
-                          pingStatuses[nodeStatusKey(node.id)] ?? "unknown";
+                      hosts.map((host) => {
+                        const hostStatus =
+                          pingStatuses[hostStatusKey(host.id)] ?? "unknown";
                         return (
                           <NavLink
-                            key={node.id}
-                            to={`/nodes/${node.id}`}
+                            key={host.id}
+                            to={`/hosts/${host.id}`}
                             className={({ isActive }) =>
                               cn(
                                 "flex items-center gap-1.5 rounded py-0.5 px-1.5 text-xs no-underline",
@@ -111,23 +111,23 @@ export function SidebarRacksSection() {
                             <span
                               className={cn(
                                 "size-1 shrink-0 rounded-full",
-                                nodeStatus === "online" && "bg-emerald-400",
-                                nodeStatus === "offline" && "bg-red-500",
-                                nodeStatus === "unknown" && "bg-zinc-700",
+                                hostStatus === "online" && "bg-emerald-400",
+                                hostStatus === "offline" && "bg-red-500",
+                                hostStatus === "unknown" && "bg-zinc-700",
                               )}
                               title={
-                                nodeStatus === "online"
+                                hostStatus === "online"
                                   ? "Online"
-                                  : nodeStatus === "offline"
+                                  : hostStatus === "offline"
                                     ? "Offline"
                                     : "Unknown"
                               }
                             />
                             <span className="truncate">
-                              {node.name ||
-                                node.hostname ||
-                                node.ip_address ||
-                                node.id}
+                              {host.name ||
+                                host.hostname ||
+                                host.ip_address ||
+                                host.id}
                             </span>
                           </NavLink>
                         );
