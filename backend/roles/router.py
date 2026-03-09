@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from collections.abc import AsyncGenerator
 
 from fastapi import APIRouter, Cookie, Depends, HTTPException, WebSocket, WebSocketDisconnect
@@ -74,21 +75,62 @@ class GenerateRequest(BaseModel):
     prompt: str
 
 
-async def _stream_role_yaml(prompt: str) -> AsyncGenerator[str]:
+MAX_GENERATE_RETRIES = 2
+
+
+def _validate_role_yaml(yaml_text: str) -> str | None:
+    """Return error string if invalid, None if valid."""
+    try:
+        data = yaml.safe_load(yaml_text)
+    except yaml.YAMLError as e:
+        return f"Invalid YAML syntax: {e}"
+    if not isinstance(data, dict):
+        return "YAML must be a mapping"
+    try:
+        RoleCreateRequest.model_validate(data)
+    except ValidationError as e:
+        return str(e)
+    return None
+
+
+async def _generate_with_validation(prompt: str) -> AsyncGenerator[str]:
     client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
-    response = await client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[
-            {"role": "system", "content": ROLE_SYSTEM_PROMPT},
-            {"role": "user", "content": prompt},
-        ],
-        stream=True,
-    )
-    async for chunk in response:
-        delta = chunk.choices[0].delta.content
-        if delta:
-            yield f"data: {delta}\n\n"
-    yield "data: [DONE]\n\n"
+    messages: list[dict[str, str]] = [
+        {"role": "system", "content": ROLE_SYSTEM_PROMPT},
+        {"role": "user", "content": prompt},
+    ]
+
+    for attempt in range(MAX_GENERATE_RETRIES + 1):
+        is_last = attempt == MAX_GENERATE_RETRIES
+
+        if is_last:
+            response = await client.chat.completions.create(
+                model="gpt-4o-mini", messages=messages, stream=True,
+            )
+            async for chunk in response:
+                delta = chunk.choices[0].delta.content
+                if delta:
+                    yield f"data: {delta}\n\n"
+            yield "data: [DONE]\n\n"
+            return
+
+        response = await client.chat.completions.create(
+            model="gpt-4o-mini", messages=messages, stream=False,
+        )
+        yaml_text = response.choices[0].message.content or ""
+
+        errors = _validate_role_yaml(yaml_text)
+        if not errors:
+            yield f"data: {json.dumps(yaml_text)}\n\n"
+            yield "data: [DONE]\n\n"
+            return
+
+        yield "data: [RETRY]\n\n"
+        messages.append({"role": "assistant", "content": yaml_text})
+        messages.append({"role": "user", "content": (
+            f"This YAML has validation errors:\n{errors}\n\n"
+            "Fix them and output only the corrected YAML."
+        )})
 
 
 @router.post("/generate")
@@ -99,7 +141,7 @@ async def generate_role(
     if not settings.OPENAI_API_KEY:
         raise HTTPException(status_code=503, detail="AI generation is not configured (OPENAI_API_KEY missing)")
     return StreamingResponse(
-        _stream_role_yaml(body.prompt),
+        _generate_with_validation(body.prompt),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )

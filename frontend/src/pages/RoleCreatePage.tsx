@@ -21,11 +21,13 @@ export function RoleCreatePage() {
   const [showPrompt, setShowPrompt] = useState(false);
   const [prompt, setPrompt] = useState("");
   const [generating, setGenerating] = useState(false);
+  const [genStatus, setGenStatus] = useState("Generating...");
   const abortRef = useRef<AbortController | null>(null);
 
   async function handleGenerate() {
     if (!prompt.trim()) return;
     setGenerating(true);
+    setGenStatus("Generating...");
     setError(null);
     setYaml("");
 
@@ -62,6 +64,19 @@ export function RoleCreatePage() {
           if (!line.startsWith("data: ")) continue;
           const payload = line.slice(6);
           if (payload === "[DONE]") break;
+          if (payload === "[RETRY]") {
+            setYaml("");
+            setGenStatus("Refining...");
+            continue;
+          }
+          if (payload.startsWith('"')) {
+            try {
+              setYaml(JSON.parse(payload));
+              continue;
+            } catch {
+              /* fall through to plain append */
+            }
+          }
           setYaml((prev) => prev + payload);
         }
       }
@@ -176,7 +191,7 @@ export function RoleCreatePage() {
           {generating && (
             <div className="flex items-center gap-2 text-xs text-zinc-500">
               <Loader2 className="size-3.5 animate-spin" />
-              Generating...
+              {genStatus}
             </div>
           )}
 
