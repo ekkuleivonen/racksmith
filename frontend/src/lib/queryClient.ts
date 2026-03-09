@@ -15,6 +15,7 @@ export const queryKeys = {
   racks: ["racks"] as const,
   groups: ["groups"] as const,
   playbooks: ["playbooks"] as const,
+  registry: ["registry"] as const,
   codeTree: ["code", "tree"] as const,
   codeStatuses: ["code", "statuses"] as const,
 };

@@ -4,6 +4,8 @@ services:
       context: .
       dockerfile: backend/Dockerfile
     image: racksmith-app:dev
+    environment:
+      REGISTRY_URL: http://registry:8001
 
   worker:
     build:
@@ -23,6 +25,26 @@ services:
       - "6379:6379"
     volumes:
       - redis_data:/data
+  registry-db:
+    image: postgres:17-alpine
+    ports:
+      - "5433:5432"
+    environment:
+      POSTGRES_DB: registry
+      POSTGRES_USER: registry
+      POSTGRES_PASSWORD: registry
+
+  registry:
+    build:
+      context: .
+      dockerfile: registry/Dockerfile
+    image: racksmith-registry:dev
+    ports:
+      - "8001:8001"
+    environment:
+      DATABASE_URL: postgresql+asyncpg://registry:registry@registry-db/registry
+    depends_on:
+      - registry-db
 
   watchtower:
     profiles: [disabled]

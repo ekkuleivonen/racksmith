@@ -27,6 +27,9 @@ import { HostsPage } from "@/pages/HostsPage";
 import { HostCreatePage } from "@/pages/HostCreatePage";
 import { RoleImportPage } from "@/pages/RoleImportPage";
 
+import { RegistryPage } from "@/pages/RegistryPage";
+import { RegistryRolePage } from "@/pages/RegistryRolePage";
+
 class ErrorBoundary extends Component<
   { children: ReactNode },
   { error: Error | null }
@@ -267,6 +270,26 @@ function AppRoutes() {
                 <ProtectedRoute>
                   <AppShell title="Import role">
                     <RoleImportPage />
+                  </AppShell>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/registry"
+              element={
+                <ProtectedRoute>
+                  <AppShell title="Registry">
+                    <RegistryPage />
+                  </AppShell>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/registry/:slug"
+              element={
+                <ProtectedRoute>
+                  <AppShell title="Registry">
+                    <RegistryRolePage />
                   </AppShell>
                 </ProtectedRoute>
               }

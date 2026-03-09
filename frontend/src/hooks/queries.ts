@@ -4,6 +4,12 @@ import { listHosts } from "@/lib/hosts";
 import { listRacks, getRackLayout } from "@/lib/racks";
 import { listGroups } from "@/lib/groups";
 import { listPlaybooks } from "@/lib/playbooks";
+import {
+  getRegistryRole,
+  getRegistryRoleVersions,
+  listRegistryRoles,
+  type ListRegistryRolesParams,
+} from "@/lib/registry";
 import { apiGet } from "@/lib/api";
 import type { Host } from "@/lib/hosts";
 import type { RackSummary } from "@/lib/racks";
@@ -72,6 +78,29 @@ type GitStatuses = {
   modifiedPaths: Record<string, true>;
   untrackedPaths: Record<string, true>;
 };
+
+export function useRegistryRoles(params: ListRegistryRolesParams = {}) {
+  return useQuery({
+    queryKey: [...queryKeys.registry, "list", params],
+    queryFn: () => listRegistryRoles(params),
+  });
+}
+
+export function useRegistryRole(slug: string | null) {
+  return useQuery({
+    queryKey: [...queryKeys.registry, "role", slug],
+    queryFn: () => getRegistryRole(slug!),
+    enabled: !!slug,
+  });
+}
+
+export function useRegistryRoleVersions(slug: string | null) {
+  return useQuery({
+    queryKey: [...queryKeys.registry, "role", slug, "versions"],
+    queryFn: () => getRegistryRoleVersions(slug!),
+    enabled: !!slug,
+  });
+}
 
 export function useGitStatuses() {
   return useQuery({

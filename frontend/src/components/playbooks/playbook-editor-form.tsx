@@ -14,7 +14,7 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { GripVertical, Trash2 } from "lucide-react";
+import { GripVertical, Trash2, Upload } from "lucide-react";
 import {
   Accordion,
   AccordionContent,
@@ -43,11 +43,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { pushToRegistry } from "@/lib/registry";
 import type {
   RoleCatalogEntry,
   PlaybookRoleEntry,
   PlaybookUpsertRequest,
 } from "@/lib/playbooks";
+
+import { toast } from "sonner";
 
 interface PlaybookEditorFormProps {
   draft: PlaybookUpsertRequest;
@@ -85,10 +88,25 @@ function SortableRoleCard({
   updateRole,
   removeRole,
 }: SortableRoleCardProps) {
+  const [pushing, setPushing] = useState(false);
   const { attributes, listeners, setNodeRef, transform, transition } =
     useSortable({
       id: roleId,
     });
+
+  const handlePush = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setPushing(true);
+    try {
+      await pushToRegistry(roleEntry.slug);
+      toast.success(`Pushed ${roleEntry.name} to registry`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Push failed");
+    } finally {
+      setPushing(false);
+    }
+  };
 
   return (
     <AccordionItem
@@ -111,15 +129,30 @@ function SortableRoleCard({
           <GripVertical className="size-4" />
         </button>
         <div className="min-w-0 flex-1 [&>*]:w-full">
-          <AccordionTrigger
-            className="w-full items-center py-2.5 text-left hover:no-underline"
-          >
+          <AccordionTrigger className="w-full items-center py-2.5 text-left hover:no-underline">
             <div className="min-w-0 space-y-0.5">
               <p className="text-sm text-zinc-100">{roleEntry.name}</p>
-              <p className="truncate text-xs text-zinc-500">{roleEntry.description}</p>
+              <p className="truncate text-xs text-zinc-500">
+                {roleEntry.description}
+              </p>
             </div>
           </AccordionTrigger>
         </div>
+        <Button
+          type="button"
+          size="icon"
+          variant="ghost"
+          className="h-8 w-8 shrink-0"
+          title="Push to Registry"
+          onClick={handlePush}
+          disabled={pushing}
+        >
+          {pushing ? (
+            <span className="size-3.5 animate-spin rounded-full border border-zinc-500 border-t-transparent" />
+          ) : (
+            <Upload className="size-3.5" />
+          )}
+        </Button>
         <Button
           type="button"
           size="icon"
@@ -132,17 +165,21 @@ function SortableRoleCard({
       </div>
 
       <AccordionContent className="px-3 pb-3">
-        {roleEntry.inputs.filter((f) => !(f as { interactive?: boolean }).interactive)
-          .length > 0 ? (
+        {roleEntry.inputs.filter(
+          (f) => !(f as { interactive?: boolean }).interactive,
+        ).length > 0 ? (
           <div className="grid gap-2 md:grid-cols-2">
             {roleEntry.inputs
               .filter((f) => !(f as { interactive?: boolean }).interactive)
               .map((field) => (
                 <div key={field.key} className="space-y-1">
                   <p className="text-xs text-zinc-400">{field.label}</p>
-                  {field.type === "select" && (field.options?.length ?? 0) > 0 ? (
+                  {field.type === "select" &&
+                  (field.options?.length ?? 0) > 0 ? (
                     <Select
-                      value={String(role.vars[field.key] ?? field.default ?? "")}
+                      value={String(
+                        role.vars[field.key] ?? field.default ?? "",
+                      )}
                       onValueChange={(value) =>
                         updateRole(index, {
                           ...role,
@@ -180,7 +217,9 @@ function SortableRoleCard({
                     />
                   ) : (
                     <Input
-                      value={String(role.vars[field.key] ?? field.default ?? "")}
+                      value={String(
+                        role.vars[field.key] ?? field.default ?? "",
+                      )}
                       onChange={(event) =>
                         updateRole(index, {
                           ...role,
@@ -217,9 +256,7 @@ export function PlaybookEditorForm({
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
   );
   const rolePickerAnchor = useComboboxAnchor();
-  const [rolePickerValue, setRolePickerValue] = useState<string | null>(
-    null,
-  );
+  const [rolePickerValue, setRolePickerValue] = useState<string | null>(null);
   const [roleQuery, setRoleQuery] = useState("");
   const [activeRoleId, setActiveRoleId] = useState<string | undefined>(
     undefined,
@@ -258,9 +295,7 @@ export function PlaybookEditorForm({
 
   const filteredRolesByLabel = useMemo(() => {
     const normalized = roleQuery.trim().toLowerCase();
-    const availableRoleSlugSet = new Set(
-      draft.roles.map((r) => r.role_slug),
-    );
+    const availableRoleSlugSet = new Set(draft.roles.map((r) => r.role_slug));
 
     const withoutAlreadyAdded = rolesByLabel
       .map((group) => ({

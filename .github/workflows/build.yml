@@ -24,6 +24,9 @@ jobs:
           - name: racksmith-frontend
             dockerfile: frontend/Dockerfile
             context: frontend
+          - name: racksmith-registry
+            dockerfile: registry/Dockerfile
+            context: .
 
     steps:
       - uses: actions/checkout@v4

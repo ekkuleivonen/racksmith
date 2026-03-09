@@ -56,6 +56,27 @@ services:
       app:
         condition: service_healthy
 
+  registry-db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: registry
+      POSTGRES_USER: registry
+      POSTGRES_PASSWORD: ${REGISTRY_DB_PASSWORD}
+    volumes:
+      - registry_db_data:/var/lib/postgresql/data
+
+  registry:
+    image: ghcr.io/ekkuleivonen/racksmith-registry:latest
+    restart: unless-stopped
+    ports:
+      - "8001:8001"
+    environment:
+      DATABASE_URL: postgresql+asyncpg://registry:${REGISTRY_DB_PASSWORD}@registry-db/registry
+    depends_on:
+      registry-db:
+        condition: service_started
+
   watchtower:
     image: nickfedor/watchtower
     environment:
@@ -68,3 +89,4 @@ services:
 
 volumes:
   redis_data:
+  registry_db_data:

@@ -15,6 +15,7 @@ from groups.router import router as groups_router
 from hosts.router import router as hosts_router
 from playbooks.router import router as playbooks_router
 from racks.router import router as racks_router
+from registry.router import router as registry_router
 from repos.router import router as repos_router
 from roles.router import router as roles_router
 from schema.router import router as schema_router
@@ -73,6 +74,7 @@ app.include_router(schema_router, prefix="/api/schema", tags=["schema"])
 app.include_router(playbooks_router, prefix="/api/playbooks", tags=["playbooks"])
 app.include_router(code_router, prefix="/api/code", tags=["code"])
 app.include_router(ssh_router, prefix="/api/ssh", tags=["ssh"])
+app.include_router(registry_router, prefix="/api/registry", tags=["registry"])
 
 logger = get_logger(__name__)
 

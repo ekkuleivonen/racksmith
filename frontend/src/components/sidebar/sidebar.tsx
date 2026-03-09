@@ -7,6 +7,7 @@ import { SidebarHostsSection } from "./sidebar-hosts-section";
 import { SidebarRacksSection } from "./sidebar-racks-section";
 import { SidebarGroupsSection } from "./sidebar-groups-section";
 import { SidebarPlaybooksSection } from "./sidebar-playbooks-section";
+import { SidebarRegistrySection } from "./sidebar-registry-section";
 import { SidebarCodeSection } from "./sidebar-code-section";
 import { SidebarFooter } from "./sidebar-footer";
 
@@ -68,6 +69,7 @@ export function Sidebar({ onLogout }: SidebarProps) {
             <SidebarRacksSection />
             <SidebarGroupsSection />
             <SidebarPlaybooksSection />
+            <SidebarRegistrySection />
           </>
         ) : (
           <SidebarCodeSection />
