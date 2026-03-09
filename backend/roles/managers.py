@@ -12,6 +12,7 @@ import yaml
 import redis.asyncio as aioredis
 import settings
 from ansible import resolve_layout
+from ansible.run import validate_become_password
 from github.misc import RepoNotAvailableError
 from ansible.roles import (
     RoleData,
@@ -316,6 +317,12 @@ class RoleManager:
         hosts = playbook_manager.resolve_targets(session, body.targets).hosts
         if not hosts:
             raise ValueError("No hosts matched the selected targets")
+
+        if body.become and body.become_password:
+            await validate_become_password(
+                repo_path, hosts, body.become_password
+            )
+
         user_id = user_storage_id(session.user)
         commit_sha = get_head_sha(repo_path)
         run = RoleRun(

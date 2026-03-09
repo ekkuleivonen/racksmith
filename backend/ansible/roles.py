@@ -105,6 +105,9 @@ def _role_from_meta_main(role_dir: Path, data: dict) -> RoleData:
     tags = gi.get("galaxy_tags", [])
     if not isinstance(tags, list):
         tags = []
+    xr = data.get(X_RACKSMITH) or {}
+    if not isinstance(xr, dict):
+        xr = {}
 
     inputs: list[RoleInput] = []
     argspec = data.get("argument_specs") or {}
@@ -270,7 +273,6 @@ def write_role(
             }
         },
     }
-
     meta_path = role_dir / META_MAIN
     meta_path.write_text("", encoding="utf-8")
     _yaml_rt().dump(meta_data, meta_path)

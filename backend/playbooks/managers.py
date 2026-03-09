@@ -10,20 +10,21 @@ from pathlib import Path
 
 import redis.asyncio as aioredis
 import settings
+from _utils.db import _get_db, row_to_playbook_run
 from ansible import resolve_layout
-from github.misc import RepoNotAvailableError
+from ansible.run import validate_become_password
 from ansible.playbooks import (
     PlaybookData,
-    PlaybookRoleEntry as AnsiblePlaybookRoleEntry,
-    read_playbook,
     list_playbooks,
+    read_playbook,
     remove_playbook,
     write_playbook,
 )
+from ansible.playbooks import (
+    PlaybookRoleEntry as AnsiblePlaybookRoleEntry,
+)
 from ansible.roles import RoleData, list_roles
-
-from _utils.db import _get_db, row_to_playbook_run
-from github.misc import get_head_sha, user_storage_id
+from github.misc import RepoNotAvailableError, get_head_sha, user_storage_id
 from hosts.managers import host_manager
 from repos.managers import repos_manager
 
@@ -82,11 +83,7 @@ def _role_data_to_catalog(r: RoleData) -> dict:
 
 
 def _role_default_vars(role: RoleData) -> dict:
-    return {
-        inp.key: inp.default
-        for inp in role.inputs
-        if inp.default is not None
-    }
+    return {inp.key: inp.default for inp in role.inputs if inp.default is not None}
 
 
 def _merged_role_vars(role: RoleData, supplied_vars: dict | None) -> dict:
@@ -155,10 +152,9 @@ class PlaybookManager:
         if not playbook_path.exists():
             raise FileNotFoundError("Playbook not found")
         p = read_playbook(playbook_path, layout.repo_path)
-        roles_catalog = [r for r in list_roles(layout)]
+        roles_data = list_roles(layout)
         role_entries = [
-            PlaybookRoleEntry(role_slug=re.role, vars=re.vars or {})
-            for re in p.roles
+            PlaybookRoleEntry(role_slug=re.role, vars=re.vars or {}) for re in p.roles
         ]
         path_str = str(p.path) if p.path else ""
         return PlaybookDetail(
@@ -170,7 +166,7 @@ class PlaybookManager:
             updated_at=datetime.fromtimestamp(
                 playbook_path.stat().st_mtime, tz=UTC
             ).isoformat(),
-            roles_catalog=[_role_data_to_catalog(r) for r in roles_catalog],
+            roles_catalog=[_role_data_to_catalog(r) for r in roles_data],
             role_entries=role_entries,
             raw_content=p.raw_content,
         )
@@ -254,26 +250,18 @@ class PlaybookManager:
         except FileNotFoundError:
             return ResolveTargetsResponse(hosts=[])
 
-        managed = [
-            h
-            for h in all_hosts
-            if h.managed and h.ip_address and h.ssh_user
-        ]
+        managed = [h for h in all_hosts if h.managed and h.ip_address and h.ssh_user]
         filtered = managed
 
         wanted_groups = {g.strip() for g in targets.groups if g.strip()}
         if wanted_groups:
             filtered = [
-                h for h in filtered
-                if wanted_groups.intersection(set(h.groups))
+                h for h in filtered if wanted_groups.intersection(set(h.groups))
             ]
 
         wanted_labels = {t.strip() for t in targets.labels if t.strip()}
         if wanted_labels:
-            filtered = [
-                h for h in filtered
-                if wanted_labels.issubset(set(h.labels))
-            ]
+            filtered = [h for h in filtered if wanted_labels.issubset(set(h.labels))]
 
         wanted_hosts = {s.strip() for s in targets.hosts if s.strip()}
         if wanted_hosts:
@@ -282,8 +270,7 @@ class PlaybookManager:
         wanted_racks = {r.strip() for r in targets.racks if r.strip()}
         if wanted_racks:
             filtered = [
-                h for h in filtered
-                if h.placement and h.placement.rack in wanted_racks
+                h for h in filtered if h.placement and h.placement.rack in wanted_racks
             ]
 
         hosts = sorted({h.id for h in filtered})
@@ -305,7 +292,6 @@ class PlaybookManager:
                 (user_id,),
             )
         rows = await cursor.fetchall()
-        from _utils.db import row_to_playbook_run
         return [row_to_playbook_run(row) for row in rows]
 
     async def get_run(self, session, run_id: str) -> PlaybookRun:
@@ -318,7 +304,6 @@ class PlaybookManager:
         row = await cursor.fetchone()
         if row is None:
             raise KeyError("Run not found")
-        from _utils.db import row_to_playbook_run
         return row_to_playbook_run(row)
 
     async def create_run(
@@ -329,6 +314,11 @@ class PlaybookManager:
         hosts = self.resolve_targets(session, body.targets).hosts
         if not hosts:
             raise ValueError("No hosts matched the selected targets")
+
+        if body.become and body.become_password:
+            await validate_become_password(
+                repo_path, hosts, body.become_password
+            )
 
         user_id = user_storage_id(session.user)
         commit_sha = get_head_sha(repo_path)
@@ -382,9 +372,7 @@ class PlaybookManager:
             return
 
         channel = f"{RUN_EVENTS_CHANNEL_PREFIX}{run_id}:events"
-        redis_client = aioredis.from_url(
-            settings.REDIS_URL, decode_responses=True
-        )
+        redis_client = aioredis.from_url(settings.REDIS_URL, decode_responses=True)
         pubsub = redis_client.pubsub()
         try:
             await pubsub.subscribe(channel)

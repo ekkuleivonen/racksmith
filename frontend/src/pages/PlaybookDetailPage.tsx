@@ -251,7 +251,6 @@ export function PlaybookDetailPage() {
     }
     return map;
   }, [hosts]);
-
   const load = useCallback(async () => {
     if (!playbookId) return;
     setLoading(true);
