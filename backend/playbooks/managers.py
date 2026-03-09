@@ -81,6 +81,21 @@ def _role_data_to_catalog(r: RoleData) -> dict:
     }
 
 
+def _role_default_vars(role: RoleData) -> dict:
+    return {
+        inp.key: inp.default
+        for inp in role.inputs
+        if inp.default is not None
+    }
+
+
+def _merged_role_vars(role: RoleData, supplied_vars: dict | None) -> dict:
+    return {
+        **_role_default_vars(role),
+        **(supplied_vars or {}),
+    }
+
+
 class PlaybookManager:
     def __init__(self) -> None:
         self._arq_pool = None
@@ -169,8 +184,12 @@ class PlaybookManager:
         for re in body.roles:
             if re.role_slug not in roles_catalog:
                 raise ValueError(f"Unknown role: {re.role_slug}")
+            role_data = roles_catalog[re.role_slug]
             ansible_roles.append(
-                AnsiblePlaybookRoleEntry(role=re.role_slug, vars=re.vars)
+                AnsiblePlaybookRoleEntry(
+                    role=re.role_slug,
+                    vars=_merged_role_vars(role_data, re.vars),
+                )
             )
         playbook_data = PlaybookData(
             id=playbook_id,
@@ -201,8 +220,12 @@ class PlaybookManager:
         for re in body.roles:
             if re.role_slug not in roles_catalog:
                 raise ValueError(f"Unknown role: {re.role_slug}")
+            role_data = roles_catalog[re.role_slug]
             ansible_roles.append(
-                AnsiblePlaybookRoleEntry(role=re.role_slug, vars=re.vars)
+                AnsiblePlaybookRoleEntry(
+                    role=re.role_slug,
+                    vars=_merged_role_vars(role_data, re.vars),
+                )
             )
         playbook_data = PlaybookData(
             id=playbook_id,

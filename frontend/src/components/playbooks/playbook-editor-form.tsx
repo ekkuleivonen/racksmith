@@ -67,6 +67,14 @@ function parseRoleSlugFromPickerValue(value: string) {
   return value.split("|||")[0] ?? "";
 }
 
+function defaultVarsForRole(role: RoleCatalogEntry): Record<string, unknown> {
+  return Object.fromEntries(
+    role.inputs
+      .filter((input) => input.default !== undefined && input.default !== null)
+      .map((input) => [input.key, input.default]),
+  );
+}
+
 type SortableRoleCardProps = {
   roleId: string;
   role: PlaybookRoleEntry;
@@ -139,7 +147,12 @@ function SortableRoleCard({
               .filter((f) => !(f as { interactive?: boolean }).interactive)
               .map((field) => (
                 <div key={field.key} className="space-y-1">
-                  <p className="text-xs text-zinc-400">{field.label}</p>
+                  <p className="text-xs text-zinc-400">
+                    {field.label}
+                    {field.required ? (
+                      <span className="ml-1 text-red-400">*</span>
+                    ) : null}
+                  </p>
                   {field.type === "select" &&
                   (field.options?.length ?? 0) > 0 ? (
                     <Select
@@ -326,10 +339,12 @@ export function PlaybookEditorForm({
 
   const addRole = (roleSlug: string) => {
     if (draft.roles.some((role) => role.role_slug === roleSlug)) return;
+    const roleEntry = rolesById[roleSlug];
+    const initialVars = roleEntry ? defaultVarsForRole(roleEntry) : {};
 
     onChange({
       ...draft,
-      roles: [...draft.roles, { role_slug: roleSlug, vars: {} }],
+      roles: [...draft.roles, { role_slug: roleSlug, vars: initialVars }],
     });
     setActiveRoleId(roleSlug);
   };
