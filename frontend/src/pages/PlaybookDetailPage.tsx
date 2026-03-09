@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { Checkbox } from "@/components/ui/checkbox";
 import { ChevronDown, LoaderCircle, Play, Search } from "lucide-react";
 import { toast } from "sonner";
 import { PlaybookEditorForm } from "@/components/playbooks/playbook-editor-form";
@@ -168,7 +167,10 @@ function SearchableFilterDropdown({
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="outline" className="w-full justify-between text-xs font-normal">
+        <Button
+          variant="outline"
+          className="w-full justify-between text-xs font-normal"
+        >
           <span className="truncate">
             {label}: {values.length === 0 ? "All" : `${values.length} selected`}
           </span>
@@ -202,7 +204,9 @@ function SearchableFilterDropdown({
                 <div className="flex min-w-0 flex-col">
                   <span className="truncate">{option.label}</span>
                   {option.group ? (
-                    <span className="truncate text-[10px] text-zinc-500">{option.group}</span>
+                    <span className="truncate text-[10px] text-zinc-500">
+                      {option.group}
+                    </span>
                   ) : null}
                 </div>
               </DropdownMenuCheckboxItem>
@@ -220,7 +224,9 @@ export function PlaybookDetailPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const prefilledHost = searchParams.get("host") ?? undefined;
   const tabParam = searchParams.get("tab") ?? (prefilledHost ? "run" : "roles");
-  const validTab = ["roles", "history", "run"].includes(tabParam) ? tabParam : "roles";
+  const validTab = ["roles", "history", "run"].includes(tabParam)
+    ? tabParam
+    : "roles";
   const [activeTab, setActiveTab] = useState(validTab);
   const [draft, setDraft] = useState<PlaybookUpsertRequest | null>(null);
   const [roles_catalog, setRolesCatalog] = useState<RoleCatalogEntry[]>([]);
@@ -273,11 +279,11 @@ export function PlaybookDetailPage() {
       const activeRun = runsResult.runs.find(
         (run) => run.status === "queued" || run.status === "running",
       );
-      setViewingRunId(
-        activeRun?.id ?? runsResult.runs[0]?.id ?? null,
-      );
+      setViewingRunId(activeRun?.id ?? runsResult.runs[0]?.id ?? null);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to load playbook");
+      toast.error(
+        error instanceof Error ? error.message : "Failed to load playbook",
+      );
     } finally {
       setLoading(false);
     }
@@ -309,7 +315,8 @@ export function PlaybookDetailPage() {
     if (
       draft.name === savedDraftRef.current.name &&
       draft.description === savedDraftRef.current.description &&
-      JSON.stringify(draft.roles) === JSON.stringify(savedDraftRef.current.roles) &&
+      JSON.stringify(draft.roles) ===
+        JSON.stringify(savedDraftRef.current.roles) &&
       (draft.become ?? false) === (savedDraftRef.current.become ?? false)
     ) {
       return;
@@ -330,7 +337,9 @@ export function PlaybookDetailPage() {
         setRolesCatalog(result.playbook.roles_catalog);
         toast.success("Playbook saved");
       } catch (error) {
-        toast.error(error instanceof Error ? error.message : "Failed to save playbook");
+        toast.error(
+          error instanceof Error ? error.message : "Failed to save playbook",
+        );
       } finally {
         setSaving(false);
       }
@@ -339,10 +348,7 @@ export function PlaybookDetailPage() {
   }, [draft, playbookId]);
 
   const tagOptions = useMemo(
-    () =>
-      Array.from(
-        new Set(hosts.flatMap((n) => n.labels ?? [])),
-      ).sort(),
+    () => Array.from(new Set(hosts.flatMap((n) => n.labels ?? []))).sort(),
     [hosts],
   );
 
@@ -447,14 +453,23 @@ export function PlaybookDetailPage() {
                 disabled={saving}
                 className="text-red-400 hover:text-red-300 hover:bg-red-500/10"
                 onClick={async () => {
-                  if (!window.confirm("Delete this playbook? Run history will be lost.")) return;
+                  if (
+                    !window.confirm(
+                      "Delete this playbook? Run history will be lost.",
+                    )
+                  )
+                    return;
                   setSaving(true);
                   try {
                     await deletePlaybook(playbookId);
                     toast.success("Playbook deleted");
                     navigate("/playbooks", { replace: true });
                   } catch (error) {
-                    toast.error(error instanceof Error ? error.message : "Failed to delete playbook");
+                    toast.error(
+                      error instanceof Error
+                        ? error.message
+                        : "Failed to delete playbook",
+                    );
                   } finally {
                     setSaving(false);
                   }
@@ -488,7 +503,8 @@ export function PlaybookDetailPage() {
                 <div className="space-y-1">
                   <p className="text-zinc-100 font-medium">Run</p>
                   <p className="text-xs text-zinc-500">
-                    Narrow targets with searchable filters, then run the playbook below.
+                    Narrow targets with searchable filters, then run the
+                    playbook below.
                   </p>
                 </div>
 
@@ -520,7 +536,10 @@ export function PlaybookDetailPage() {
                   <SearchableFilterDropdown
                     label="Labels"
                     placeholder="Search labels..."
-                    options={tagOptions.map((tag) => ({ value: tag, label: tag }))}
+                    options={tagOptions.map((tag) => ({
+                      value: tag,
+                      label: tag,
+                    }))}
                     values={targets.labels}
                     onToggle={(value) =>
                       setTargets((current) => ({
@@ -546,13 +565,19 @@ export function PlaybookDetailPage() {
                 <div className="space-y-2">
                   <div className="flex items-center justify-between gap-2">
                     <p className="text-zinc-100 font-medium">Resolved hosts</p>
-                    {resolving ? <LoaderCircle className="size-4 animate-spin text-zinc-400" /> : null}
+                    {resolving ? (
+                      <LoaderCircle className="size-4 animate-spin text-zinc-400" />
+                    ) : null}
                   </div>
                   <p className="text-xs text-zinc-500">
-                    Active filters: {targets.racks.length} rack, {targets.groups.length} group, {targets.labels.length} label, {targets.hosts.length} host
+                    Active filters: {targets.racks.length} rack,{" "}
+                    {targets.groups.length} group, {targets.labels.length}{" "}
+                    label, {targets.hosts.length} host
                   </p>
                   {resolvedHosts.length === 0 ? (
-                    <p className="text-xs text-zinc-500">No hosts matched the current selection.</p>
+                    <p className="text-xs text-zinc-500">
+                      No hosts matched the current selection.
+                    </p>
                   ) : (
                     <div className="flex flex-wrap gap-1">
                       {resolvedHosts.map((hostId) => (
@@ -575,14 +600,23 @@ export function PlaybookDetailPage() {
                       try {
                         const result = await createPlaybookRun(playbookId, {
                           targets,
-                          runtime_vars: Object.keys(runtimeVars).length > 0 ? runtimeVars : undefined,
-                          become_password: playbookBecome ? becomePassword ?? undefined : undefined,
+                          runtime_vars:
+                            Object.keys(runtimeVars).length > 0
+                              ? runtimeVars
+                              : undefined,
+                          become_password: playbookBecome
+                            ? (becomePassword ?? undefined)
+                            : undefined,
                         });
                         setRuns((prev) => [result.run, ...prev]);
                         setViewingRunId(result.run.id);
                         toast.success("Playbook started");
                       } catch (error) {
-                        toast.error(error instanceof Error ? error.message : "Failed to run playbook");
+                        toast.error(
+                          error instanceof Error
+                            ? error.message
+                            : "Failed to run playbook",
+                        );
                       } finally {
                         setRunning(false);
                       }
@@ -591,9 +625,13 @@ export function PlaybookDetailPage() {
                   />
                   <Button
                     size="sm"
-                    disabled={running || resolving || resolvedHosts.length === 0}
+                    disabled={
+                      running || resolving || resolvedHosts.length === 0
+                    }
                     onClick={async () => {
-                      if (needsRuntimeVarsDialog(roles_catalog, playbookBecome)) {
+                      if (
+                        needsRuntimeVarsDialog(roles_catalog, playbookBecome)
+                      ) {
                         setRuntimeDialogOpen(true);
                         return;
                       }
@@ -606,7 +644,11 @@ export function PlaybookDetailPage() {
                         setViewingRunId(result.run.id);
                         toast.success("Playbook started");
                       } catch (error) {
-                        toast.error(error instanceof Error ? error.message : "Failed to run playbook");
+                        toast.error(
+                          error instanceof Error
+                            ? error.message
+                            : "Failed to run playbook",
+                        );
                       } finally {
                         setRunning(false);
                       }
@@ -628,7 +670,9 @@ export function PlaybookDetailPage() {
 
               <PlaybookRunOutput
                 run={
-                  runs.find((r) => r.status === "queued" || r.status === "running") ??
+                  runs.find(
+                    (r) => r.status === "queued" || r.status === "running",
+                  ) ??
                   runs.find((r) => r.id === viewingRunId) ??
                   null
                 }
@@ -640,16 +684,24 @@ export function PlaybookDetailPage() {
           <TabsContent value="history">
             {runs.length === 0 ? (
               <section className="border border-zinc-800 bg-zinc-900/30 p-4">
-                <p className="text-zinc-500 text-sm">No runs yet. Run a playbook from the Run tab.</p>
+                <p className="text-zinc-500 text-sm">
+                  No runs yet. Run a playbook from the Run tab.
+                </p>
               </section>
             ) : (
               <ResizablePanelGroup
                 orientation="horizontal"
                 className="min-h-0 flex-1"
               >
-                <ResizablePanel defaultSize={20} minSize={12} className="min-w-0">
+                <ResizablePanel
+                  defaultSize={20}
+                  minSize={12}
+                  className="min-w-0"
+                >
                   <section className="h-full border border-zinc-800 bg-zinc-900/30 p-3 flex flex-col min-h-0">
-                    <p className="mb-2 text-xs font-medium text-zinc-400 shrink-0">Run history</p>
+                    <p className="mb-2 text-xs font-medium text-zinc-400 shrink-0">
+                      Run history
+                    </p>
                     <ScrollArea className="flex-1 min-h-0">
                       <div className="space-y-0.5 pr-2">
                         {runs.map((r) => (
@@ -681,10 +733,16 @@ export function PlaybookDetailPage() {
                               </span>
                             </div>
                             <p className="mt-0.5 truncate text-[10px] text-zinc-500">
-                              {r.hosts.length} host{r.hosts.length === 1 ? "" : "s"}
-                              {r.exit_code != null ? ` · exit ${r.exit_code}` : ""}
+                              {r.hosts.length} host
+                              {r.hosts.length === 1 ? "" : "s"}
+                              {r.exit_code != null
+                                ? ` · exit ${r.exit_code}`
+                                : ""}
                               {r.commit_sha ? (
-                                <span title={r.commit_sha}> · {r.commit_sha.slice(0, 7)}</span>
+                                <span title={r.commit_sha}>
+                                  {" "}
+                                  · {r.commit_sha.slice(0, 7)}
+                                </span>
                               ) : null}
                             </p>
                           </button>
@@ -694,7 +752,11 @@ export function PlaybookDetailPage() {
                   </section>
                 </ResizablePanel>
                 <ResizableHandle withHandle className="bg-zinc-800" />
-                <ResizablePanel defaultSize={80} minSize={40} className="min-w-0">
+                <ResizablePanel
+                  defaultSize={80}
+                  minSize={40}
+                  className="min-w-0"
+                >
                   <PlaybookRunOutput
                     run={runs.find((r) => r.id === viewingRunId) ?? null}
                     onRunUpdate={handleRunUpdate}
