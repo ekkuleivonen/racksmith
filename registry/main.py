@@ -11,19 +11,26 @@ from roles.router import router as roles_router
 logger = structlog.get_logger()
 
 
-def _run_migrations():
-    from alembic import command
-    from alembic.config import Config
+async def _run_migrations():
+    import subprocess
+    import sys
 
-    cfg = Config("alembic.ini")
-    command.upgrade(cfg, "head")
+    result = subprocess.run(
+        [sys.executable, "-m", "alembic", "upgrade", "head"],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        logger.error("alembic migration failed", stderr=result.stderr)
+        raise RuntimeError(f"Alembic migration failed: {result.stderr}")
+    logger.info("migrations applied")
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     from db.engine import engine
 
-    _run_migrations()
+    await _run_migrations()
     logger.info("registry starting")
     yield
     await engine.dispose()
