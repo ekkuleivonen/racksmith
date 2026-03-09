@@ -2,7 +2,12 @@
 
 from __future__ import annotations
 
+from collections.abc import AsyncGenerator
+
 from fastapi import APIRouter, Cookie, Depends, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi.responses import StreamingResponse
+from openai import AsyncOpenAI
+from pydantic import BaseModel
 
 import yaml
 from pydantic import ValidationError
@@ -19,6 +24,85 @@ from roles.schemas import (
 )
 
 router = APIRouter()
+
+ROLE_SYSTEM_PROMPT = """\
+You generate Racksmith role YAML. Output ONLY a single raw YAML document. \
+Never wrap it in markdown code fences. No explanations before or after.
+
+Required top-level keys:
+  slug        – lowercase alphanumeric + hyphens (e.g. install-nginx)
+  name        – human-readable name
+  description – short summary
+
+Optional top-level keys:
+  labels        – list of tags (e.g. [web, nginx])
+  compatibility – mapping with os_family list (e.g. {os_family: [debian, redhat]})
+  inputs        – list of variable definitions (see below)
+  tasks         – list of Ansible tasks (written to tasks/main.yml)
+
+Each input item: key, label, type (string|boolean|select|secret), \
+placeholder, default, required, options (for select), interactive (for runtime prompts).
+
+Example output:
+
+slug: install-nginx
+name: Install Nginx
+description: Install and configure Nginx web server
+labels: [web, nginx]
+compatibility:
+  os_family: [debian, redhat]
+inputs:
+  - key: nginx_port
+    label: Port
+    type: string
+    placeholder: "80"
+    default: "80"
+    required: true
+tasks:
+  - name: Install nginx
+    ansible.builtin.package:
+      name: nginx
+      state: present
+  - name: Start nginx
+    ansible.builtin.service:
+      name: nginx
+      state: started
+      enabled: true"""
+
+
+class GenerateRequest(BaseModel):
+    prompt: str
+
+
+async def _stream_role_yaml(prompt: str) -> AsyncGenerator[str]:
+    client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
+    response = await client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[
+            {"role": "system", "content": ROLE_SYSTEM_PROMPT},
+            {"role": "user", "content": prompt},
+        ],
+        stream=True,
+    )
+    async for chunk in response:
+        delta = chunk.choices[0].delta.content
+        if delta:
+            yield f"data: {delta}\n\n"
+    yield "data: [DONE]\n\n"
+
+
+@router.post("/generate")
+async def generate_role(
+    body: GenerateRequest,
+    _session=Depends(auth_manager.get_current_session),
+):
+    if not settings.OPENAI_API_KEY:
+        raise HTTPException(status_code=503, detail="AI generation is not configured (OPENAI_API_KEY missing)")
+    return StreamingResponse(
+        _stream_role_yaml(body.prompt),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 @router.post("/from-yaml", status_code=201)

@@ -14,6 +14,7 @@ APP_URL: str = env.str("APP_URL", default="http://localhost:5173")
 REPOS_WORKSPACE: str = env.str("REPOS_WORKSPACE", default="./workspace")
 REGISTRY_URL: str = env.str("REGISTRY_URL", default="http://localhost:8001")
 RACKSMITH_VERSION: str = env.str("RACKSMITH_VERSION", default="1.0.0")
+OPENAI_API_KEY: str = env.str("OPENAI_API_KEY", default="")
 
 # =============================================================================
 # Database
