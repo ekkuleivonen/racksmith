@@ -19,10 +19,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import {
-  useRegistryRole,
-  useRegistryRoleVersions,
-} from "@/hooks/queries";
+import { useRegistryRole, useRegistryRoleVersions } from "@/hooks/queries";
 import { importFromRegistry } from "@/lib/registry";
 import { useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "@/lib/queryClient";
@@ -42,7 +39,7 @@ export function RegistryRolePage() {
       const result = await importFromRegistry(slug);
       toast.success(result.message);
       queryClient.invalidateQueries({ queryKey: queryKeys.codeTree });
-      queryClient.invalidateQueries({ queryKey: queryKeys.stacks });
+      queryClient.invalidateQueries({ queryKey: queryKeys.playbooks });
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Import failed");
     } finally {
@@ -113,10 +110,7 @@ export function RegistryRolePage() {
                 </span>
               </div>
             </div>
-            <Button
-              onClick={handleImport}
-              disabled={importing}
-            >
+            <Button onClick={handleImport} disabled={importing}>
               {importing ? (
                 <Loader2 className="size-4 animate-spin" />
               ) : (
@@ -181,9 +175,15 @@ export function RegistryRolePage() {
         ) : null}
 
         {versions.length > 1 ? (
-          <Accordion type="single" collapsible className="border border-zinc-800">
+          <Accordion
+            type="single"
+            collapsible
+            className="border border-zinc-800"
+          >
             <AccordionItem value="versions">
-              <AccordionTrigger>Version history ({versions.length})</AccordionTrigger>
+              <AccordionTrigger>
+                Version history ({versions.length})
+              </AccordionTrigger>
               <AccordionContent>
                 <div className="space-y-2 pt-2">
                   {versions.map((v) => (
