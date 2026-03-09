@@ -32,7 +32,7 @@ export function RegistryPage() {
         <section className="border border-zinc-800 bg-zinc-900/30 p-4 space-y-1">
           <h1 className="text-zinc-100 font-semibold">Registry</h1>
           <p className="text-xs text-zinc-500">
-            Browse and import community actions from the Racksmith registry.
+            Browse and import community roles from the Racksmith registry.
           </p>
         </section>
 
@@ -41,7 +41,7 @@ export function RegistryPage() {
             <div className="relative flex-1 min-w-[200px]">
               <Search className="absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-zinc-500" />
               <Input
-                placeholder="Search actions..."
+                placeholder="Search roles..."
                 value={q}
                 onChange={(e) => {
                   setQ(e.target.value);
@@ -75,7 +75,7 @@ export function RegistryPage() {
             </div>
           ) : data?.items.length === 0 ? (
             <p className="py-8 text-sm text-zinc-500">
-              No actions found. Try a different search or sort.
+              No roles found. Try a different search or sort.
             </p>
           ) : (
             <div className="grid gap-3 sm:grid-cols-2">
@@ -93,7 +93,8 @@ export function RegistryPage() {
                             {role.latest_version?.name ?? role.slug}
                           </p>
                           <p className="line-clamp-2 text-xs text-zinc-500">
-                            {role.latest_version?.description || "No description"}
+                            {role.latest_version?.description ||
+                              "No description"}
                           </p>
                           <div className="flex items-center gap-2 pt-1">
                             <img

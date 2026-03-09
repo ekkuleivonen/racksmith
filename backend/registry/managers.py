@@ -5,12 +5,11 @@ from __future__ import annotations
 from pathlib import Path
 
 import httpx
-import yaml
-
 import settings
-from actions.managers import action_manager
+import yaml
 from github.misc import RACKSMITH_BRANCH, run_git
 from repos.managers import repos_manager
+from roles.managers import role_manager
 
 from registry.schemas import (
     RegistryRole,
@@ -21,7 +20,7 @@ from registry.schemas import (
     RoleUpdate,
 )
 
-ACTIONS_DIR = Path(".racksmith/actions")
+ROLES_DIR = Path(".racksmith/roles")
 
 
 def _headers(session) -> dict[str, str]:
@@ -84,18 +83,18 @@ async def get_versions(session, slug: str) -> list[RegistryVersion]:
 
 async def push_role(session, slug: str) -> RegistryRole:
     """Read local action, serialize, POST (new) or PUT (update) to registry."""
-    detail = action_manager.get_action_detail(session, slug)
+    detail = role_manager.get_role_detail(session, slug)
     repo_path = repos_manager.active_repo_path(session)
-    action_dir = repo_path / ACTIONS_DIR / slug
+    role_dir = repo_path / ROLES_DIR / slug
 
     tasks_yaml = detail.tasks_content
     defaults_yaml = ""
-    defaults_file = action_dir / "defaults" / "main.yml"
+    defaults_file = role_dir / "defaults" / "main.yml"
     if defaults_file.is_file():
         defaults_yaml = defaults_file.read_text(encoding="utf-8")
 
     meta_yaml = ""
-    meta_file = action_dir / "meta" / "main.yml"
+    meta_file = role_dir / "meta" / "main.yml"
     if meta_file.is_file():
         meta_yaml = meta_file.read_text(encoding="utf-8")
 
@@ -156,7 +155,7 @@ async def import_role(session, slug: str) -> RoleImportResponse:
 
     version = RegistryVersion.model_validate(resp.json())
     repo_path = repos_manager.active_repo_path(session)
-    dest = repo_path / ACTIONS_DIR / slug
+    dest = repo_path / ROLES_DIR / slug
 
     dest.mkdir(parents=True, exist_ok=True)
 
@@ -210,7 +209,7 @@ async def import_role(session, slug: str) -> RoleImportResponse:
                 f"user.email={settings.GIT_COMMIT_USER_EMAIL}",
                 "commit",
                 "-m",
-                f"Import action from registry: {slug}",
+                f"Import role from registry: {slug}",
             ],
             check=False,
         )
