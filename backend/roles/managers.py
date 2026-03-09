@@ -25,7 +25,7 @@ from ansible.roles import (
 )
 
 from _utils.db import _get_db, row_to_role_run
-from github.misc import RACKSMITH_BRANCH, get_head_sha, run_git, user_storage_id
+from github.misc import get_head_sha, user_storage_id
 from playbooks.managers import playbook_manager
 from repos.managers import repos_manager
 
@@ -200,7 +200,6 @@ class RoleManager:
         role = read_role(layout.roles_path / body.slug)
         if role is None:
             raise RuntimeError("Role was written but could not be read back")
-        self._commit_role(session, repo_path, role_dir, body.slug)
         return _role_data_to_summary(role)
 
     def update_role(self, session, slug: str, body: RoleUpdateRequest) -> RoleDetail:
@@ -240,38 +239,7 @@ class RoleManager:
             else None
         )
         write_role(layout, role_data, tasks_yaml=tasks_yaml)
-        detail = self.get_role_detail(session, slug)
-        self._commit_role(session, repo_path, role_dir, slug, message=f"Update role: {slug}")
-        return detail
-
-    def _commit_role(
-        self, session, repo_path: Path, role_dir: Path, slug: str, *, message: str | None = None
-    ) -> None:
-        binding = repos_manager.current_repo(session)
-        if not binding:
-            return
-        rel = role_dir.relative_to(repo_path)
-        remote_url = (
-            f"https://x-access-token:{session.access_token}"
-            f"@github.com/{binding.owner}/{binding.repo}.git"
-        )
-        run_git(repo_path, ["remote", "set-url", "origin", remote_url], check=False)
-        run_git(repo_path, ["add", str(rel)])
-        result = run_git(
-            repo_path,
-            [
-                "-c",
-                f"user.name={settings.GIT_COMMIT_USER_NAME}",
-                "-c",
-                f"user.email={settings.GIT_COMMIT_USER_EMAIL}",
-                "commit",
-                "-m",
-                message or f"Add role: {slug}",
-            ],
-            check=False,
-        )
-        if result.returncode == 0:
-            run_git(repo_path, ["push", "origin", RACKSMITH_BRANCH], check=False)
+        return self.get_role_detail(session, slug)
 
     def delete_role(self, session, slug: str) -> None:
         repo_path = repos_manager.active_repo_path(session)
@@ -280,36 +248,6 @@ class RoleManager:
         if not role_dir.exists():
             raise FileNotFoundError(f"Role '{slug}' not found")
         remove_role(layout, slug)
-        self._commit_removal(session, repo_path, role_dir, slug)
-
-    def _commit_removal(
-        self, session, repo_path: Path, role_dir: Path, slug: str
-    ) -> None:
-        binding = repos_manager.current_repo(session)
-        if not binding:
-            return
-        rel = role_dir.relative_to(repo_path)
-        remote_url = (
-            f"https://x-access-token:{session.access_token}"
-            f"@github.com/{binding.owner}/{binding.repo}.git"
-        )
-        run_git(repo_path, ["remote", "set-url", "origin", remote_url], check=False)
-        run_git(repo_path, ["rm", "-r", "--cached", "--ignore-unmatch", str(rel)])
-        result = run_git(
-            repo_path,
-            [
-                "-c",
-                f"user.name={settings.GIT_COMMIT_USER_NAME}",
-                "-c",
-                f"user.email={settings.GIT_COMMIT_USER_EMAIL}",
-                "commit",
-                "-m",
-                f"Remove role: {slug}",
-            ],
-            check=False,
-        )
-        if result.returncode == 0:
-            run_git(repo_path, ["push", "origin", RACKSMITH_BRANCH], check=False)
 
     async def create_run(self, session, slug: str, body: RoleRunRequest) -> RoleRun:
         repo_path = repos_manager.active_repo_path(session)
