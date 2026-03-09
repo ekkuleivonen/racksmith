@@ -36,12 +36,31 @@ class RoleCreateRequest(BaseModel):
                 continue
 
             key = str(inp.get("key") or f"inputs[{index}]")
+            input_type = str(inp.get("type") or "string")
             has_default = "default" in inp and inp.get("default") is not None
             is_required = bool(inp.get("required", False))
+            options = inp.get("options", []) or []
+            if not isinstance(options, list):
+                raise ValueError(f"Input '{key}' options must be a list")
 
             if has_default and is_required:
                 raise ValueError(
                     f"Input '{key}' cannot set both required=true and a default value"
+                )
+
+            if input_type == "select" and not options:
+                raise ValueError(
+                    f"Input '{key}' uses type='select' but options is empty"
+                )
+
+            if input_type != "select" and options:
+                raise ValueError(
+                    f"Input '{key}' must only set options when type='select'"
+                )
+
+            if input_type == "select" and has_default and inp.get("default") not in options:
+                raise ValueError(
+                    f"Input '{key}' default must be one of its options"
                 )
 
         return self

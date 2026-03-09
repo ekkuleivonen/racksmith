@@ -55,6 +55,9 @@ Each input item has these fields:
 Validation rule:
   If an input has a default value, required MUST be false.
   Use required: true only when there is no default.
+  If an input has options, type MUST be "select".
+  If type is "select", options must be a non-empty list.
+  If type is "select" and default is set, default must be one of the options.
 
 Example output:
 
