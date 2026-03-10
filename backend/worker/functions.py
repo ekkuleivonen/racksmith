@@ -12,11 +12,11 @@ from pathlib import Path
 import yaml
 import aiosqlite
 import settings
+from _utils.logging import get_logger
 from ansible import resolve_layout
+
+logger = get_logger(__name__)
 from ssh.misc import _racksmith_ssh_dir
-
-RUN_EVENTS_CHANNEL_PREFIX = "racksmith:run:"
-
 
 def _now_iso() -> str:
     return datetime.now(UTC).isoformat()
@@ -49,8 +49,9 @@ async def execute_playbook_run(
     become_password: str | None = None,
 ) -> None:
     """Execute ansible-playbook in worker process, publishing output via Redis pub/sub."""
+    logger.info("playbook_run_started", run_id=run_id, playbook_id=playbook_id, hosts=hosts)
     redis = ctx["redis"]
-    channel = f"{RUN_EVENTS_CHANNEL_PREFIX}{run_id}:events"
+    channel = f"{settings.REDIS_RUN_EVENTS_PREFIX}{run_id}:events"
 
     repo = Path(repo_path)
     layout = resolve_layout(repo)
@@ -114,6 +115,7 @@ async def execute_playbook_run(
         )
     except FileNotFoundError:
         error_msg = "ansible-playbook was not found on PATH.\n"
+        logger.error("playbook_run_failed", run_id=run_id, error=error_msg.strip())
         output += error_msg
         await redis.publish(channel, json.dumps({"type": "output", "data": error_msg}))
         async with aiosqlite.connect(settings.DB_PATH) as db:
@@ -147,6 +149,12 @@ async def execute_playbook_run(
         )
         await db.commit()
 
+    logger.info(
+        "playbook_run_finished",
+        run_id=run_id,
+        exit_code=exit_code,
+        status=status,
+    )
     await redis.publish(channel, json.dumps({"type": "status", "status": status}))
     await redis.publish(channel, json.dumps({"type": "done"}))
     try:
@@ -173,8 +181,9 @@ async def execute_role_run(
     become_password: str | None = None,
 ) -> None:
     """Execute a single role as an ansible-playbook run."""
+    logger.info("role_run_started", run_id=run_id, role_slug=role_slug, hosts=hosts)
     redis = ctx["redis"]
-    channel = f"{RUN_EVENTS_CHANNEL_PREFIX}{run_id}:events"
+    channel = f"{settings.REDIS_RUN_EVENTS_PREFIX}{run_id}:events"
 
     repo = Path(repo_path)
     layout = resolve_layout(repo)
@@ -254,6 +263,7 @@ async def execute_role_run(
         )
     except FileNotFoundError:
         error_msg = "ansible-playbook was not found on PATH.\n"
+        logger.error("role_run_failed", run_id=run_id, error=error_msg.strip())
         output += error_msg
         await redis.publish(channel, json.dumps({"type": "output", "data": error_msg}))
         async with aiosqlite.connect(settings.DB_PATH) as db:
@@ -281,6 +291,12 @@ async def execute_role_run(
     status = "completed" if exit_code == 0 else "failed"
     finished_at = _now_iso()
 
+    logger.info(
+        "role_run_finished",
+        run_id=run_id,
+        exit_code=exit_code,
+        status=status,
+    )
     async with aiosqlite.connect(settings.DB_PATH) as db:
         await db.execute(
             """UPDATE role_runs SET status = ?, finished_at = ?, exit_code = ?, output = ? WHERE id = ?""",

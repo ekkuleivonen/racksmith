@@ -13,6 +13,7 @@ auth_router = APIRouter()
 
 @auth_router.get("/login")
 async def login(request: Request):
+    """Redirect to GitHub OAuth authorization page."""
     redirect_uri = f"{settings.APP_URL.rstrip('/')}/api/auth/callback"
     return RedirectResponse(url=auth_manager.get_login_url(redirect_uri))
 
@@ -23,6 +24,7 @@ async def callback(
     code: str | None = None,
     state: str | None = None,
 ):
+    """Handle GitHub OAuth callback and set session cookie."""
     redirect_uri = f"{settings.APP_URL.rstrip('/')}/api/auth/callback"
     session_id = await auth_manager.handle_callback(code, state, redirect_uri)
 
@@ -44,6 +46,7 @@ async def callback(
 
 @auth_router.get("/me")
 async def me(user: dict = Depends(auth_manager.get_current_user)):
+    """Return the currently authenticated user's profile."""
     return {"user": user}
 
 
@@ -54,6 +57,7 @@ async def logout(
         default=None, alias=settings.SESSION_COOKIE_NAME
     ),
 ):
+    """Destroy the current session and clear the cookie."""
     auth_manager.logout(session_id)
     response = JSONResponse({"status": "logged_out"})
     response.delete_cookie(settings.SESSION_COOKIE_NAME)

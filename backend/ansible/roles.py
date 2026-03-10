@@ -258,6 +258,7 @@ def write_role(
     (role_dir / "tasks").mkdir(exist_ok=True)
 
     meta_data: dict[str, Any] = {
+        "x_racksmith_schema_version": 1,
         "galaxy_info": {
             "role_name": role.name,
             "description": role.description,

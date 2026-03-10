@@ -1,5 +1,8 @@
 FROM --platform=$BUILDPLATFORM node:22-alpine AS build
 
+ARG RACKSMITH_VERSION=dev
+ENV RACKSMITH_VERSION=$RACKSMITH_VERSION
+
 WORKDIR /app
 
 COPY package.json package-lock.json ./

@@ -7,7 +7,12 @@ import shutil
 from pathlib import Path
 
 import httpx
+import settings
 
+from _utils.logging import get_logger
+from ansible.migrations import migrate_repo
+
+logger = get_logger(__name__)
 from github.misc import (
     ActiveRepoBinding,
     clear_active_repo,
@@ -41,11 +46,12 @@ class ReposManager:
     async def list_repos(self, access_token: str) -> list[dict]:
         async with httpx.AsyncClient() as client:
             resp = await client.get(
-                "https://api.github.com/user/repos",
+                f"{settings.GITHUB_API_BASE}/user/repos",
                 params={"per_page": 100, "type": "all", "sort": "updated"},
                 headers={"Authorization": f"Bearer {access_token}"},
             )
             if resp.status_code != 200:
+                logger.warning("github_repos_fetch_failed", status_code=resp.status_code)
                 raise RuntimeError("Failed to fetch repos from GitHub")
 
         return [
@@ -64,11 +70,12 @@ class ReposManager:
     ) -> dict:
         async with httpx.AsyncClient() as client:
             resp = await client.post(
-                "https://api.github.com/user/repos",
+                f"{settings.GITHUB_API_BASE}/user/repos",
                 headers={"Authorization": f"Bearer {access_token}"},
                 json={"name": name, "private": private, "auto_init": True},
             )
         if resp.status_code not in (200, 201):
+            logger.warning("github_repo_create_failed", status_code=resp.status_code)
             raise RuntimeError("Failed to create repository on GitHub")
         repo = resp.json()
         return {
@@ -85,9 +92,11 @@ class ReposManager:
         if not repo_path.exists():
             repo_path = user_repo_dir(user_id, owner, repo)
         ensure_racksmith_branch(repo_path)
+        migrate_repo(repo_path, racksmith_version=settings.RACKSMITH_VERSION)
         binding = write_active_repo(
             ActiveRepoBinding(user_id=user_id, owner=owner, repo=repo)
         )
+        logger.info("repo_activated", owner=owner, repo=repo, user_id=user_id)
         return self.serialize_binding(binding)
 
     def activate_local_repo(self, session, *, owner: str, repo: str) -> dict:
@@ -96,9 +105,11 @@ class ReposManager:
         if not repo_path.is_dir():
             raise FileNotFoundError("Local repo is missing on disk")
         ensure_racksmith_branch(repo_path)
+        migrate_repo(repo_path, racksmith_version=settings.RACKSMITH_VERSION)
         binding = write_active_repo(
             ActiveRepoBinding(user_id=user_id, owner=owner, repo=repo)
         )
+        logger.info("local_repo_activated", owner=owner, repo=repo, user_id=user_id)
         return self.serialize_binding(binding)
 
     def serialize_binding(self, binding: ActiveRepoBinding) -> dict:
@@ -157,11 +168,19 @@ class ReposManager:
         if active and active.owner == owner and active.repo == repo:
             clear_active_repo(user_id)
         shutil.rmtree(repo_path)
+        logger.info("repo_dropped", owner=owner, repo=repo, user_id=user_id)
 
     def sync_repo(self, session) -> None:
         """Rebase racksmith branch on top of the base branch (e.g. main)."""
-        repo_path = self.active_repo_path(session)
-        sync_racksmith_branch(repo_path)
+        try:
+            repo_path = self.active_repo_path(session)
+            sync_racksmith_branch(repo_path)
+            binding = self.current_repo(session)
+            if binding:
+                logger.info("repo_synced", owner=binding.owner, repo=binding.repo, user_id=binding.user_id)
+        except RuntimeError as e:
+            logger.warning("repo_sync_failed", error=str(e))
+            raise
 
     def status(self, session, *, hosts_ready: bool) -> dict:
         binding = self.current_repo(session)

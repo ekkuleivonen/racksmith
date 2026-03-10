@@ -8,10 +8,8 @@ from collections.abc import AsyncGenerator
 from fastapi import APIRouter, Cookie, Depends, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.responses import StreamingResponse
 from openai import AsyncOpenAI
-from pydantic import BaseModel
-
 import yaml
-from pydantic import ValidationError
+from pydantic import BaseModel, ValidationError
 
 import settings
 from github.managers import auth_manager
@@ -24,77 +22,15 @@ from roles.schemas import (
     RoleUpdateRequest,
 )
 
+from roles.prompts import ROLE_SYSTEM_PROMPT
+
 router = APIRouter()
-
-ROLE_SYSTEM_PROMPT = """\
-You generate Racksmith role YAML. Output ONLY a single raw YAML document. \
-Never wrap it in markdown code fences. No explanations before or after.
-
-Required top-level keys:
-  slug        – lowercase alphanumeric + hyphens (e.g. install-nginx)
-  name        – human-readable name
-  description – short summary
-
-Optional top-level keys:
-  labels        – list of tags (e.g. [web, nginx])
-  compatibility – mapping with os_family list (e.g. {os_family: [debian, redhat]})
-  inputs        – list of variable definitions (see below)
-  tasks         – list of Ansible tasks (written to tasks/main.yml)
-
-Each input item has these fields:
-  key         – variable name (snake_case)
-  label       – human-readable label
-  type        – MUST be exactly one of: "string", "bool", "select", "secret"
-                (never use "str", "boolean", "int", or any other type name)
-  placeholder – hint text (string, use "" if not applicable)
-  default     – default value (string for string/select/secret, true/false for bool)
-  required    – true or false
-  options     – list of choices (only for type: select, use [] otherwise)
-  interactive – true if the value should be prompted at runtime, false otherwise
-
-Validation rule:
-  If an input has a default value, required MUST be false.
-  Use required: true only when there is no default.
-  If an input has options, type MUST be "select".
-  If type is "select", options must be a non-empty list.
-  If type is "select" and default is set, default must be one of the options.
-
-Example output:
-
-slug: install-nginx
-name: Install Nginx
-description: Install and configure Nginx web server
-labels: [web, nginx]
-compatibility:
-  os_family: [debian, redhat]
-inputs:
-  - key: nginx_port
-    label: Port
-    type: string
-    placeholder: "80"
-    required: true
-  - key: enable_ssl
-    label: Enable SSL
-    type: bool
-    default: true
-    required: false
-tasks:
-  - name: Install nginx
-    ansible.builtin.package:
-      name: nginx
-      state: present
-  - name: Start nginx
-    ansible.builtin.service:
-      name: nginx
-      state: started
-      enabled: true"""
 
 
 class GenerateRequest(BaseModel):
     prompt: str
 
 
-MAX_GENERATE_RETRIES = 2
 
 
 def _validate_role_yaml(yaml_text: str) -> str | None:
@@ -119,8 +55,8 @@ async def _generate_with_validation(prompt: str) -> AsyncGenerator[str]:
         {"role": "user", "content": prompt},
     ]
 
-    for attempt in range(MAX_GENERATE_RETRIES + 1):
-        is_last = attempt == MAX_GENERATE_RETRIES
+    for attempt in range(settings.OPENAI_ROLE_GENERATE_RETRIES + 1):
+        is_last = attempt == settings.OPENAI_ROLE_GENERATE_RETRIES
         use_stream = attempt == 0 or is_last
 
         if use_stream:
@@ -171,6 +107,7 @@ async def generate_role(
     body: GenerateRequest,
     _session=Depends(auth_manager.get_current_session),
 ):
+    """Generate an Ansible role from a natural-language prompt via AI."""
     if not settings.OPENAI_API_KEY:
         raise HTTPException(status_code=503, detail="AI generation is not configured (OPENAI_API_KEY missing)")
     return StreamingResponse(
@@ -205,6 +142,7 @@ def create_role_from_yaml(
 
 @router.get("")
 def list_roles(session=Depends(auth_manager.get_current_session)):
+    """List all roles in the active repo."""
     return {"roles": role_manager.list_roles(session)}
 
 
@@ -214,11 +152,13 @@ async def list_runs(
     role_slug: str | None = None,
     session=Depends(auth_manager.get_current_session),
 ):
+    """List role runs, optionally filtered by role slug."""
     return {"runs": await role_manager.list_runs(session, role_slug=role_slug)}
 
 
 @router.get("/runs/{run_id}")
 async def get_run(run_id: str, session=Depends(auth_manager.get_current_session)):
+    """Get a single role run by ID."""
     try:
         run = await role_manager.get_run(session, run_id)
     except KeyError as exc:
@@ -232,6 +172,7 @@ async def stream_run(
     run_id: str,
     session_id: str | None = Cookie(default=None, alias=settings.SESSION_COOKIE_NAME),
 ):
+    """Stream live role run output over WebSocket."""
     session = get_session(session_id)
     if not session:
         await websocket.close(code=4401, reason="Not authenticated")
@@ -252,6 +193,7 @@ async def stream_run(
 
 @router.get("/{slug}/detail")
 def get_role_detail(slug: str, session=Depends(auth_manager.get_current_session)):
+    """Get full role detail including raw YAML content."""
     try:
         return {"role": role_manager.get_role_detail(session, slug)}
     except FileNotFoundError as exc:
@@ -260,6 +202,7 @@ def get_role_detail(slug: str, session=Depends(auth_manager.get_current_session)
 
 @router.get("/{slug}")
 def get_role(slug: str, session=Depends(auth_manager.get_current_session)):
+    """Get role summary by slug."""
     try:
         return {"role": role_manager.get_role(session, slug)}
     except FileNotFoundError as exc:
@@ -271,6 +214,7 @@ def create_role(
     body: RoleCreateRequest,
     session=Depends(auth_manager.get_current_session),
 ):
+    """Create a new role from structured input."""
     try:
         role = role_manager.create_role(session, body)
     except ValueError as exc:
@@ -284,6 +228,7 @@ def update_role(
     body: RoleUpdateRequest,
     session=Depends(auth_manager.get_current_session),
 ):
+    """Update an existing role via raw YAML."""
     try:
         role = role_manager.update_role(session, slug, body)
     except FileNotFoundError as exc:
@@ -295,6 +240,7 @@ def update_role(
 
 @router.delete("/{slug}", status_code=204)
 def delete_role(slug: str, session=Depends(auth_manager.get_current_session)):
+    """Delete a role by slug."""
     try:
         role_manager.delete_role(session, slug)
     except FileNotFoundError as exc:
@@ -309,6 +255,7 @@ async def create_run(
     body: RoleRunRequest,
     session=Depends(auth_manager.get_current_session),
 ):
+    """Queue a new role run against the given targets."""
     try:
         run = await role_manager.create_run(session, slug, body)
     except FileNotFoundError as exc:

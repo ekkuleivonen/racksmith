@@ -13,6 +13,10 @@ from pathlib import Path
 from typing import Any
 
 import httpx
+
+from _utils.logging import get_logger
+
+logger = get_logger(__name__)
 from fastapi import Cookie, HTTPException, Request
 from ruamel.yaml import YAML
 from ruamel.yaml.error import YAMLError
@@ -22,8 +26,6 @@ from _utils.redis import Redis
 
 REPO_NAME_RE = re.compile(r"^[a-zA-Z0-9._-]+$")
 YAML_EXTENSIONS = {".yaml", ".yml"}
-RACK_TOPIC = "racksmith-rack"
-RACKSMITH_BRANCH = "racksmith"
 
 
 class RepoNotAvailableError(Exception):
@@ -33,8 +35,6 @@ class RepoNotAvailableError(Exception):
 # ---------------------------------------------------------------------------
 # Session management
 # ---------------------------------------------------------------------------
-
-_SESSION_PREFIX = "racksmith:session:"
 
 
 @dataclass
@@ -60,7 +60,7 @@ class ActiveRepoBinding:
 
 
 def _session_key(session_id: str) -> str:
-    return f"{_SESSION_PREFIX}{session_id}"
+    return f"{settings.REDIS_SESSION_PREFIX}{session_id}"
 
 
 def create_session(access_token: str, user: dict[str, Any]) -> str:
@@ -253,6 +253,8 @@ def run_git(
     return result
 
 
+
+
 def get_head_sha(repo_path: Path) -> str | None:
     """Return the current Git HEAD commit SHA, or None if not a repo or detached."""
     result = run_git(repo_path, ["rev-parse", "HEAD"], check=False)
@@ -350,29 +352,29 @@ def get_file_statuses(repo_path: Path) -> dict[str, list[str]]:
 def ensure_racksmith_branch(repo_path: Path) -> None:
     """Ensure we're on the racksmith branch, creating it from main if needed."""
     current = run_git(repo_path, ["branch", "--show-current"], check=False)
-    if current.returncode == 0 and current.stdout.strip() == RACKSMITH_BRANCH:
+    if current.returncode == 0 and current.stdout.strip() == settings.GIT_RACKSMITH_BRANCH:
         return
     run_git(repo_path, ["fetch", "origin"], check=False)
     has_local = (
-        run_git(repo_path, ["rev-parse", "--verify", RACKSMITH_BRANCH], check=False)
+        run_git(repo_path, ["rev-parse", "--verify", settings.GIT_RACKSMITH_BRANCH], check=False)
         .returncode
         == 0
     )
     has_remote = (
         run_git(
             repo_path,
-            ["rev-parse", "--verify", f"origin/{RACKSMITH_BRANCH}"],
+            ["rev-parse", "--verify", f"origin/{settings.GIT_RACKSMITH_BRANCH}"],
             check=False,
         ).returncode
         == 0
     )
     if has_local:
-        run_git(repo_path, ["checkout", RACKSMITH_BRANCH])
+        run_git(repo_path, ["checkout", settings.GIT_RACKSMITH_BRANCH])
     elif has_remote:
-        run_git(repo_path, ["checkout", "-b", RACKSMITH_BRANCH, f"origin/{RACKSMITH_BRANCH}"])
+        run_git(repo_path, ["checkout", "-b", settings.GIT_RACKSMITH_BRANCH, f"origin/{settings.GIT_RACKSMITH_BRANCH}"])
     else:
         base = detect_base_branch(repo_path)
-        run_git(repo_path, ["checkout", "-b", RACKSMITH_BRANCH, f"origin/{base}"])
+        run_git(repo_path, ["checkout", "-b", settings.GIT_RACKSMITH_BRANCH, f"origin/{base}"])
 
 
 def discard_changes(repo_path: Path) -> None:
@@ -465,29 +467,33 @@ def commit_and_push(
     repo: str,
 ) -> str | None:
     """Stage all changes, commit, push to racksmith branch, create PR, return PR URL."""
-    remote_url = (
-        f"https://x-access-token:{access_token}"
-        f"@github.com/{owner}/{repo}.git"
-    )
-    run_git(repo_path, ["remote", "set-url", "origin", remote_url], check=False)
-    run_git(repo_path, ["add", "-A"])
-    msg = message.strip()
-    if not msg:
-        raise ValueError("Commit message cannot be empty")
-    run_git(
-        repo_path,
-        [
-            "-c",
-            f"user.name={settings.GIT_COMMIT_USER_NAME}",
-            "-c",
-            f"user.email={settings.GIT_COMMIT_USER_EMAIL}",
-            "commit",
-            "-m",
-            msg,
-        ],
-    )
-    _delete_conflicting_racksmith_branches(repo_path)
-    run_git(repo_path, ["push", "origin", RACKSMITH_BRANCH])
+    try:
+        remote_url = (
+            f"https://x-access-token:{access_token}"
+            f"@github.com/{owner}/{repo}.git"
+        )
+        run_git(repo_path, ["remote", "set-url", "origin", remote_url], check=False)
+        run_git(repo_path, ["add", "-A"])
+        msg = message.strip()
+        if not msg:
+            raise ValueError("Commit message cannot be empty")
+        run_git(
+            repo_path,
+            [
+                "-c",
+                f"user.name={settings.GIT_COMMIT_USER_NAME}",
+                "-c",
+                f"user.email={settings.GIT_COMMIT_USER_EMAIL}",
+                "commit",
+                "-m",
+                msg,
+            ],
+        )
+        _delete_conflicting_racksmith_branches(repo_path)
+        run_git(repo_path, ["push", "origin", settings.GIT_RACKSMITH_BRANCH])
+    except (RuntimeError, ValueError) as e:
+        logger.error("git_commit_push_failed", owner=owner, repo=repo, error=str(e)[:200])
+        raise
 
     base = detect_base_branch(repo_path)
     return create_racksmith_pr(owner, repo, access_token, base)
@@ -504,25 +510,29 @@ def create_racksmith_pr(
     }
     with httpx.Client() as client:
         resp = client.post(
-            f"https://api.github.com/repos/{owner}/{repo}/pulls",
+            f"{settings.GITHUB_API_BASE}/repos/{owner}/{repo}/pulls",
             headers=headers,
             json={
                 "title": f"Merge racksmith into {base}",
-                "head": RACKSMITH_BRANCH,
+                "head": settings.GIT_RACKSMITH_BRANCH,
                 "base": base,
             },
         )
         if resp.status_code == 201:
-            return resp.json().get("html_url")
+            pr_url = resp.json().get("html_url")
+            logger.info("pr_created", owner=owner, repo=repo, base=base)
+            return pr_url
         if resp.status_code == 422:
             # PR may already exist
             list_resp = client.get(
-                f"https://api.github.com/repos/{owner}/{repo}/pulls",
+                f"{settings.GITHUB_API_BASE}/repos/{owner}/{repo}/pulls",
                 headers=headers,
-                params={"head": f"{owner}:{RACKSMITH_BRANCH}", "base": base, "state": "open"},
+                params={"head": f"{owner}:{settings.GIT_RACKSMITH_BRANCH}", "base": base, "state": "open"},
             )
             if list_resp.status_code == 200 and list_resp.json():
-                return list_resp.json()[0].get("html_url")
+                pr_url = list_resp.json()[0].get("html_url")
+                logger.info("pr_created", owner=owner, repo=repo, base=base)
+                return pr_url
         return None
 
 

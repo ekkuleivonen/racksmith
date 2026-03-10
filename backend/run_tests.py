@@ -21,7 +21,7 @@ import pytest  # noqa: E402
 
 
 def main() -> int:
-    args = sys.argv[1:] if len(sys.argv) > 1 else ["ansible/tests/"]
+    args = sys.argv[1:] if len(sys.argv) > 1 else ["tests/"]
     return pytest.main(["-v"] + args)
 
 

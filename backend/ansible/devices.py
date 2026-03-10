@@ -88,6 +88,7 @@ def write_device(layout: AnsibleLayout, device: DeviceData) -> None:
 
     if not isinstance(data, dict):
         data = {}
+    data.setdefault("schema_version", 1)
 
     data[device.id] = {
         "name": device.name,

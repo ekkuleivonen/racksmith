@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import shutil
 
+from _utils.logging import get_logger
+
 from github.misc import (
     RepoNotAvailableError,
     commit_and_push as git_commit_and_push,
@@ -17,6 +19,8 @@ from github.misc import (
     walk_tree,
 )
 from repos.managers import repos_manager
+
+logger = get_logger(__name__)
 
 
 class CodeManager:
@@ -105,17 +109,23 @@ class CodeManager:
         if not binding:
             raise RepoNotAvailableError("Active repo is not configured")
         repo_path = repos_manager.active_repo_path(session)
-        return git_commit_and_push(
+        result = git_commit_and_push(
             repo_path,
             message,
             session.access_token,
             binding.owner,
             binding.repo,
         )
+        if result:
+            logger.info("repo_committed_and_pushed", message=message[:80], owner=binding.owner, repo=binding.repo)
+        return result
 
     def discard_changes(self, session) -> None:
         repo_path = repos_manager.active_repo_path(session)
         git_discard_changes(repo_path)
+        binding = repos_manager.current_repo(session)
+        if binding:
+            logger.info("repo_changes_discarded", owner=binding.owner, repo=binding.repo)
 
 
 code_manager = CodeManager()

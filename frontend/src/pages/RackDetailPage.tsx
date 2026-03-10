@@ -521,7 +521,7 @@ export function RackPage() {
                 </h1>
               )}
               <p className="text-xs text-zinc-500">
-                Rack definitions are stored under `.racksmith/racks` in the
+                Rack definitions are stored under `.racksmith/racks.yml` in the
                 active repo.
               </p>
             </div>

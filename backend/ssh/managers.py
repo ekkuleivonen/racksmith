@@ -8,16 +8,17 @@ from contextlib import suppress
 from datetime import UTC, datetime
 
 import asyncssh
+
+from _utils.logging import get_logger
+
+logger = get_logger(__name__)
 from _utils.redis import Redis
 from github.misc import RepoNotAvailableError, user_storage_id
 from hosts.managers import host_manager
 
+import settings
 from ssh.misc import _connect_kwargs, generate_ssh_key_pair, machine_public_key
 from ssh.schemas import CommandHistoryEntry, PingStatusEntry, PingStatusTarget
-
-_HISTORY_PREFIX = "racksmith:ssh_history"
-HISTORY_TTL = 60 * 60 * 24 * 30
-HISTORY_LIMIT = 100
 
 
 def _now_iso() -> str:
@@ -32,7 +33,7 @@ class SSHManager:
         return generate_ssh_key_pair()
 
     def _history_key(self, user_id: str, host_id: str) -> str:
-        return f"{_HISTORY_PREFIX}:{user_id}:{host_id}"
+        return f"{settings.REDIS_SSH_HISTORY_PREFIX}:{user_id}:{host_id}"
 
     def _find_host(self, session, host_id: str):
         return host_manager.get_host(session, host_id)
@@ -95,8 +96,9 @@ class SSHManager:
                 ip_address=host.ip_address,
             )
         )
-        payload = json.dumps([entry.model_dump() for entry in history[-HISTORY_LIMIT:]])
-        Redis.setex(self._history_key(user_id, host_id), HISTORY_TTL, payload)
+        payload = json.dumps([entry.model_dump() for entry in history[-settings.SSH_HISTORY_LIMIT:]])
+        Redis.setex(self._history_key(user_id, host_id), settings.SSH_HISTORY_TTL, payload)
+        logger.debug("ssh_command_recorded", host_id=host_id, user_id=user_id)
 
     async def reboot_node(self, session, host_id: str) -> None:
         host = self._require_ssh_host(session, host_id)
@@ -160,6 +162,8 @@ class SSHManager:
 
     async def proxy_terminal(self, session, host_id: str, websocket) -> None:
         host = self._require_ssh_host(session, host_id)
+        user_id = user_storage_id(session.user)
+        logger.info("ssh_terminal_opened", host_id=host_id, user_id=user_id)
         conn = await asyncssh.connect(
             **_connect_kwargs(host.ip_address, host.ssh_user, host.ssh_port)
         )
@@ -214,6 +218,7 @@ class SSHManager:
             process.close()
             conn.close()
             await conn.wait_closed()
+            logger.info("ssh_terminal_closed", host_id=host_id, user_id=user_id)
 
 
 ssh_manager = SSHManager()

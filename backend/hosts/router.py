@@ -6,19 +6,21 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from github.managers import auth_manager
 from hosts.managers import host_manager
-from hosts.schemas import HostInput
+from hosts.schemas import HostCreate, HostUpdate
 
 router = APIRouter()
 
 
 @router.get("")
 async def list_hosts(session=Depends(auth_manager.get_current_session)):
+    """List all hosts in the active repo inventory."""
     hosts = host_manager.list_hosts(session)
     return {"hosts": [h.model_dump() for h in hosts]}
 
 
 @router.post("", status_code=201)
-async def create_host(body: HostInput, session=Depends(auth_manager.get_current_session)):
+async def create_host(body: HostCreate, session=Depends(auth_manager.get_current_session)):
+    """Create a new host in the inventory."""
     try:
         host = await host_manager.create_host(session, body)
     except FileNotFoundError as exc:
@@ -28,6 +30,7 @@ async def create_host(body: HostInput, session=Depends(auth_manager.get_current_
 
 @router.get("/{host_id}")
 async def get_host(host_id: str, session=Depends(auth_manager.get_current_session)):
+    """Get a single host by ID."""
     try:
         host = host_manager.get_host(session, host_id)
     except KeyError:
@@ -37,8 +40,9 @@ async def get_host(host_id: str, session=Depends(auth_manager.get_current_sessio
 
 @router.patch("/{host_id}")
 async def update_host(
-    host_id: str, body: HostInput, session=Depends(auth_manager.get_current_session)
+    host_id: str, body: HostUpdate, session=Depends(auth_manager.get_current_session)
 ):
+    """Update a host's properties."""
     try:
         host = host_manager.update_host(session, host_id, body)
     except KeyError:
@@ -48,6 +52,7 @@ async def update_host(
 
 @router.delete("/{host_id}", status_code=204)
 async def delete_host(host_id: str, session=Depends(auth_manager.get_current_session)):
+    """Delete a host from the inventory."""
     try:
         host_manager.delete_host(session, host_id)
     except KeyError:
@@ -56,6 +61,7 @@ async def delete_host(host_id: str, session=Depends(auth_manager.get_current_ses
 
 @router.post("/{host_id}/refresh")
 async def refresh_host(host_id: str, session=Depends(auth_manager.get_current_session)):
+    """Probe host via SSH to refresh OS/facts."""
     try:
         host = await host_manager.probe_host(session, host_id)
     except KeyError:
@@ -66,7 +72,8 @@ async def refresh_host(host_id: str, session=Depends(auth_manager.get_current_se
 
 
 @router.post("/preview")
-async def preview_host(body: HostInput, session=Depends(auth_manager.get_current_session)):
+async def preview_host(body: HostCreate, session=Depends(auth_manager.get_current_session)):
+    """Probe a host via SSH without saving to return a preview."""
     try:
         host = await host_manager.preview_host(body)
     except ValueError as exc:

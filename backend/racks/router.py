@@ -13,11 +13,13 @@ router = APIRouter()
 
 @router.get("")
 async def list_racks(session=Depends(auth_manager.get_current_session)):
+    """List all server racks in the active repo."""
     return {"racks": rack_manager.list_racks(session)}
 
 
 @router.post("", status_code=201)
 async def create_rack(body: RackCreate, session=Depends(auth_manager.get_current_session)):
+    """Create a new server rack."""
     try:
         rack = rack_manager.create_rack(session, body)
     except FileNotFoundError as exc:
@@ -29,6 +31,7 @@ async def create_rack(body: RackCreate, session=Depends(auth_manager.get_current
 
 @router.get("/{rack_id}")
 async def get_rack(rack_id: str, session=Depends(auth_manager.get_current_session)):
+    """Get a single rack by ID."""
     try:
         rack = rack_manager.get_rack(session, rack_id)
     except (FileNotFoundError, KeyError):
@@ -38,6 +41,7 @@ async def get_rack(rack_id: str, session=Depends(auth_manager.get_current_sessio
 
 @router.get("/{rack_id}/layout")
 async def get_rack_layout(rack_id: str, session=Depends(auth_manager.get_current_session)):
+    """Get the visual layout grid for a rack."""
     try:
         layout = rack_manager.get_layout(session, rack_id)
     except (FileNotFoundError, KeyError):
@@ -49,6 +53,7 @@ async def get_rack_layout(rack_id: str, session=Depends(auth_manager.get_current
 async def update_rack(
     rack_id: str, body: RackUpdate, session=Depends(auth_manager.get_current_session)
 ):
+    """Update a rack's properties."""
     try:
         rack = rack_manager.update_rack(session, rack_id, body)
     except KeyError:
@@ -60,6 +65,7 @@ async def update_rack(
 
 @router.delete("/{rack_id}", status_code=204)
 async def delete_rack(rack_id: str, session=Depends(auth_manager.get_current_session)):
+    """Delete a rack and remove host placements."""
     try:
         rack_manager.delete_rack(session, rack_id)
     except KeyError:

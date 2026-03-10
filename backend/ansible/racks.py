@@ -82,6 +82,7 @@ def write_rack(layout: AnsibleLayout, rack: RackData) -> None:
 
     if not isinstance(data, dict):
         data = {}
+    data.setdefault("schema_version", 1)
 
     data[rack.id] = {
         "name": rack.name,

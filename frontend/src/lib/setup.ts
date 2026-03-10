@@ -67,3 +67,40 @@ export async function createGithubRepo(name: string, isPrivate = true) {
 export async function syncRepo() {
   return apiPost<{ status: string }>("/repos/sync");
 }
+
+export type DetectedAnsiblePaths = {
+  inventory_path: string | null;
+  roles_path: string | null;
+  playbooks_path: string | null;
+  host_vars_path: string | null;
+  group_vars_path: string | null;
+};
+
+export type ImportAnsibleSummary = {
+  inventory_files: number;
+  host_vars_files: number;
+  group_vars_files: number;
+  roles_imported: number;
+  playbooks_imported: number;
+};
+
+export async function detectAnsibleResources() {
+  const data = await apiPost<{ detected: DetectedAnsiblePaths }>(
+    "/repos/detect-ansible"
+  );
+  return data.detected;
+}
+
+export async function importAnsibleResources(paths: {
+  inventory_path?: string | null;
+  roles_path?: string | null;
+  playbooks_path?: string | null;
+  host_vars_path?: string | null;
+  group_vars_path?: string | null;
+}) {
+  const data = await apiPost<{ summary: ImportAnsibleSummary }>(
+    "/repos/import-ansible",
+    paths
+  );
+  return data.summary;
+}

@@ -1,5 +1,8 @@
 FROM ghcr.io/astral-sh/uv:python3.14-bookworm-slim
 
+ARG RACKSMITH_VERSION=dev
+ENV RACKSMITH_VERSION=$RACKSMITH_VERSION
+
 WORKDIR /app
 
 # Install git (repo clone/fetch), ping (node reachability), and openssh-client (Ansible SSH)

@@ -5,6 +5,7 @@ import { AppShell, OnboardingShell } from "@/components/app-shell";
 import { ProtectedRoute } from "@/components/protected-route";
 import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
+import { UpgradeBanner } from "@/components/upgrade-banner";
 import { AuthProvider } from "@/context/auth-context";
 import { queryClient } from "@/lib/queryClient";
 import { CodePage } from "@/pages/CodePage";
@@ -66,7 +67,9 @@ class ErrorBoundary extends Component<
 
 function AppRoutes() {
   return (
-    <div className="h-screen bg-zinc-950 flex overflow-hidden relative">
+    <div className="h-screen bg-zinc-950 flex flex-col overflow-hidden relative">
+      <UpgradeBanner />
+      <div className="flex-1 min-h-0 flex overflow-hidden relative">
       <svg className="absolute" width="0" height="0">
         <filter id="noise">
           <feTurbulence
@@ -319,6 +322,7 @@ function AppRoutes() {
           </Routes>
         </ErrorBoundary>
       </div>
+      </div>
     </div>
   );
 }
@@ -326,7 +330,7 @@ function AppRoutes() {
 export function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <ThemeProvider defaultTheme="dark" storageKey="lake-admin-theme">
+      <ThemeProvider defaultTheme="dark" storageKey="racksmith-theme">
         <AuthProvider>
           <BrowserRouter>
             <AppRoutes />

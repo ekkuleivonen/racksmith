@@ -6,18 +6,20 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from github.managers import auth_manager
 from groups.managers import group_manager
-from groups.schemas import GroupInput
+from groups.schemas import GroupCreate, GroupUpdate
 
 router = APIRouter()
 
 
 @router.get("")
 async def list_groups(session=Depends(auth_manager.get_current_session)):
+    """List all host groups in the active repo."""
     return {"groups": group_manager.list_groups(session)}
 
 
 @router.post("", status_code=201)
-async def create_group(body: GroupInput, session=Depends(auth_manager.get_current_session)):
+async def create_group(body: GroupCreate, session=Depends(auth_manager.get_current_session)):
+    """Create a new host group."""
     try:
         group = group_manager.create_group(session, body)
     except FileNotFoundError as exc:
@@ -27,6 +29,7 @@ async def create_group(body: GroupInput, session=Depends(auth_manager.get_curren
 
 @router.get("/{group_id}")
 async def get_group(group_id: str, session=Depends(auth_manager.get_current_session)):
+    """Get a single group by ID."""
     try:
         group = group_manager.get_group(session, group_id)
     except KeyError as exc:
@@ -36,8 +39,9 @@ async def get_group(group_id: str, session=Depends(auth_manager.get_current_sess
 
 @router.patch("/{group_id}")
 async def update_group(
-    group_id: str, body: GroupInput, session=Depends(auth_manager.get_current_session)
+    group_id: str, body: GroupUpdate, session=Depends(auth_manager.get_current_session)
 ):
+    """Update a group's name or variables."""
     try:
         group = group_manager.update_group(session, group_id, body)
     except KeyError:
@@ -47,6 +51,7 @@ async def update_group(
 
 @router.delete("/{group_id}", status_code=204)
 async def delete_group(group_id: str, session=Depends(auth_manager.get_current_session)):
+    """Delete a group by ID."""
     try:
         group_manager.delete_group(session, group_id)
     except KeyError:

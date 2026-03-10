@@ -8,8 +8,13 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
   const apiTarget = env.VITE_API_TARGET || "http://localhost:8000"
 
+  const racksmithVersion = process.env.RACKSMITH_VERSION || process.env.VITE_RACKSMITH_VERSION || "1.0.0";
+
   return {
     plugins: [react(), tailwindcss()],
+    define: {
+      __APP_VERSION__: JSON.stringify(racksmithVersion),
+    },
     resolve: {
       alias: {
         "@": path.resolve(__dirname, "./src"),

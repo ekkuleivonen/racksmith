@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-COLS_BY_WIDTH: dict[int, int] = {10: 6, 19: 12}
+COLS_BY_WIDTH: dict[int, int] = {10: 6, 19: 12, 23: 12}
 
 
 def cols_for_width(width_inches: int, explicit: int = 0) -> int:
@@ -12,8 +12,8 @@ def cols_for_width(width_inches: int, explicit: int = 0) -> int:
 
 
 def validate_width(width: int) -> None:
-    if width not in (10, 19):
-        raise ValueError("rack_width_inches must be 10 or 19")
+    if width not in (10, 19, 23):
+        raise ValueError("rack_width_inches must be 10, 19, or 23")
 
 
 def validate_host(value: str) -> str:

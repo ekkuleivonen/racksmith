@@ -7,6 +7,10 @@ from typing import Any
 from urllib.parse import urlencode
 
 import httpx
+
+from _utils.logging import get_logger
+
+logger = get_logger(__name__)
 from fastapi import Cookie, HTTPException, Request
 
 import settings
@@ -28,18 +32,19 @@ class AuthManager:
             "scope": settings.GITHUB_OAUTH_SCOPES,
             "state": state,
         }
-        return f"https://github.com/login/oauth/authorize?{urlencode(params)}"
+        return f"{settings.GITHUB_OAUTH_BASE}/login/oauth/authorize?{urlencode(params)}"
 
     async def handle_callback(
         self, code: str | None, state: str | None, redirect_uri: str
     ) -> str | None:
         if not code or not state or state not in self._oauth_states:
+            logger.warning("auth_login_failed", reason="invalid_or_missing_state")
             return None
         del self._oauth_states[state]
 
         async with httpx.AsyncClient() as client:
             token_resp = await client.post(
-                "https://github.com/login/oauth/access_token",
+                f"{settings.GITHUB_OAUTH_BASE}/login/oauth/access_token",
                 params={
                     "client_id": settings.GITHUB_CLIENT_ID,
                     "client_secret": settings.GITHUB_CLIENT_SECRET,
@@ -50,17 +55,22 @@ class AuthManager:
             )
         access_token = token_resp.json().get("access_token")
         if not access_token:
+            logger.warning("auth_login_failed", reason="no_token_in_response")
             return None
 
         async with httpx.AsyncClient() as client:
             user_resp = await client.get(
-                "https://api.github.com/user",
+                f"{settings.GITHUB_API_BASE}/user",
                 headers={"Authorization": f"Bearer {access_token}"},
             )
         if user_resp.status_code != 200:
+            logger.warning("auth_login_failed", reason="user_fetch_failed", status_code=user_resp.status_code)
             return None
 
-        return create_session(access_token, user_resp.json())
+        user_data = user_resp.json()
+        session_id = create_session(access_token, user_data)
+        logger.info("auth_login_success", user_id=str(user_data.get("id", "")))
+        return session_id
 
     def logout(self, session_id: str | None) -> None:
         delete_session(session_id)

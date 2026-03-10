@@ -221,6 +221,40 @@ class TestWriteHost:
         assert h.racksmith == original.racksmith
         assert set(h.groups) == set(original.groups)
 
+    def test_preserves_existing_ansible_vars_in_host_vars(self, layout) -> None:
+        """write_host preserves non-racksmith vars; only racksmith is overwritten."""
+        layout.inventory_path.mkdir(parents=True, exist_ok=True)
+        layout.host_vars_path.mkdir(parents=True, exist_ok=True)
+        (layout.inventory_path / "hosts.yml").write_text("""
+all:
+  hosts:
+    data1: {}
+  children:
+    data:
+      hosts:
+        data1: {}
+""")
+        (layout.host_vars_path / "data1.yml").write_text("""
+ansible_host: 10.0.0.10
+custom_var: from_host_vars
+racksmith_name: Original Name
+""")
+        # Update only racksmith (e.g. from UI edit)
+        host = HostData(
+            id="data1",
+            ansible_host="10.0.0.10",
+            ansible_user="deploy",
+            ansible_port=22,
+            ansible_vars={},
+            racksmith={"name": "Updated Name"},
+            groups=["data"],
+        )
+        write_host(layout, host)
+        h = read_host(layout, "data1")
+        assert h is not None
+        assert h.racksmith["name"] == "Updated Name"
+        assert h.ansible_vars.get("custom_var") == "from_host_vars"
+
     def test_no_host_vars_when_racksmith_empty(self, layout) -> None:
         host = HostData(id="h1", ansible_host="1.2.3.4", racksmith={})
         write_host(layout, host)

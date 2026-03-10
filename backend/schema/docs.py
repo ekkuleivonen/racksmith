@@ -7,9 +7,23 @@ def generate_docs() -> str:
     """Generate markdown documentation for Ansible-native layout."""
     return """# Ansible-Native Schema Reference
 
-Racksmith uses standard Ansible file structures. Paths are resolved via `.racksmith/config.yml` and `ansible.cfg`.
+Racksmith uses standard Ansible file structures. All resources live under `.racksmith/` by default (configurable via `racksmith_dir` in `.racksmith/config.yml`).
 
-## Inventory (inventory/hosts.yml)
+## Layout (.racksmith/)
+
+```
+.racksmith/
+  config.yml       # optional: racksmith_dir
+  inventory/hosts.yml
+  host_vars/{host_id}.yml
+  group_vars/{group_id}.yml
+  roles/{slug}/
+  playbooks/{id}.yml
+  racks.yml
+  devices.yml
+```
+
+## Inventory (.racksmith/inventory/hosts.yml)
 
 Hosts and groups follow Ansible inventory format:
 
@@ -26,22 +40,23 @@ all:
         host_id: {}
 ```
 
-Racksmith extensions use the `racksmith_` prefix in `host_vars/{id}.yml` and `group_vars/{id}.yml`:
+Racksmith extensions use the `racksmith_` prefix in `.racksmith/host_vars/{id}.yml` and `.racksmith/group_vars/{id}.yml`:
 
 - `racksmith_name`, `racksmith_managed`, `racksmith_notes`, `racksmith_mac_address`
 - `racksmith_os_family`, `racksmith_labels`
 - `racksmith_rack`, `racksmith_position_u_start`, `racksmith_position_u_height`, etc.
 
-## Roles (roles/<slug>/)
+## Roles (.racksmith/roles/<slug>/)
 
 Each role has:
 
-- `meta/main.yml` — `galaxy_info` and `argument_specs`
+- `meta/main.yml` — `galaxy_info` and `argument_specs` (schema_version: `x_racksmith_schema_version`)
 - `tasks/main.yml` — Ansible tasks
+- `defaults/main.yml` — Role default variables (read-only in UI; imported roles get this from registry, local edits do not persist)
 
-Legacy `action.yaml` format is also supported for migration.
+Legacy `action.yaml` format is supported for read/import only; Racksmith never writes `action.yaml`, only `meta/main.yml`.
 
-## Playbooks (playbooks/*.yml)
+## Playbooks (.racksmith/playbooks/*.yml)
 
 Standard Ansible playbook format. Description is stored in play vars as `racksmith_description`.
 
@@ -58,4 +73,8 @@ rack_id:
   created_at: "..."
   updated_at: "..."
 ```
+
+## Schema Versioning
+
+All `.racksmith/` files track a `schema_version`. Migrations run automatically when a repo is activated. See `docs/SCHEMA_VERSIONING.md` in the project repository for how to add migrations and handle breaking changes.
 """

@@ -1,63 +1,81 @@
-import { Link } from "react-router-dom";
-import { Button } from "@/components/ui/button";
-import { useHosts, useRackEntries, useGroups, usePlaybooks } from "@/hooks/queries";
-import { isManagedHost } from "@/lib/hosts";
+import { NavLink } from "react-router-dom";
+import { Server, Terminal, BookOpen, Box, Code } from "lucide-react";
+import { useHosts, useRackEntries, usePlaybooks } from "@/hooks/queries";
+import { cn } from "@/lib/utils";
+
+const quickLinks = [
+  { to: "/racks", label: "Racks", icon: Server, desc: "Hardware topology" },
+  { to: "/hosts", label: "Hosts", icon: Terminal, desc: "Managed nodes" },
+  { to: "/playbooks", label: "Playbooks", icon: BookOpen, desc: "Ansible stacks" },
+  { to: "/roles", label: "Roles", icon: Box, desc: "Reusable roles" },
+  { to: "/code", label: "Code", icon: Code, desc: "Edit in browser" },
+];
 
 export function HomeDashboard() {
   const { data: hosts = [] } = useHosts();
   const { data: rackEntries = [] } = useRackEntries();
-  const { data: groups = [] } = useGroups();
   const { data: playbooks = [] } = usePlaybooks();
 
   return (
     <div className="flex-1 min-h-0 overflow-auto p-6">
-      <div className="max-w-2xl mx-auto space-y-8">
-        <div className="space-y-2">
-          <h1 className="text-2xl font-semibold text-zinc-100">Welcome to Racksmith</h1>
-          <p className="text-zinc-400 text-sm">
-            Your infrastructure is ready. Manage hosts, racks, groups, and playbooks from the sidebar.
+      <div className="max-w-4xl mx-auto space-y-8">
+        <section>
+          <h1 className="text-zinc-100 font-semibold text-lg">Overview</h1>
+          <p className="text-sm text-zinc-500 mt-1">
+            Your infrastructure at a glance.
           </p>
-        </div>
+          <div className="grid grid-cols-3 gap-4 mt-4">
+            <div className="border border-zinc-800 bg-zinc-900/30 p-4 rounded">
+              <p className="text-2xl font-medium text-zinc-100">
+                {hosts.filter((h) => h.managed).length}
+              </p>
+              <p className="text-xs text-zinc-500">Managed hosts</p>
+            </div>
+            <div className="border border-zinc-800 bg-zinc-900/30 p-4 rounded">
+              <p className="text-2xl font-medium text-zinc-100">
+                {rackEntries.length}
+              </p>
+              <p className="text-xs text-zinc-500">Racks</p>
+            </div>
+            <div className="border border-zinc-800 bg-zinc-900/30 p-4 rounded">
+              <p className="text-2xl font-medium text-zinc-100">
+                {playbooks.length}
+              </p>
+              <p className="text-xs text-zinc-500">Playbooks</p>
+            </div>
+          </div>
+        </section>
 
-        <div className="grid grid-cols-2 gap-4">
-          <div className="border border-zinc-800 bg-zinc-900/40 p-4 rounded">
-            <p className="text-zinc-500 text-xs font-medium uppercase tracking-wider">Hosts</p>
-            <p className="text-2xl font-semibold text-zinc-100 mt-1">{hosts.filter(isManagedHost).length}</p>
-            <Button variant="outline" size="sm" className="mt-2" asChild>
-              <Link to="/hosts">View hosts</Link>
-            </Button>
+        <section>
+          <h2 className="text-zinc-100 font-semibold">Quick links</h2>
+          <p className="text-sm text-zinc-500 mt-1">
+            Jump to a section of your infrastructure.
+          </p>
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3 mt-4">
+            {quickLinks.map(({ to, label, icon: Icon, desc }) => (
+              <NavLink
+                key={to}
+                to={to}
+                className={({ isActive }) =>
+                  cn(
+                    "flex items-center gap-4 border border-zinc-800 bg-zinc-900/30 p-4 transition-colors",
+                    isActive
+                      ? "border-zinc-600 bg-zinc-800/50"
+                      : "hover:border-zinc-700 hover:bg-zinc-900/50"
+                  )
+                }
+              >
+                <div className="shrink-0 w-10 h-10 rounded bg-zinc-800 flex items-center justify-center">
+                  <Icon className="size-5 text-zinc-400" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-zinc-100 font-medium">{label}</p>
+                  <p className="text-xs text-zinc-500 truncate">{desc}</p>
+                </div>
+              </NavLink>
+            ))}
           </div>
-          <div className="border border-zinc-800 bg-zinc-900/40 p-4 rounded">
-            <p className="text-zinc-500 text-xs font-medium uppercase tracking-wider">Racks</p>
-            <p className="text-2xl font-semibold text-zinc-100 mt-1">{rackEntries.length}</p>
-            <Button variant="outline" size="sm" className="mt-2" asChild>
-              <Link to="/racks">View racks</Link>
-            </Button>
-          </div>
-          <div className="border border-zinc-800 bg-zinc-900/40 p-4 rounded">
-            <p className="text-zinc-500 text-xs font-medium uppercase tracking-wider">Groups</p>
-            <p className="text-2xl font-semibold text-zinc-100 mt-1">{groups.length}</p>
-            <Button variant="outline" size="sm" className="mt-2" asChild>
-              <Link to="/groups">View groups</Link>
-            </Button>
-          </div>
-          <div className="border border-zinc-800 bg-zinc-900/40 p-4 rounded">
-            <p className="text-zinc-500 text-xs font-medium uppercase tracking-wider">Playbooks</p>
-            <p className="text-2xl font-semibold text-zinc-100 mt-1">{playbooks.length}</p>
-            <Button variant="outline" size="sm" className="mt-2" asChild>
-              <Link to="/playbooks">View playbooks</Link>
-            </Button>
-          </div>
-        </div>
-
-        <div className="flex gap-2">
-          <Button asChild>
-            <Link to="/hosts/create">Add host</Link>
-          </Button>
-          <Button variant="outline" asChild>
-            <Link to="/repos">Manage repos</Link>
-          </Button>
-        </div>
+        </section>
       </div>
     </div>
   );

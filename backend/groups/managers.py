@@ -2,11 +2,17 @@
 
 from __future__ import annotations
 
+import secrets
+
+from _utils.logging import get_logger
 from ansible import resolve_layout
+
+logger = get_logger(__name__)
 from ansible.inventory import GroupData, read_group, read_groups, remove_group, write_group
 
+from _utils.slugs import slugify
 from github.misc import RepoNotAvailableError
-from groups.schemas import Group, GroupInput, GroupWithMembers
+from groups.schemas import Group, GroupCreate, GroupUpdate, GroupWithMembers
 from hosts.managers import host_manager
 from hosts.schemas import HostSummary
 from repos.managers import repos_manager
@@ -54,21 +60,10 @@ class GroupManager:
         ]
         return GroupWithMembers(**group.model_dump(), hosts=members)
 
-    def create_group(self, session, data: GroupInput) -> Group:
+    def create_group(self, session, data: GroupCreate) -> Group:
         repo_path = repos_manager.active_repo_path(session)
         layout = resolve_layout(repo_path)
-        import re
-        import secrets
-
-        SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9_-]*$")
-
-        def _slugify(name: str) -> str:
-            slug = name.strip().lower()
-            slug = re.sub(r"[^a-z0-9_-]+", "_", slug)
-            slug = slug.strip("_")
-            return slug[:60] if slug else ""
-
-        base = _slugify(data.name) or "group"
+        base = slugify(data.name, separator="_", max_length=60) or "group"
         existing = {g.id for g in read_groups(layout)}
         group_id = base
         if group_id in existing:
@@ -86,17 +81,21 @@ class GroupManager:
             racksmith={"name": data.name.strip(), "description": data.description.strip()},
         )
         write_group(layout, group_data)
+        logger.info("group_created", group_id=group_data.id)
         return _group_data_to_group(group_data)
 
-    def update_group(self, session, group_id: str, data: GroupInput) -> Group:
+    def update_group(self, session, group_id: str, data: GroupUpdate) -> Group:
         repo_path = repos_manager.active_repo_path(session)
         layout = resolve_layout(repo_path)
         group_data = read_group(layout, group_id)
         if group_data is None:
             raise KeyError(f"Group {group_id} not found")
-        group_data.racksmith["name"] = data.name.strip()
-        group_data.racksmith["description"] = data.description.strip()
+        if data.name is not None:
+            group_data.racksmith["name"] = data.name.strip()
+        if data.description is not None:
+            group_data.racksmith["description"] = data.description.strip()
         write_group(layout, group_data)
+        logger.info("group_updated", group_id=group_id)
         return _group_data_to_group(group_data)
 
     def delete_group(self, session, group_id: str) -> None:
@@ -105,6 +104,7 @@ class GroupManager:
         if read_group(layout, group_id) is None:
             raise KeyError(f"Group {group_id} not found")
         remove_group(layout, group_id)
+        logger.info("group_deleted", group_id=group_id)
 
 
 group_manager = GroupManager()

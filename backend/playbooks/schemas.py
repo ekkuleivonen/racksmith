@@ -2,19 +2,18 @@
 
 from __future__ import annotations
 
-from typing import Any, Literal
+from typing import Any
 
 from pydantic import BaseModel, Field
 
-
-RunStatus = Literal["queued", "running", "completed", "failed"]
+from _utils.schemas import RoleInputSpec, RunStatus
 
 
 class RoleCatalogEntry(BaseModel):
     slug: str
     name: str
     description: str
-    inputs: list[dict[str, Any]] = Field(default_factory=list)
+    inputs: list[RoleInputSpec] = Field(default_factory=list)
     labels: list[str] = Field(default_factory=list)
 
 

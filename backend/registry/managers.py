@@ -4,6 +4,10 @@ from __future__ import annotations
 
 import httpx
 import settings
+
+from _utils.logging import get_logger
+
+logger = get_logger(__name__)
 from ansible import resolve_layout
 from ansible.roles import (
     RoleData,
@@ -12,7 +16,7 @@ from ansible.roles import (
     read_role_tasks,
     write_role,
 )
-from github.misc import RACKSMITH_BRANCH, run_git
+from github.misc import run_git
 from repos.managers import repos_manager
 
 from registry.schemas import (
@@ -53,23 +57,31 @@ async def list_roles(
     if owner:
         params["owner"] = owner
 
-    async with httpx.AsyncClient() as client:
-        resp = await client.get(
-            f"{settings.REGISTRY_URL}/roles",
-            params=params,
-            headers=_headers(session),
-        )
-        resp.raise_for_status()
+    try:
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(
+                f"{settings.REGISTRY_URL}/roles",
+                params=params,
+                headers=_headers(session),
+            )
+            resp.raise_for_status()
+    except httpx.HTTPStatusError as e:
+        logger.warning("registry_request_failed", status_code=e.response.status_code, error=str(e))
+        raise
     return RegistryRoleList.model_validate(resp.json())
 
 
 async def get_role(session, slug: str) -> RegistryRole:
-    async with httpx.AsyncClient() as client:
-        resp = await client.get(
-            f"{settings.REGISTRY_URL}/roles/{slug}",
-            headers=_headers(session),
-        )
-        resp.raise_for_status()
+    try:
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(
+                f"{settings.REGISTRY_URL}/roles/{slug}",
+                headers=_headers(session),
+            )
+            resp.raise_for_status()
+    except httpx.HTTPStatusError as e:
+        logger.warning("registry_request_failed", slug=slug, status_code=e.response.status_code, error=str(e))
+        raise
     return RegistryRole.model_validate(resp.json())
 
 
@@ -164,19 +176,28 @@ async def push_role(session, slug: str) -> RegistryRole:
                 headers=_headers(session),
             )
 
-    resp.raise_for_status()
+    try:
+        resp.raise_for_status()
+    except httpx.HTTPStatusError as e:
+        logger.warning("registry_request_failed", slug=slug, status_code=e.response.status_code, error=str(e))
+        raise
+    logger.info("registry_role_pushed", slug=slug)
     return RegistryRole.model_validate(resp.json())
 
 
 async def import_role(session, slug: str) -> RoleImportResponse:
     """Download from registry, write to local repo using ansible/roles module."""
-    async with httpx.AsyncClient() as client:
-        resp = await client.post(
-            f"{settings.REGISTRY_URL}/roles/{slug}/download",
-            params={"racksmith_version": settings.RACKSMITH_VERSION},
-            headers=_headers(session),
-        )
-        resp.raise_for_status()
+    try:
+        async with httpx.AsyncClient() as client:
+            resp = await client.post(
+                f"{settings.REGISTRY_URL}/roles/{slug}/download",
+                params={"racksmith_version": settings.RACKSMITH_VERSION},
+                headers=_headers(session),
+            )
+            resp.raise_for_status()
+    except httpx.HTTPStatusError as e:
+        logger.warning("registry_request_failed", slug=slug, status_code=e.response.status_code, error=str(e))
+        raise
 
     version = RegistryVersion.model_validate(resp.json())
     repo_path = repos_manager.active_repo_path(session)
@@ -242,8 +263,9 @@ async def import_role(session, slug: str) -> RoleImportResponse:
             ],
             check=False,
         )
-        run_git(repo_path, ["push", "origin", RACKSMITH_BRANCH], check=False)
+        run_git(repo_path, ["push", "origin", settings.GIT_RACKSMITH_BRANCH], check=False)
 
+    logger.info("role_imported_from_registry", slug=slug, version=version.version_number)
     return RoleImportResponse(
         slug=slug,
         name=version.name,
@@ -252,9 +274,14 @@ async def import_role(session, slug: str) -> RoleImportResponse:
 
 
 async def delete_role(session, slug: str) -> None:
-    async with httpx.AsyncClient() as client:
-        resp = await client.delete(
-            f"{settings.REGISTRY_URL}/roles/{slug}",
-            headers=_headers(session),
-        )
-        resp.raise_for_status()
+    try:
+        async with httpx.AsyncClient() as client:
+            resp = await client.delete(
+                f"{settings.REGISTRY_URL}/roles/{slug}",
+                headers=_headers(session),
+            )
+            resp.raise_for_status()
+    except httpx.HTTPStatusError as e:
+        logger.warning("registry_request_failed", slug=slug, status_code=e.response.status_code, error=str(e))
+        raise
+    logger.info("registry_role_deleted", slug=slug)

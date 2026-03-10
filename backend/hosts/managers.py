@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
-import re
 import secrets
 from pathlib import Path
 
 import settings
+from _utils.logging import get_logger
 from ansible import resolve_layout
+
+logger = get_logger(__name__)
 from ansible.devices import (
     DeviceData,
     read_device,
@@ -16,12 +18,11 @@ from ansible.devices import (
     write_device,
 )
 from ansible.inventory import HostData, read_host, read_hosts, remove_host, write_host
-from github.misc import RepoNotAvailableError
-from hosts.schemas import Host, HostInput, HostSummary
+from github.misc import RepoNotAvailableError, user_storage_id
+from hosts.schemas import Host, HostCreate, HostSummary, HostUpdate
+from _utils.slugs import SLUG_RE, slugify
 from repos.managers import repos_manager
 from ssh.misc import probe_ssh_target
-
-SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9_-]*$")
 
 
 def _os_to_family(os_name: str) -> str | None:
@@ -34,16 +35,6 @@ def _os_to_family(os_name: str) -> str | None:
     if "arch" in lower:
         return "arch"
     return None
-
-
-def _slugify(name: str) -> str:
-    """Convert name to a valid inventory hostname slug."""
-    slug = name.strip().lower()
-    slug = re.sub(r"[^a-z0-9_-]+", "-", slug)
-    slug = slug.strip("-")
-    if not slug or not SLUG_RE.match(slug):
-        return ""
-    return slug[:120]
 
 
 def _generate_host_id(repo_path: Path, layout) -> str:
@@ -121,7 +112,7 @@ def _device_data_to_host(d: DeviceData) -> Host:
     )
 
 
-def _host_input_to_host_data(host_id: str, data: HostInput) -> HostData:
+def _host_input_to_host_data(host_id: str, data: HostCreate) -> HostData:
     """Convert HostInput to HostData for writing."""
     racksmith: dict = {
         "name": data.name.strip(),
@@ -149,7 +140,7 @@ def _host_input_to_host_data(host_id: str, data: HostInput) -> HostData:
     )
 
 
-def _host_input_to_device_data(device_id: str, data: HostInput) -> DeviceData:
+def _host_input_to_device_data(device_id: str, data: HostCreate) -> DeviceData:
     """Convert HostInput to DeviceData for unmanaged devices."""
     placement = data.placement
     return DeviceData(
@@ -242,12 +233,13 @@ class HostManager:
             return _device_data_to_host(device_data)
         raise KeyError(f"Host {host_id} not found")
 
-    async def create_host(self, session, data: HostInput) -> Host:
+    async def create_host(self, session, data: HostCreate) -> Host:
+        user_id = user_storage_id(session.user)
         repo_path = repos_manager.active_repo_path(session)
         layout = resolve_layout(repo_path)
 
         if data.managed:
-            slug = _slugify(data.name) if data.name.strip() else ""
+            slug = slugify(data.name) if data.name.strip() else ""
             if slug and read_host(layout, slug) is None and read_device(layout, slug) is None:
                 host_id = slug
             else:
@@ -265,16 +257,18 @@ class HostManager:
             device_data = _host_input_to_device_data(host_id, data)
             write_device(layout, device_data)
             host = _device_data_to_host(device_data)
+        logger.info("host_created", host_id=host.id, user_id=user_id)
         return host
 
-    def update_host(self, session, host_id: str, data: HostInput) -> Host:
+    def update_host(self, session, host_id: str, data: HostUpdate) -> Host:
         repo_path = repos_manager.active_repo_path(session)
         layout = resolve_layout(repo_path)
         existing = self.get_host(session, host_id)
         in_inventory = read_host(layout, host_id) is not None
-        managed_changed = data.managed != existing.managed
+        managed = data.managed if data.managed is not None else existing.managed
+        managed_changed = managed != existing.managed
         migrate_unmanaged_to_devices = (
-            not data.managed and in_inventory
+            not managed and in_inventory
         )  # was in inventory, now unmanaged -> migrate to devices
 
         if managed_changed or migrate_unmanaged_to_devices:
@@ -283,24 +277,24 @@ class HostManager:
             if read_device(layout, host_id) is not None:
                 remove_device(layout, host_id)
 
-        if data.managed:
-            name = data.name.strip() if data.name and data.name.strip() else existing.name
+        if managed:
+            name = (data.name.strip() or existing.name) if data.name is not None else existing.name
             ip_address = (
-                data.ip_address.strip()
-                if data.ip_address and data.ip_address.strip()
+                (data.ip_address.strip() or existing.ip_address)
+                if data.ip_address is not None
                 else existing.ip_address
             )
             ssh_user = (
-                data.ssh_user.strip()
-                if data.ssh_user and data.ssh_user.strip()
+                (data.ssh_user.strip() or existing.ssh_user)
+                if data.ssh_user is not None
                 else existing.ssh_user
             )
-            ssh_port = (
-                data.ssh_port
-                if data.ssh_port != 22 or existing.ssh_port == 22
-                else existing.ssh_port
-            )
+            ssh_port = data.ssh_port if data.ssh_port is not None else existing.ssh_port
             placement = data.placement if data.placement is not None else existing.placement
+            groups = data.groups if data.groups is not None else existing.groups
+            labels = data.labels if data.labels is not None else existing.labels
+            os_family = data.os_family if data.os_family is not None else existing.os_family
+            notes = data.notes if data.notes is not None else existing.notes
             host = Host(
                 id=host_id,
                 hostname=existing.hostname,
@@ -309,22 +303,24 @@ class HostManager:
                 ssh_user=ssh_user,
                 ssh_port=ssh_port,
                 managed=True,
-                groups=data.groups,
-                labels=data.labels,
-                os_family=data.os_family or existing.os_family,
-                notes=data.notes,
+                groups=groups,
+                labels=labels,
+                os_family=os_family,
+                notes=notes,
                 placement=placement,
                 mac_address=existing.mac_address,
             )
             write_host(layout, _host_to_host_data(host))
         else:
-            name = data.name.strip() if data.name and data.name.strip() else existing.name
+            name = (data.name.strip() or existing.name) if data.name is not None else existing.name
             placement = data.placement if data.placement is not None else existing.placement
+            notes = data.notes if data.notes is not None else existing.notes
+            labels = data.labels if data.labels is not None else existing.labels
             device = DeviceData(
                 id=host_id,
                 name=name,
-                notes=data.notes,
-                labels=data.labels,
+                notes=notes,
+                labels=labels,
                 mac_address=existing.mac_address or "",
                 rack=placement.rack if placement else "",
                 position_u_start=placement.u_start if placement else 1,
@@ -334,6 +330,7 @@ class HostManager:
             )
             write_device(layout, device)
             host = _device_data_to_host(device)
+        logger.info("host_updated", host_id=host_id)
         return host
 
     def delete_host(self, session, host_id: str) -> None:
@@ -347,12 +344,19 @@ class HostManager:
             remove_host(layout, host_id)
         if in_devices:
             remove_device(layout, host_id)
+        logger.info("host_removed", host_id=host_id)
 
     async def probe_host(self, session, host_id: str) -> Host:
+        user_id = user_storage_id(session.user)
         host = self.get_host(session, host_id)
         if not host.managed or not host.ip_address or not host.ssh_user:
             raise ValueError("Host is not managed or missing ip_address/ssh_user")
-        probe = await probe_ssh_target(host.ip_address, host.ssh_user, host.ssh_port)
+        logger.info("host_refresh_requested", host_id=host_id, user_id=user_id)
+        try:
+            probe = await probe_ssh_target(host.ip_address, host.ssh_user, host.ssh_port)
+        except Exception as e:
+            logger.warning("ssh_probe_failed", host_id=host_id, host=host.ip_address, error=str(e))
+            raise
         os_family = _os_to_family(probe.os) or host.os_family
         updated = Host(
             id=host.id,
@@ -373,7 +377,7 @@ class HostManager:
         write_host(layout, _host_to_host_data(updated))
         return updated
 
-    async def preview_host(self, data: HostInput) -> Host:
+    async def preview_host(self, data: HostCreate) -> Host:
         """Probe without saving. Returns Host with id='preview'."""
         if not data.managed or not data.ip_address or not data.ssh_user:
             return Host(

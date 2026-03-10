@@ -12,6 +12,7 @@ from .config import AnsibleLayout
 from .extensions import PREFIX
 
 RESERVED_DESCRIPTION_KEY = f"{PREFIX}description"
+RESERVED_SCHEMA_VERSION_KEY = f"{PREFIX}schema_version"
 
 
 @dataclass
@@ -50,6 +51,7 @@ def read_playbook(path: Path, repo_path: Path | None = None) -> PlaybookData:
         desc_val = vars_block.get(RESERVED_DESCRIPTION_KEY)
         if isinstance(desc_val, str):
             description = desc_val
+        # schema_version is written but not read yet; treat missing as 1
 
     role_entries: list[PlaybookRoleEntry] = []
     for entry in play.get("roles", []) or []:
@@ -133,8 +135,10 @@ def write_playbook(layout: AnsibleLayout, playbook: PlaybookData) -> Path:
         else:
             play["roles"].append(re.role)
 
+    play_vars: dict = {RESERVED_SCHEMA_VERSION_KEY: 1}
     if playbook.description:
-        play["vars"] = {RESERVED_DESCRIPTION_KEY: playbook.description}
+        play_vars[RESERVED_DESCRIPTION_KEY] = playbook.description
+    play["vars"] = play_vars
 
     yaml_rt = _yaml_rt()
     path.write_text("", encoding="utf-8")

@@ -35,6 +35,7 @@ async def list_roles(
     per_page: int = Query(20, ge=1, le=100),
     session=Depends(auth_manager.get_current_session),
 ):
+    """Search and browse roles in the community registry."""
     return await managers.list_roles(
         session,
         racksmith_version=racksmith_version,
@@ -52,6 +53,7 @@ async def get_role(
     slug: str,
     session=Depends(auth_manager.get_current_session),
 ):
+    """Get a single registry role by slug."""
     try:
         return await managers.get_role(session, slug)
     except Exception as e:
@@ -63,6 +65,7 @@ async def get_versions(
     slug: str,
     session=Depends(auth_manager.get_current_session),
 ):
+    """List all published versions of a registry role."""
     try:
         return await managers.get_versions(session, slug)
     except Exception as e:
@@ -74,6 +77,7 @@ async def push_role(
     slug: str,
     session=Depends(auth_manager.get_current_session),
 ):
+    """Push a local role to the community registry."""
     try:
         return await managers.push_role(session, slug)
     except Exception as e:
@@ -85,6 +89,7 @@ async def import_role(
     slug: str,
     session=Depends(auth_manager.get_current_session),
 ):
+    """Import a role from the registry into the active repo."""
     try:
         return await managers.import_role(session, slug)
     except Exception as e:
@@ -96,6 +101,7 @@ async def delete_role(
     slug: str,
     session=Depends(auth_manager.get_current_session),
 ):
+    """Delete a role from the community registry."""
     try:
         await managers.delete_role(session, slug)
     except Exception as e:

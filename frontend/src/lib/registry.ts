@@ -1,6 +1,6 @@
 import { apiGet, apiPost, apiDelete } from "./api";
 
-const RACKSMITH_VERSION = "1.0.0";
+const RACKSMITH_VERSION = typeof __APP_VERSION__ !== "undefined" ? __APP_VERSION__ : "1.0.0";
 
 export type RegistryOwner = {
   username: string;

@@ -4,7 +4,10 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
+from _utils.logging import get_logger
 from ansible import resolve_layout
+
+logger = get_logger(__name__)
 from github.misc import RepoNotAvailableError
 from ansible.racks import RackData, read_rack, read_racks, remove_rack, write_rack
 
@@ -116,17 +119,18 @@ class RackManager:
             updated_at=now,
         )
         write_rack(layout, rack_data)
+        logger.info("rack_created", rack_id=rack_id)
         return _rack_data_to_rack(rack_data)
 
     def update_rack(self, session, rack_id: str, data: RackUpdate) -> Rack:
         repo_path = repos_manager.active_repo_path(session)
         layout = resolve_layout(repo_path)
         rack = self.get_rack(session, rack_id)
-        name = data.name.strip() if data.name else rack.name
-        width = data.rack_width_inches if data.rack_width_inches > 0 else rack.rack_width_inches
-        units = data.rack_units if data.rack_units > 0 else rack.rack_units
-        cols_val = data.rack_cols if data.rack_cols > 0 else rack.rack_cols
-        if data.rack_width_inches > 0:
+        name = (data.name.strip() or rack.name) if data.name is not None else rack.name
+        width = data.rack_width_inches if data.rack_width_inches is not None else rack.rack_width_inches
+        units = data.rack_units if data.rack_units is not None else rack.rack_units
+        cols_val = data.rack_cols if data.rack_cols is not None else rack.rack_cols
+        if data.rack_width_inches is not None:
             validate_width(data.rack_width_inches)
         rack_cols = cols_for_width(width, cols_val)
         updated = Rack(
@@ -150,6 +154,7 @@ class RackManager:
                 updated_at=updated.updated_at,
             ),
         )
+        logger.info("rack_updated", rack_id=rack_id)
         return updated
 
     def delete_rack(self, session, rack_id: str) -> None:
@@ -158,6 +163,7 @@ class RackManager:
         if read_rack(layout, rack_id) is None:
             raise KeyError(f"Rack {rack_id} not found")
         remove_rack(layout, rack_id)
+        logger.info("rack_removed", rack_id=rack_id)
 
     def has_rack_for_session(self, session) -> bool:
         return self.has_ready_rack_for_session(session)

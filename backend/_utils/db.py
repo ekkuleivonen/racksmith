@@ -10,6 +10,10 @@ import aiosqlite
 
 import settings
 
+from _utils.logging import get_logger
+
+logger = get_logger(__name__)
+
 if TYPE_CHECKING:
     from playbooks.schemas import PlaybookRun
     from roles.schemas import RoleRun
@@ -61,7 +65,31 @@ async def init_db() -> None:
         )
         """
     )
-    await _db.commit()
+    # Indexes for run queries
+    await _db.execute(
+        "CREATE INDEX IF NOT EXISTS idx_playbook_runs_user ON playbook_runs(user_id)"
+    )
+    await _db.execute(
+        "CREATE INDEX IF NOT EXISTS idx_playbook_runs_status ON playbook_runs(status)"
+    )
+    await _db.execute(
+        "CREATE INDEX IF NOT EXISTS idx_role_runs_user ON role_runs(user_id)"
+    )
+    await _db.execute(
+        "CREATE INDEX IF NOT EXISTS idx_role_runs_status ON role_runs(status)"
+    )
+    # schema_version table for migrations
+    await _db.execute(
+        """
+        CREATE TABLE IF NOT EXISTS schema_version (
+            version INTEGER PRIMARY KEY
+        )
+        """
+    )
+    from _utils.db_migrations import run_migrations
+
+    await run_migrations(_db)
+    logger.info("db_initialized", path=settings.DB_PATH)
 
 
 async def close_db() -> None:
@@ -70,6 +98,13 @@ async def close_db() -> None:
     if _db is not None:
         await _db.close()
         _db = None
+
+
+async def get_db_schema_version() -> int:
+    """Return current DB schema version."""
+    from _utils.db_migrations import get_schema_version
+
+    return await get_schema_version(_get_db())
 
 
 def _get_db() -> aiosqlite.Connection:

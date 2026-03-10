@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from typing import Any
+from pydantic import BaseModel, Field
 
-from pydantic import BaseModel
+from _utils.schemas import PlatformSpec, RoleInputSpec
 
 
 class RegistryOwner(BaseModel):
@@ -18,9 +18,9 @@ class RegistryVersion(BaseModel):
     racksmith_version: str
     name: str
     description: str
-    platforms: list[Any]
+    platforms: list[PlatformSpec]
     tags: list[str]
-    inputs: list[Any]
+    inputs: list[RoleInputSpec]
     tasks_yaml: str
     defaults_yaml: str
     meta_yaml: str
@@ -50,9 +50,9 @@ class RoleCreate(BaseModel):
     name: str
     racksmith_version: str
     description: str = ""
-    platforms: list[Any] = []
-    tags: list[str] = []
-    inputs: list[Any] = []
+    platforms: list[PlatformSpec] = Field(default_factory=list)
+    tags: list[str] = Field(default_factory=list)
+    inputs: list[RoleInputSpec] = Field(default_factory=list)
     tasks_yaml: str = ""
     defaults_yaml: str = ""
     meta_yaml: str = ""
@@ -64,9 +64,9 @@ class RoleUpdate(BaseModel):
     racksmith_version: str
     name: str | None = None
     description: str | None = None
-    platforms: list[Any] | None = None
+    platforms: list[PlatformSpec] | None = None
     tags: list[str] | None = None
-    inputs: list[Any] | None = None
+    inputs: list[RoleInputSpec] | None = None
     tasks_yaml: str | None = None
     defaults_yaml: str | None = None
     meta_yaml: str | None = None

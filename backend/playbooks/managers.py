@@ -10,6 +10,10 @@ from pathlib import Path
 
 import redis.asyncio as aioredis
 import settings
+
+from _utils.logging import get_logger
+
+logger = get_logger(__name__)
 from _utils.db import _get_db, row_to_playbook_run
 from ansible import resolve_layout
 from ansible.run import validate_become_password
@@ -38,9 +42,6 @@ from playbooks.schemas import (
     ResolveTargetsResponse,
     TargetSelection,
 )
-
-RUN_EVENTS_CHANNEL_PREFIX = "racksmith:run:"
-
 
 def _generate_playbook_id(repo_path: Path, layout) -> str:
     existing = {p.id for p in list_playbooks(layout)}
@@ -200,6 +201,7 @@ class PlaybookManager:
             raw_content="",
         )
         write_playbook(layout, playbook_data)
+        logger.info("playbook_created", playbook_id=playbook_id)
         return self.get_playbook(session, playbook_id)
 
     def update_playbook(
@@ -236,12 +238,14 @@ class PlaybookManager:
             raw_content="",
         )
         write_playbook(layout, playbook_data)
+        logger.info("playbook_updated", playbook_id=playbook_id)
         return self.get_playbook(session, playbook_id)
 
     def delete_playbook(self, session, playbook_id: str) -> None:
         repo_path = repos_manager.active_repo_path(session)
         layout = resolve_layout(repo_path)
         remove_playbook(layout, playbook_id)
+        logger.info("playbook_removed", playbook_id=playbook_id)
 
     def resolve_targets(
         self, session, targets: TargetSelection
@@ -362,6 +366,12 @@ class PlaybookManager:
             become=playbook.become,
             become_password=body.become_password,
         )
+        logger.info(
+            "playbook_run_submitted",
+            run_id=run.id,
+            playbook_id=playbook.id,
+            host_count=len(hosts),
+        )
         return run
 
     async def stream_run(self, session, run_id: str, websocket) -> None:
@@ -372,7 +382,7 @@ class PlaybookManager:
             )
             return
 
-        channel = f"{RUN_EVENTS_CHANNEL_PREFIX}{run_id}:events"
+        channel = f"{settings.REDIS_RUN_EVENTS_PREFIX}{run_id}:events"
         redis_client = aioredis.from_url(settings.REDIS_URL, decode_responses=True)
         pubsub = redis_client.pubsub()
         try:

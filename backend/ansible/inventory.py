@@ -211,6 +211,7 @@ def write_host(layout: AnsibleLayout, host: HostData) -> None:
 
     if not isinstance(data, dict):
         data = {}
+    data.setdefault("schema_version", 1)
     all_block = data.setdefault("all", {})
     if not isinstance(all_block, dict):
         all_block = {}
@@ -272,10 +273,14 @@ def write_host(layout: AnsibleLayout, host: HostData) -> None:
     yaml.dump(data, hosts_file)
 
     host_vars_path = layout.host_vars_file(host.id)
-    if host.racksmith:
-        hv_data = inject(host.racksmith)
+    # Preserve existing non-racksmith vars when writing (merge, don't overwrite)
+    existing = _load_host_vars(layout, host.id)
+    ansible_vars, _ = extract(existing)
+    merged = {**ansible_vars, **inject(host.racksmith)} if host.racksmith else ansible_vars
+    if merged:
+        host_vars_path.parent.mkdir(parents=True, exist_ok=True)
         host_vars_path.write_text("", encoding="utf-8")
-        yaml.dump(hv_data, host_vars_path)
+        yaml.dump(merged, host_vars_path)
     elif host_vars_path.is_file():
         host_vars_path.unlink()
 
@@ -326,6 +331,7 @@ def write_group(layout: AnsibleLayout, group: GroupData) -> None:
 
     if not isinstance(data, dict):
         data = {}
+    data.setdefault("schema_version", 1)
     all_block = data.setdefault("all", {})
     if not isinstance(all_block, dict):
         all_block = {}

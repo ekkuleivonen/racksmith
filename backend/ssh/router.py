@@ -24,6 +24,7 @@ async def list_history(
     host_id: str,
     session_id: str | None = Cookie(default=None, alias=settings.SESSION_COOKIE_NAME),
 ):
+    """List SSH command history for a host."""
     session = _require_session(session_id)
     try:
         history = ssh_manager.list_history(session, host_id)
@@ -37,6 +38,7 @@ async def reboot_node(
     host_id: str,
     session_id: str | None = Cookie(default=None, alias=settings.SESSION_COOKIE_NAME),
 ):
+    """Reboot a remote host via SSH."""
     session = _require_session(session_id)
     try:
         await ssh_manager.reboot_node(session, host_id)
@@ -54,6 +56,7 @@ async def ping_statuses(
     body: PingStatusRequest,
     session_id: str | None = Cookie(default=None, alias=settings.SESSION_COOKIE_NAME),
 ):
+    """Ping multiple hosts and return their reachability status."""
     session = _require_session(session_id)
     statuses = await ssh_manager.ping_statuses(session, body.targets)
     return {"statuses": [entry.model_dump() for entry in statuses]}
@@ -63,6 +66,7 @@ async def ping_statuses(
 async def generate_key(
     session_id: str | None = Cookie(default=None, alias=settings.SESSION_COOKIE_NAME),
 ):
+    """Generate a new SSH key pair and return the public key."""
     session = _require_session(session_id)
     try:
         public_key = ssh_manager.generate_key(session)
@@ -75,6 +79,7 @@ async def generate_key(
 async def get_public_key(
     session_id: str | None = Cookie(default=None, alias=settings.SESSION_COOKIE_NAME),
 ):
+    """Get the current SSH public key."""
     session = _require_session(session_id)
     try:
         public_key = ssh_manager.public_key(session)
@@ -89,6 +94,7 @@ async def terminal_socket(
     host_id: str,
     session_id: str | None = Cookie(default=None, alias=settings.SESSION_COOKIE_NAME),
 ):
+    """Open an interactive SSH terminal session over WebSocket."""
     session = get_session(session_id)
     if not session:
         await websocket.close(code=4401, reason="Not authenticated")

@@ -11,6 +11,10 @@ from pathlib import Path
 import yaml
 import redis.asyncio as aioredis
 import settings
+
+from _utils.logging import get_logger
+
+logger = get_logger(__name__)
 from ansible import resolve_layout
 from ansible.run import validate_become_password
 from github.misc import RepoNotAvailableError
@@ -38,8 +42,7 @@ from roles.schemas import (
     RoleUpdateRequest,
 )
 
-SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9_-]*$")
-RUN_EVENTS_CHANNEL_PREFIX = "racksmith:run:"
+from _utils.slugs import SLUG_RE, validate_slug
 
 
 def _now_iso() -> str:
@@ -51,11 +54,7 @@ def _new_id() -> str:
 
 
 def _validate_slug(slug: str) -> None:
-    if not SLUG_RE.match(slug):
-        raise ValueError(
-            "slug must be lowercase letters, numbers, hyphens, or underscores "
-            "and must start with a letter or number"
-        )
+    validate_slug(slug)
 
 
 def _request_input_to_role_input(inp: dict) -> RoleInput:
@@ -200,6 +199,7 @@ class RoleManager:
         role = read_role(layout.roles_path / body.slug)
         if role is None:
             raise RuntimeError("Role was written but could not be read back")
+        logger.info("role_created", slug=body.slug)
         return _role_data_to_summary(role)
 
     def update_role(self, session, slug: str, body: RoleUpdateRequest) -> RoleDetail:
@@ -239,6 +239,7 @@ class RoleManager:
             else None
         )
         write_role(layout, role_data, tasks_yaml=tasks_yaml)
+        logger.info("role_updated", slug=slug)
         return self.get_role_detail(session, slug)
 
     def delete_role(self, session, slug: str) -> None:
@@ -248,6 +249,7 @@ class RoleManager:
         if not role_dir.exists():
             raise FileNotFoundError(f"Role '{slug}' not found")
         remove_role(layout, slug)
+        logger.info("role_removed", slug=slug)
 
     async def create_run(self, session, slug: str, body: RoleRunRequest) -> RoleRun:
         repo_path = repos_manager.active_repo_path(session)
@@ -307,6 +309,12 @@ class RoleManager:
             runtime_vars=body.runtime_vars or {},
             become_password=body.become_password,
         )
+        logger.info(
+            "role_run_submitted",
+            run_id=run.id,
+            role_slug=slug,
+            host_count=len(hosts),
+        )
         return run
 
     async def list_runs(self, session, role_slug: str | None = None) -> list[RoleRun]:
@@ -344,7 +352,7 @@ class RoleManager:
                 {"type": "snapshot", "run": run.model_dump(), "done": True}
             )
             return
-        channel = f"{RUN_EVENTS_CHANNEL_PREFIX}{run_id}:events"
+        channel = f"{settings.REDIS_RUN_EVENTS_PREFIX}{run_id}:events"
         redis_client = aioredis.from_url(
             settings.REDIS_URL, decode_responses=True
         )

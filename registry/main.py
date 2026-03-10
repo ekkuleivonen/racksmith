@@ -1,14 +1,53 @@
 """Racksmith Registry – role registry API."""
 
+import logging
+import sys
 from contextlib import asynccontextmanager
 
 import settings
 import structlog
 from fastapi import FastAPI
+
+# Structlog processor chain — matches the backend's _utils/logging.py for
+# consistent JSON output across both services.
+_shared_processors: list[structlog.types.Processor] = [
+    structlog.stdlib.add_log_level,
+    structlog.stdlib.add_logger_name,
+    structlog.processors.TimeStamper(fmt="iso"),
+    structlog.processors.StackInfoRenderer(),
+    structlog.processors.format_exc_info,
+    structlog.processors.UnicodeDecoder(),
+]
+
+_formatter = structlog.stdlib.ProcessorFormatter(
+    foreign_pre_chain=_shared_processors,
+    processors=[
+        structlog.stdlib.ProcessorFormatter.remove_processors_meta,
+        structlog.processors.JSONRenderer(),
+    ],
+)
+
+_root = logging.getLogger()
+_root.setLevel(logging.INFO)
+_root.handlers.clear()
+_handler = logging.StreamHandler(sys.stdout)
+_handler.setFormatter(_formatter)
+_root.addHandler(_handler)
+
+structlog.configure(
+    processors=_shared_processors + [
+        structlog.stdlib.ProcessorFormatter.wrap_for_formatter,
+    ],
+    context_class=dict,
+    logger_factory=structlog.stdlib.LoggerFactory(),
+    wrapper_class=structlog.stdlib.BoundLogger,
+    cache_logger_on_first_use=True,
+)
+
 from fastapi.middleware.cors import CORSMiddleware
 from roles.router import router as roles_router
 
-logger = structlog.get_logger()
+logger = structlog.get_logger(__name__)
 
 
 async def _run_migrations():

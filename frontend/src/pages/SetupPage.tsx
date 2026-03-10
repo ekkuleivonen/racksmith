@@ -21,8 +21,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/context/auth-context";
 import {
   createGithubRepo,
+  detectAnsibleResources,
+  importAnsibleResources,
   listGithubRepos,
   selectGithubRepo,
+  type DetectedAnsiblePaths,
   type GithubRepoChoice,
 } from "@/lib/setup";
 import { fetchMachinePublicKey, generateMachineKey } from "@/lib/ssh";
@@ -47,15 +50,35 @@ function persistWantsRack(value: boolean): void {
   localStorage.setItem(WANTS_RACK_KEY, String(value));
 }
 
-type RequiredStep = 1 | 2 | 3 | "done";
+type RequiredStep = 1 | 2 | 2.5 | 3 | "done";
+
+function hasDetectedPaths(detected: DetectedAnsiblePaths | null): boolean {
+  if (!detected) return false;
+  return !!(
+    detected.inventory_path ||
+    detected.roles_path ||
+    detected.playbooks_path ||
+    detected.host_vars_path ||
+    detected.group_vars_path
+  );
+}
 
 function computeStep(
   isAuthenticated: boolean,
   repoReady: boolean,
   nodesCount: number,
+  detectedPaths: DetectedAnsiblePaths | null,
+  importStepDone: boolean,
 ): RequiredStep {
   if (!isAuthenticated) return 1;
   if (!repoReady) return 2;
+  if (
+    nodesCount === 0 &&
+    hasDetectedPaths(detectedPaths) &&
+    !importStepDone
+  ) {
+    return 2.5;
+  }
   if (nodesCount === 0) return 3;
   return "done";
 }
@@ -67,6 +90,7 @@ function computeProgress(
 ): number {
   if (step === 1) return 20;
   if (step === 2) return 40;
+  if (step === 2.5) return 50;
   if (step === 3) return 60;
   if (wantsRack === null) return 80;
   if (wantsRack === true && rackCount === 0) return 90;
@@ -103,6 +127,10 @@ export function SetupPage() {
     repo: string;
   } | null>(null);
   const [signingIn, setSigningIn] = useState(false);
+  const [detectedPaths, setDetectedPaths] =
+    useState<DetectedAnsiblePaths | null>(null);
+  const [importStepDone, setImportStepDone] = useState(false);
+  const [importing, setImporting] = useState(false);
   const [setupPublicKey, setSetupPublicKey] = useState<string | null>(null);
   const [setupPublicKeyLoading, setSetupPublicKeyLoading] = useState(false);
   const [setupPublicKeyError, setSetupPublicKeyError] = useState<string | null>(
@@ -115,6 +143,8 @@ export function SetupPage() {
     isAuthenticated,
     status?.repo_ready ?? false,
     managedCount,
+    detectedPaths,
+    importStepDone,
   );
 
   const refreshStatus = useCallback(async () => {
@@ -179,6 +209,17 @@ export function SetupPage() {
   }, [isAuthenticated, loadRepos]);
 
   useEffect(() => {
+    if (!(status?.repo_ready ?? false)) {
+      setDetectedPaths(null);
+      setImportStepDone(false);
+      return;
+    }
+    detectAnsibleResources()
+      .then(setDetectedPaths)
+      .catch(() => setDetectedPaths(null));
+  }, [status?.repo_ready]);
+
+  useEffect(() => {
     if (repos.length === 0 || !status) return;
     const activeFullName = status.repo
       ? `${status.repo.owner}/${status.repo.repo}`
@@ -227,7 +268,7 @@ export function SetupPage() {
         <div className="max-w-md w-full mx-auto flex-1 flex flex-col justify-center">
           <div className="space-y-4 mb-6">
             <Progress value={progress} className="h-1.5" />
-            <p className="text-xs text-zinc-500">Step 1 of 5</p>
+            <p className="text-xs text-zinc-500">Step 1 of 6</p>
           </div>
           <Card className="border-zinc-800 bg-zinc-900/40">
             <CardHeader>
@@ -265,7 +306,7 @@ export function SetupPage() {
         <div className="max-w-3xl mx-auto space-y-6">
           <div className="space-y-2">
             <Progress value={progress} className="h-1.5" />
-            <p className="text-xs text-zinc-500">Step 2 of 5</p>
+            <p className="text-xs text-zinc-500">Step 2 of 6</p>
           </div>
           <div className="space-y-1">
             <h1 className="text-zinc-100 text-xl font-semibold">
@@ -482,13 +523,103 @@ export function SetupPage() {
     );
   }
 
+  if (step === 2.5) {
+    return (
+      <div className="flex-1 overflow-auto p-6">
+        <div className="max-w-3xl mx-auto space-y-6">
+          <div className="space-y-2">
+            <Progress value={progress} className="h-1.5" />
+            <p className="text-xs text-zinc-500">Step 2.5 of 6</p>
+          </div>
+          <div className="space-y-1">
+            <h1 className="text-zinc-100 text-xl font-semibold">
+              Import existing Ansible resources
+            </h1>
+            <p className="text-sm text-zinc-500">
+              We found Ansible resources in your repo. Import them into{" "}
+              <code className="rounded bg-zinc-800 px-1">.racksmith/</code> to
+              use them with Racksmith.
+            </p>
+          </div>
+
+          <Card className="border-zinc-800 bg-zinc-900/40">
+            <CardHeader className="space-y-3">
+              <CardTitle>Detected paths</CardTitle>
+              <ul className="text-sm text-zinc-400 space-y-1 list-disc list-inside">
+                {detectedPaths?.inventory_path && (
+                  <li>Inventory: {detectedPaths.inventory_path}</li>
+                )}
+                {detectedPaths?.roles_path && (
+                  <li>Roles: {detectedPaths.roles_path}</li>
+                )}
+                {detectedPaths?.playbooks_path && (
+                  <li>Playbooks: {detectedPaths.playbooks_path}</li>
+                )}
+                {detectedPaths?.host_vars_path && (
+                  <li>Host vars: {detectedPaths.host_vars_path}</li>
+                )}
+                {detectedPaths?.group_vars_path && (
+                  <li>Group vars: {detectedPaths.group_vars_path}</li>
+                )}
+              </ul>
+            </CardHeader>
+            <CardContent className="flex gap-2">
+              <Button
+                disabled={importing}
+                onClick={async () => {
+                  setImporting(true);
+                  try {
+                    await importAnsibleResources({
+                      inventory_path: detectedPaths?.inventory_path ?? undefined,
+                      roles_path: detectedPaths?.roles_path ?? undefined,
+                      playbooks_path: detectedPaths?.playbooks_path ?? undefined,
+                      host_vars_path: detectedPaths?.host_vars_path ?? undefined,
+                      group_vars_path:
+                        detectedPaths?.group_vars_path ?? undefined,
+                    });
+                    setImportStepDone(true);
+                    toast.success("Ansible resources imported");
+                  } catch (error) {
+                    toast.error(
+                      error instanceof Error
+                        ? error.message
+                        : "Failed to import",
+                    );
+                  } finally {
+                    setImporting(false);
+                  }
+                }}
+              >
+                {importing ? (
+                  <>
+                    <Loader2 className="mr-2 size-4 animate-spin" />
+                    Importing…
+                  </>
+                ) : (
+                  "Import"
+                )}
+              </Button>
+              <Button
+                variant="outline"
+                disabled={importing}
+                onClick={() => setImportStepDone(true)}
+              >
+                Skip
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    );
+  }
+
   if (step === 3) {
     return (
       <div className="flex-1 overflow-auto p-6">
         <div className="max-w-3xl mx-auto space-y-6">
           <div className="space-y-2">
             <Progress value={progress} className="h-1.5" />
-            <p className="text-xs text-zinc-500">Step 3 of 5</p>
+            <p className="text-xs text-zinc-500">Step 3 of 6</p>
           </div>
           <div className="space-y-1">
             <h1 className="text-zinc-100 text-xl font-semibold">
@@ -601,7 +732,7 @@ export function SetupPage() {
           <div className="max-w-md w-full mx-auto flex-1 flex flex-col justify-center">
             <div className="space-y-2 mb-6">
               <Progress value={progress} className="h-1.5" />
-              <p className="text-xs text-zinc-500">Step 4 of 5</p>
+              <p className="text-xs text-zinc-500">Step 4 of 6</p>
             </div>
             <Card className="border-zinc-800 bg-zinc-900/40">
               <CardHeader>
@@ -654,7 +785,7 @@ export function SetupPage() {
         <div className="max-w-3xl mx-auto space-y-6">
           <div className="space-y-2">
             <Progress value={progress} className="h-1.5" />
-            <p className="text-xs text-zinc-500">Step 5 of 5</p>
+            <p className="text-xs text-zinc-500">Step 5 of 6</p>
           </div>
           <div className="space-y-1">
             <h1 className="text-zinc-100 text-xl font-semibold">Create rack</h1>

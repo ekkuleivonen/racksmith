@@ -9,16 +9,18 @@ from hosts.schemas import Host
 
 class RackCreate(BaseModel):
     name: str = Field(min_length=1, max_length=120)
-    rack_width_inches: int
+    rack_width_inches: int = Field(ge=1, le=30)  # validated by racks.misc.validate_width (10, 19, 23)
     rack_units: int = Field(ge=1, le=52)
-    rack_cols: int = 0
+    rack_cols: int = Field(default=1, ge=1, le=48)
 
 
 class RackUpdate(BaseModel):
-    name: str = Field(default="", max_length=120)
-    rack_width_inches: int = 0
-    rack_units: int = Field(default=0, ge=0, le=52)
-    rack_cols: int = Field(default=0, ge=0, le=48)
+    """Update rack — all optional, use None for unchanged fields."""
+
+    name: str | None = Field(default=None, max_length=120)
+    rack_width_inches: int | None = Field(default=None, ge=1, le=30)
+    rack_units: int | None = Field(default=None, ge=1, le=52)
+    rack_cols: int | None = Field(default=None, ge=1, le=48)
 
 
 class Rack(BaseModel):
