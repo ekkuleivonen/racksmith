@@ -6,6 +6,7 @@ import shutil
 
 from _utils.logging import get_logger
 
+from ansible.config import resolve_layout
 from github.misc import (
     RepoNotAvailableError,
     commit_and_push as git_commit_and_push,
@@ -13,6 +14,7 @@ from github.misc import (
     ensure_racksmith_branch,
     get_file_diffs as get_git_file_diffs,
     get_file_statuses as get_git_file_statuses,
+    get_racksmith_status_paths_repo_relative,
     is_yaml_path,
     safe_relative_path,
     validate_yaml_text,
@@ -25,11 +27,16 @@ logger = get_logger(__name__)
 
 class CodeManager:
     def get_tree(self, session) -> list[dict]:
-        return walk_tree(repos_manager.active_repo_path(session))
+        repo_path = repos_manager.active_repo_path(session)
+        layout = resolve_layout(repo_path)
+        if not layout.racksmith_base.exists():
+            return []
+        return walk_tree(layout.racksmith_base)
 
     def get_file(self, session, path: str) -> str:
         repo_path = repos_manager.active_repo_path(session)
-        file_path = safe_relative_path(repo_path, path)
+        layout = resolve_layout(repo_path)
+        file_path = safe_relative_path(layout.racksmith_base, path)
         if not file_path.exists() or not file_path.is_file():
             raise FileNotFoundError("File not found")
         try:
@@ -39,7 +46,8 @@ class CodeManager:
 
     def update_file(self, session, path: str, content: str) -> None:
         repo_path = repos_manager.active_repo_path(session)
-        file_path = safe_relative_path(repo_path, path)
+        layout = resolve_layout(repo_path)
+        file_path = safe_relative_path(layout.racksmith_base, path)
         if not file_path.exists() or not file_path.is_file():
             raise FileNotFoundError("File not found")
         if "\x00" in content:
@@ -50,7 +58,8 @@ class CodeManager:
 
     def create_file(self, session, path: str, content: str) -> None:
         repo_path = repos_manager.active_repo_path(session)
-        file_path = safe_relative_path(repo_path, path)
+        layout = resolve_layout(repo_path)
+        file_path = safe_relative_path(layout.racksmith_base, path)
         if file_path.exists():
             raise ValueError("File already exists")
         if "\x00" in content:
@@ -62,7 +71,8 @@ class CodeManager:
 
     def delete_file(self, session, path: str) -> None:
         repo_path = repos_manager.active_repo_path(session)
-        file_path = safe_relative_path(repo_path, path)
+        layout = resolve_layout(repo_path)
+        file_path = safe_relative_path(layout.racksmith_base, path)
         if not file_path.exists():
             raise FileNotFoundError("File not found")
         if not file_path.is_file():
@@ -71,14 +81,16 @@ class CodeManager:
 
     def create_folder(self, session, path: str) -> None:
         repo_path = repos_manager.active_repo_path(session)
-        folder_path = safe_relative_path(repo_path, path)
+        layout = resolve_layout(repo_path)
+        folder_path = safe_relative_path(layout.racksmith_base, path)
         if folder_path.exists():
             raise ValueError("Already exists")
         folder_path.mkdir(parents=True, exist_ok=True)
 
     def delete_folder(self, session, path: str) -> None:
         repo_path = repos_manager.active_repo_path(session)
-        folder_path = safe_relative_path(repo_path, path)
+        layout = resolve_layout(repo_path)
+        folder_path = safe_relative_path(layout.racksmith_base, path)
         if not folder_path.exists():
             raise FileNotFoundError("Folder not found")
         if not folder_path.is_dir():
@@ -87,8 +99,9 @@ class CodeManager:
 
     def move_entry(self, session, src: str, dest: str) -> None:
         repo_path = repos_manager.active_repo_path(session)
-        src_path = safe_relative_path(repo_path, src)
-        dest_path = safe_relative_path(repo_path, dest)
+        layout = resolve_layout(repo_path)
+        src_path = safe_relative_path(layout.racksmith_base, src)
+        dest_path = safe_relative_path(layout.racksmith_base, dest)
         if not src_path.exists():
             raise FileNotFoundError("Source not found")
         if dest_path.exists():
@@ -97,24 +110,36 @@ class CodeManager:
         shutil.move(str(src_path), str(dest_path))
 
     def get_file_statuses(self, session) -> dict[str, list[str]]:
-        return get_git_file_statuses(repos_manager.active_repo_path(session))
+        repo_path = repos_manager.active_repo_path(session)
+        layout = resolve_layout(repo_path)
+        prefix = layout.racksmith_prefix if layout.racksmith_prefix else None
+        return get_git_file_statuses(repo_path, racksmith_prefix=prefix)
 
     def get_diffs(self, session) -> list[dict]:
         repo_path = repos_manager.active_repo_path(session)
+        layout = resolve_layout(repo_path)
         ensure_racksmith_branch(repo_path)
-        return get_git_file_diffs(repo_path)
+        prefix = layout.racksmith_prefix if layout.racksmith_prefix else None
+        return get_git_file_diffs(repo_path, racksmith_prefix=prefix)
 
     def commit_and_push(self, session, message: str) -> str | None:
         binding = repos_manager.current_repo(session)
         if not binding:
             raise RepoNotAvailableError("Active repo is not configured")
         repo_path = repos_manager.active_repo_path(session)
+        layout = resolve_layout(repo_path)
+        paths_to_add: list[str] | None = None
+        if layout.racksmith_prefix:
+            paths_to_add = get_racksmith_status_paths_repo_relative(
+                repo_path, layout.racksmith_prefix
+            )
         result = git_commit_and_push(
             repo_path,
             message,
             session.access_token,
             binding.owner,
             binding.repo,
+            paths_to_add=paths_to_add,
         )
         if result:
             logger.info("repo_committed_and_pushed", message=message[:80], owner=binding.owner, repo=binding.repo)

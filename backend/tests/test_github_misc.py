@@ -2,12 +2,16 @@
 
 from __future__ import annotations
 
+import subprocess
 from pathlib import Path
 
 import pytest
 
 from github.misc import (
     REPO_NAME_RE,
+    get_file_statuses,
+    get_file_diffs,
+    get_racksmith_status_paths_repo_relative,
     is_yaml_path,
     safe_relative_path,
     safe_slug,
@@ -161,3 +165,51 @@ class TestRepoNameRe:
         assert not REPO_NAME_RE.match("owner/repo")
         assert not REPO_NAME_RE.match("owner repo")
         assert not REPO_NAME_RE.match("")
+
+
+class TestGetFileStatusesRacksmithPrefix:
+    """Tests for get_file_statuses with racksmith_prefix filtering."""
+
+    def test_filters_to_racksmith_only(self, tmp_path: Path) -> None:
+        subprocess.run(["git", "init"], cwd=tmp_path, check=True, capture_output=True)
+        (tmp_path / ".racksmith").mkdir()
+        (tmp_path / ".racksmith" / "playbooks").mkdir()
+        (tmp_path / ".racksmith" / "playbooks" / "deploy.yml").write_text("x")
+        (tmp_path / "readme.md").write_text("readme")
+        (tmp_path / "other").mkdir()
+        (tmp_path / "other" / "file.txt").write_text("y")
+        statuses = get_file_statuses(tmp_path, racksmith_prefix=".racksmith")
+        assert "playbooks/deploy.yml" in statuses["untracked"]
+        assert "readme.md" not in statuses["untracked"] and "readme.md" not in statuses["modified"]
+        assert "other/file.txt" not in statuses["untracked"] and "other/file.txt" not in statuses["modified"]
+
+    def test_without_prefix_returns_all(self, tmp_path: Path) -> None:
+        subprocess.run(["git", "init"], cwd=tmp_path, check=True, capture_output=True)
+        (tmp_path / ".racksmith").mkdir()
+        (tmp_path / ".racksmith" / "x.yml").write_text("a")
+        (tmp_path / "root.txt").write_text("b")
+        statuses = get_file_statuses(tmp_path)
+        assert ".racksmith/x.yml" in statuses["untracked"]
+        assert "root.txt" in statuses["untracked"]
+
+
+class TestGetRacksmithStatusPathsRepoRelative:
+    def test_returns_only_racksmith_paths(self, tmp_path: Path) -> None:
+        subprocess.run(["git", "init"], cwd=tmp_path, check=True, capture_output=True)
+        (tmp_path / ".racksmith").mkdir()
+        (tmp_path / ".racksmith" / "file.yml").write_text("x")
+        (tmp_path / "outside.txt").write_text("y")
+        paths = get_racksmith_status_paths_repo_relative(tmp_path, ".racksmith")
+        assert ".racksmith/file.yml" in paths
+        assert "outside.txt" not in paths
+
+
+class TestGetFileDiffsRacksmithPrefix:
+    def test_returns_racksmith_relative_paths(self, tmp_path: Path) -> None:
+        subprocess.run(["git", "init"], cwd=tmp_path, check=True, capture_output=True)
+        (tmp_path / ".racksmith").mkdir()
+        (tmp_path / ".racksmith" / "deploy.yml").write_text("content")
+        diffs = get_file_diffs(tmp_path, racksmith_prefix=".racksmith")
+        assert len(diffs) == 1
+        assert diffs[0]["path"] == "deploy.yml"
+        assert diffs[0]["status"] == "untracked"

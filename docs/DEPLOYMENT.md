@@ -66,6 +66,46 @@ Production images are pulled from `ghcr.io/ekkuleivonen/racksmith-*` (or your re
 - `./data` — SQLite DB and any backend data
 - `./workspace` — cloned Git repos per user
 
+## Single-container deployment
+
+For quick start, homelab, or when you don't want docker-compose, use the all-in-one **racksmith-client** image. It bundles backend, worker, Redis, and frontend in one container.
+
+**When to use:** LAN deployment, no external Redis/PostgreSQL needed. Registry and PostgreSQL stay external (host them in the cloud).
+
+**Required env vars:**
+
+| Variable | Description |
+|----------|-------------|
+| `GITHUB_CLIENT_ID` | OAuth App Client ID |
+| `GITHUB_CLIENT_SECRET` | OAuth App Secret |
+| `APP_URL` | URL where users reach the app (e.g. `http://192.168.1.10:8080`, `https://racksmith.example.com`) |
+| `REGISTRY_URL` | Your cloud registry (e.g. `https://registry.racksmith.io`) |
+
+**Example `docker run`:**
+
+```bash
+docker run -p 8080:8080 \
+  -e GITHUB_CLIENT_ID=... \
+  -e GITHUB_CLIENT_SECRET=... \
+  -e APP_URL=http://localhost:8080 \
+  -e REGISTRY_URL=https://registry.racksmith.io \
+  -v ./data:/app/data \
+  -v ./workspace:/app/workspace \
+  ghcr.io/ekkuleivonen/racksmith-client:latest
+```
+
+**Example `docker compose` (use `docker-compose.client.yml`):**
+
+```bash
+docker compose -f docker-compose.client.yml up -d
+```
+
+**Volumes:**
+- `./data` → `/app/data` (SQLite, backend data)
+- `./workspace` → `/app/workspace` (cloned repos)
+
+**Note:** The Registry is external and must be reachable from the container. The client uses SQLite (no PostgreSQL) and embedded Redis.
+
 ## Backend Deployment (standalone)
 
 If not using Docker:

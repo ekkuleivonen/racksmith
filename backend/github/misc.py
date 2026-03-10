@@ -317,8 +317,32 @@ def get_untracked_paths(repo_path: Path) -> list[str]:
     return statuses["untracked"]
 
 
-def get_file_statuses(repo_path: Path) -> dict[str, list[str]]:
-    """Return modified and untracked paths from git status --porcelain."""
+def get_racksmith_status_paths_repo_relative(
+    repo_path: Path, racksmith_prefix: str
+) -> list[str]:
+    """Return repo-relative paths of modified/untracked files under racksmith_prefix."""
+    statuses = get_file_statuses(repo_path)  # full repo, no filter
+    repo_rel: list[str] = []
+    for p in set(statuses["modified"]) | set(statuses["untracked"]):
+        normalized = p.removeprefix("./")
+        if normalized == racksmith_prefix or normalized.startswith(
+            racksmith_prefix + "/"
+        ):
+            repo_rel.append(normalized)
+    return sorted(repo_rel)
+
+
+def get_file_statuses(
+    repo_path: Path,
+    *,
+    racksmith_prefix: str | None = None,
+) -> dict[str, list[str]]:
+    """Return modified and untracked paths from git status --porcelain.
+
+    When racksmith_prefix is provided, only include paths under that prefix
+    (equal or start with prefix/). Returned paths are stripped of the prefix
+    so they are racksmith-relative (e.g. playbooks/deploy.yml).
+    """
     result = subprocess.run(
         ["git", "-C", str(repo_path), "status", "--porcelain", "--untracked-files=all"],
         capture_output=True,
@@ -342,6 +366,19 @@ def get_file_statuses(repo_path: Path) -> dict[str, list[str]]:
             continue
         # Normalize path (git may output ./path for root-level files)
         normalized = candidate.removeprefix("./")
+        if racksmith_prefix:
+            if normalized != racksmith_prefix and not normalized.startswith(
+                racksmith_prefix + "/"
+            ):
+                continue
+            # Strip prefix to get racksmith-relative path
+            if normalized == racksmith_prefix:
+                stripped = ""
+            else:
+                stripped = normalized[len(racksmith_prefix) + 1 :]
+            if not stripped:
+                continue
+            normalized = stripped
         if status == "??":
             untracked.add(normalized)
         else:
@@ -417,23 +454,35 @@ def _format_untracked_diff(path: Path) -> str:
     return header + "\n".join("+" + line for line in lines)
 
 
-def get_file_diffs(repo_path: Path) -> list[dict]:
-    """Return list of {path, status, diff} for modified and untracked files."""
-    statuses = get_file_statuses(repo_path)
+def get_file_diffs(
+    repo_path: Path,
+    *,
+    racksmith_prefix: str | None = None,
+) -> list[dict]:
+    """Return list of {path, status, diff} for modified and untracked files.
+
+    When racksmith_prefix is provided, only include paths under that prefix.
+    Returned path in each dict is racksmith-relative.
+    """
+    statuses = get_file_statuses(repo_path, racksmith_prefix=racksmith_prefix)
     result: list[dict] = []
     for path in statuses["modified"]:
-        full_path = repo_path / path
+        repo_rel = f"{racksmith_prefix}/{path}" if racksmith_prefix else path
+        full_path = repo_path / repo_rel
         if not full_path.exists():
-            diff_result = run_git(repo_path, ["diff", "--no-color", "--", path], check=False)
+            diff_result = run_git(
+                repo_path, ["diff", "--no-color", "--", repo_rel], check=False
+            )
             result.append({"path": path, "status": "deleted", "diff": diff_result.stdout or ""})
             continue
         if _is_binary(full_path):
             result.append({"path": path, "status": "modified", "diff": "(binary file)"})
             continue
-        diff_result = run_git(repo_path, ["diff", "--no-color", path], check=False)
+        diff_result = run_git(repo_path, ["diff", "--no-color", repo_rel], check=False)
         result.append({"path": path, "status": "modified", "diff": diff_result.stdout or ""})
     for path in statuses["untracked"]:
-        full_path = repo_path / path
+        repo_rel = f"{racksmith_prefix}/{path}" if racksmith_prefix else path
+        full_path = repo_path / repo_rel
         if not full_path.exists() or not full_path.is_file():
             continue
         if _is_binary(full_path):
@@ -465,15 +514,24 @@ def commit_and_push(
     access_token: str,
     owner: str,
     repo: str,
+    paths_to_add: list[str] | None = None,
 ) -> str | None:
-    """Stage all changes, commit, push to racksmith branch, create PR, return PR URL."""
+    """Stage all changes, commit, push to racksmith branch, create PR, return PR URL.
+
+    When paths_to_add is provided (repo-relative paths), only stage those paths.
+    Otherwise stage everything (add -A).
+    """
     try:
         remote_url = (
             f"https://x-access-token:{access_token}"
             f"@github.com/{owner}/{repo}.git"
         )
         run_git(repo_path, ["remote", "set-url", "origin", remote_url], check=False)
-        run_git(repo_path, ["add", "-A"])
+        if paths_to_add is not None:
+            if paths_to_add:
+                run_git(repo_path, ["add", "--"] + paths_to_add)
+        else:
+            run_git(repo_path, ["add", "-A"])
         msg = message.strip()
         if not msg:
             raise ValueError("Commit message cannot be empty")

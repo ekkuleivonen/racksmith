@@ -17,6 +17,8 @@ class AnsibleLayout:
     """Resolved paths for inventory, roles, and playbooks within a repo."""
 
     repo_path: Path
+    racksmith_base: Path
+    racksmith_prefix: str  # repo-relative, e.g. ".racksmith"; empty if base is absolute
     inventory_path: Path
     host_vars_path: Path
     group_vars_path: Path
@@ -54,8 +56,15 @@ def resolve_layout(repo_path: Path) -> AnsibleLayout:
     if not base.is_absolute():
         base = repo_path / base
 
+    try:
+        racksmith_prefix = str(base.relative_to(repo_path))
+    except ValueError:
+        racksmith_prefix = ""  # base is absolute or outside repo
+
     return AnsibleLayout(
         repo_path=repo_path,
+        racksmith_base=base,
+        racksmith_prefix=racksmith_prefix,
         inventory_path=base / "inventory",
         host_vars_path=base / "host_vars",
         group_vars_path=base / "group_vars",

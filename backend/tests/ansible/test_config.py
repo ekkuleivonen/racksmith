@@ -14,6 +14,8 @@ class TestResolveLayoutDefaults:
         layout = resolve_layout(repo_path)
         base = repo_path / ".racksmith"
         assert layout.repo_path.resolve() == repo_path.resolve()
+        assert layout.racksmith_base == base
+        assert layout.racksmith_prefix == ".racksmith"
         assert layout.inventory_path == base / "inventory"
         assert layout.host_vars_path == base / "host_vars"
         assert layout.group_vars_path == base / "group_vars"
@@ -41,6 +43,8 @@ class TestResolveLayoutRacksmithConfig:
         )
         layout = resolve_layout(repo_path)
         base = repo_path / "ansible_resources"
+        assert layout.racksmith_base == base
+        assert layout.racksmith_prefix == "ansible_resources"
         assert layout.inventory_path == base / "inventory"
         assert layout.host_vars_path == base / "host_vars"
         assert layout.roles_path == base / "roles"

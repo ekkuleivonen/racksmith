@@ -28,6 +28,9 @@ jobs:
           - name: racksmith-registry
             dockerfile: registry/Dockerfile
             context: .
+          - name: racksmith-client
+            dockerfile: docker/Dockerfile.client
+            context: .
 
     steps:
       - uses: actions/checkout@v4
