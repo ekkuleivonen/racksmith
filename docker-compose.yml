@@ -41,8 +41,11 @@ services:
     image: racksmith-registry:dev
     ports:
       - "8001:8001"
+    env_file:
+      - .env
     environment:
       DATABASE_URL: postgresql+asyncpg://registry:registry@registry-db/registry
+      REGISTRY_PUBLIC_URL: http://localhost:8001
     depends_on:
       - registry-db
 

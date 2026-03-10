@@ -10,4 +10,5 @@ dependencies = [
     "alembic",
     "httpx",
     "structlog",
+    "cryptography>=46.0.5",
 ]

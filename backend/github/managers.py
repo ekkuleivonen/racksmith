@@ -1,4 +1,4 @@
-"""GitHub auth/session management."""
+"""Auth management: registry-mediated OAuth, session lifecycle, token refresh."""
 
 from __future__ import annotations
 
@@ -18,58 +18,89 @@ from github.misc import SessionData, create_session, delete_session, get_session
 
 
 class AuthManager:
-    """OAuth flow, session lifecycle, and FastAPI auth dependencies."""
+    """Registry-mediated OAuth flow, session lifecycle, and FastAPI auth deps."""
 
     def __init__(self) -> None:
         self._oauth_states: dict[str, bool] = {}
 
-    def get_login_url(self, redirect_uri: str) -> str:
+    def get_registry_login_url(self, callback_url: str) -> str:
+        """Build the URL to redirect the user to registry's OAuth entry point."""
         state = secrets.token_urlsafe(32)
         self._oauth_states[state] = True
         params = {
-            "client_id": settings.GITHUB_CLIENT_ID,
-            "redirect_uri": redirect_uri,
-            "scope": settings.GITHUB_OAUTH_SCOPES,
+            "callback_url": callback_url,
             "state": state,
         }
-        return f"{settings.GITHUB_OAUTH_BASE}/login/oauth/authorize?{urlencode(params)}"
+        registry_url = settings.REGISTRY_URL.rstrip("/")
+        return f"{registry_url}/auth/login?{urlencode(params)}"
 
-    async def handle_callback(
-        self, code: str | None, state: str | None, redirect_uri: str
-    ) -> str | None:
-        if not code or not state or state not in self._oauth_states:
-            logger.warning("auth_login_failed", reason="invalid_or_missing_state")
-            return None
+    def validate_state(self, state: str | None) -> bool:
+        """Validate and consume a CSRF state token."""
+        if not state or state not in self._oauth_states:
+            return False
         del self._oauth_states[state]
+        return True
 
-        async with httpx.AsyncClient() as client:
-            token_resp = await client.post(
-                f"{settings.GITHUB_OAUTH_BASE}/login/oauth/access_token",
-                params={
-                    "client_id": settings.GITHUB_CLIENT_ID,
-                    "client_secret": settings.GITHUB_CLIENT_SECRET,
-                    "code": code,
-                    "redirect_uri": redirect_uri,
-                },
-                headers={"Accept": "application/json"},
-            )
-        access_token = token_resp.json().get("access_token")
-        if not access_token:
-            logger.warning("auth_login_failed", reason="no_token_in_response")
+    async def exchange_code(self, exchange_code: str) -> str | None:
+        """Exchange a one-time code with registry for GH token + user, create session."""
+        registry_url = settings.REGISTRY_URL.rstrip("/")
+        try:
+            async with httpx.AsyncClient() as client:
+                resp = await client.post(
+                    f"{registry_url}/auth/exchange",
+                    json={"exchange_code": exchange_code},
+                    timeout=10,
+                )
+            if resp.status_code != 200:
+                logger.warning("auth_exchange_failed", status_code=resp.status_code)
+                return None
+            data = resp.json()
+        except httpx.HTTPError as e:
+            logger.error("auth_exchange_error", error=str(e))
             return None
 
-        async with httpx.AsyncClient() as client:
-            user_resp = await client.get(
-                f"{settings.GITHUB_API_BASE}/user",
-                headers={"Authorization": f"Bearer {access_token}"},
-            )
-        if user_resp.status_code != 200:
-            logger.warning("auth_login_failed", reason="user_fetch_failed", status_code=user_resp.status_code)
+        access_token = data.get("github_access_token")
+        user_data = data.get("user")
+        if not access_token or not user_data:
+            logger.warning("auth_exchange_failed", reason="missing_token_or_user")
             return None
 
-        user_data = user_resp.json()
         session_id = create_session(access_token, user_data)
         logger.info("auth_login_success", user_id=str(user_data.get("id", "")))
+        return session_id
+
+    async def refresh_token(self, session: SessionData) -> str | None:
+        """Ask registry for a fresh GH token using the stored github_id.
+
+        Returns a new session_id if successful, or None.
+        """
+        github_id = session.user.get("id")
+        if not github_id:
+            return None
+
+        registry_url = settings.REGISTRY_URL.rstrip("/")
+        try:
+            async with httpx.AsyncClient() as client:
+                resp = await client.post(
+                    f"{registry_url}/auth/refresh",
+                    json={"github_id": github_id},
+                    timeout=10,
+                )
+            if resp.status_code != 200:
+                logger.warning("auth_refresh_failed", status_code=resp.status_code)
+                return None
+            data = resp.json()
+        except httpx.HTTPError as e:
+            logger.error("auth_refresh_error", error=str(e))
+            return None
+
+        access_token = data.get("github_access_token")
+        user_data = data.get("user")
+        if not access_token or not user_data:
+            return None
+
+        session_id = create_session(access_token, user_data)
+        logger.info("auth_token_refreshed", user_id=str(user_data.get("id", "")))
         return session_id
 
     def logout(self, session_id: str | None) -> None:

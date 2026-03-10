@@ -1,62 +1,47 @@
+# Production: client + registry + registry-db
+# Expose via cloudflared tunnels:
+#   - Client:  https://racksmith.elei.io
+#   - Registry: https://racksmith-registry.elei.io
+#
+# =============================================================================
+# MUST have env vars (set in .env)
+# =============================================================================
+#
+# CLIENT (racksmith-client):
+#   APP_URL              — Public URL of the client (e.g. https://racksmith.elei.io)
+#   REGISTRY_URL         — Registry API URL (e.g. https://racksmith-registry.elei.io)
+#
+# REGISTRY:
+#   GITHUB_CLIENT_ID     — OAuth App Client ID
+#   GITHUB_CLIENT_SECRET — OAuth App Client Secret
+#   TOKEN_ENCRYPTION_KEY — Fernet key (generate: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())")
+#   REGISTRY_PUBLIC_URL  — Public URL of the registry (e.g. https://racksmith-registry.elei.io)
+#   REGISTRY_DB_PASSWORD — PostgreSQL password (also used by registry-db)
+#
+# GitHub OAuth App: set Authorization callback URL to {REGISTRY_PUBLIC_URL}/auth/callback
+#
+# =============================================================================
+
 services:
-  redis:
-    image: redis:7-alpine
+  client:
+    image: ghcr.io/ekkuleivonen/racksmith-client:${RACKSMITH_VERSION:-latest}
     restart: unless-stopped
     ports:
-      - "6379:6379"
-    volumes:
-      - redis_data:/data
-
-  app:
-    image: ghcr.io/ekkuleivonen/racksmith-app:${RACKSMITH_VERSION:-latest}
-    restart: unless-stopped
-    ports:
-      - "8000:8000"
+      - "8080:8080"
     env_file:
       - .env
     environment:
-      REDIS_URL: redis://redis:6379
-      DB_PATH: /app/data/racksmith.db
-      REPOS_WORKSPACE: /app/workspace
-      REGISTRY_URL: http://registry:8001
+      APP_URL: ${APP_URL}
+      REGISTRY_URL: ${REGISTRY_URL}
     volumes:
       - ./data:/app/data
       - ./workspace:/app/workspace
-    depends_on:
-      redis:
-        condition: service_started
     healthcheck:
-      test: ["CMD", "uv", "run", "python", "-c", "import socket; s=socket.create_connection(('localhost',8000),2); s.close()"]
-      interval: 5s
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:8080/api/version"]
+      interval: 10s
       timeout: 5s
-      retries: 20
+      retries: 3
       start_period: 30s
-
-  worker:
-    image: ghcr.io/ekkuleivonen/racksmith-app:${RACKSMITH_VERSION:-latest}
-    restart: unless-stopped
-    command: ["uv", "run", "python", "run_worker.py", "worker.settings.WorkerSettings"]
-    env_file:
-      - .env
-    environment:
-      REDIS_URL: redis://redis:6379
-      DB_PATH: /app/data/racksmith.db
-      REPOS_WORKSPACE: /app/workspace
-      REGISTRY_URL: http://registry:8001
-    volumes:
-      - ./data:/app/data
-      - ./workspace:/app/workspace
-    depends_on:
-      - redis
-
-  frontend:
-    image: ghcr.io/ekkuleivonen/racksmith-frontend:${RACKSMITH_VERSION:-latest}
-    restart: unless-stopped
-    ports:
-      - "3000:80"
-    depends_on:
-      app:
-        condition: service_healthy
 
   registry-db:
     image: postgres:17-alpine
@@ -73,8 +58,11 @@ services:
     restart: unless-stopped
     ports:
       - "8001:8001"
+    env_file:
+      - .env
     environment:
       DATABASE_URL: postgresql+asyncpg://registry:${REGISTRY_DB_PASSWORD}@registry-db/registry
+      REGISTRY_PUBLIC_URL: ${REGISTRY_PUBLIC_URL}
     depends_on:
       registry-db:
         condition: service_started
@@ -90,5 +78,4 @@ services:
     restart: unless-stopped
 
 volumes:
-  redis_data:
   registry_db_data:

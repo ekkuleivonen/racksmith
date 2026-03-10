@@ -45,6 +45,7 @@ structlog.configure(
 )
 
 from fastapi.middleware.cors import CORSMiddleware
+from auth.router import router as auth_router
 from roles.router import router as roles_router
 
 logger = structlog.get_logger(__name__)
@@ -87,6 +88,7 @@ if settings.ALLOWED_ORIGINS:
         allow_headers=["*"],
     )
 
+app.include_router(auth_router, tags=["auth"])
 app.include_router(roles_router, tags=["roles"])
 
 

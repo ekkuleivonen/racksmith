@@ -1,3 +1,5 @@
+from datetime import datetime
+from typing import Optional
 from uuid import uuid4
 
 from sqlalchemy import (
@@ -26,6 +28,8 @@ class User(Base):
     avatar_url: Mapped[str] = mapped_column(Text, default="")
     access_level: Mapped[str] = mapped_column(Text, default="user")
     created_at = mapped_column(DateTime(timezone=True), server_default=func.now())
+    last_seen: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    github_access_token_enc: Mapped[str] = mapped_column(Text, default="")
 
     roles: Mapped[list["RegistryRole"]] = relationship(back_populates="owner")
 

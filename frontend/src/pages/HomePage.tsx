@@ -11,7 +11,7 @@ import { isManagedHost } from "@/lib/hosts";
 function isSetupComplete(
   loading: boolean,
   repoReady: boolean,
-  nodesCount: number
+  nodesCount: number,
 ): boolean {
   return !loading && repoReady && nodesCount > 0;
 }
@@ -46,36 +46,13 @@ export function HomePage() {
               RACKSMITH
             </h1>
             <p className="text-lg text-zinc-400 max-w-xl mx-auto">
-              Infrastructure as code, backed by Git. Define your hardware, run
-              Ansible stacks, and manage nodes from a single GitOps repo.
-            </p>
-          </div>
-
-          <div className="space-y-6 text-zinc-500 text-sm max-w-lg mx-auto">
-            <div className="space-y-2">
-              <h2 className="text-zinc-300 font-medium">What it does</h2>
-              <ul className="space-y-1.5 list-disc list-inside">
-                <li>
-                  Rack builder — define servers, network gear, and topology in
-                  YAML
-                </li>
-                <li>SSH terminal — connect to nodes with one click</li>
-                <li>
-                  Code workspace — edit stacks and inventory in the browser
-                </li>
-                <li>Ansible integration — run stacks and track runs</li>
-              </ul>
-            </div>
-            <p>
-              Racksmith plugs into any Git repo. Connect your GitHub account,
-              pick a repo, and start defining your infra. Everything lives in
-              version control.
+              Homelab infra - simplified
             </p>
           </div>
 
           <div className="flex justify-center gap-3">
             <Button size="lg" asChild>
-              <Link to="/setup">Get started</Link>
+              <Link to="/setup">Login to get started</Link>
             </Button>
           </div>
         </div>

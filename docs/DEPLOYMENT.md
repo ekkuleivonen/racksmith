@@ -16,23 +16,32 @@ Racksmith consists of:
 
 - Docker and Docker Compose (for containerized deployment)
 - Git
-- GitHub OAuth App (create at [github.com/settings/developers](https://github.com/settings/developers))
+
+Users deploying the Racksmith **client** do NOT need to create a GitHub OAuth App — the registry handles OAuth centrally.
 
 ## Environment Variables
 
-Copy `.env.example` to `.env` and configure:
+### Client (backend + frontend) — what users deploy
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `APP_URL` | Yes | URL where frontend is served (e.g. `http://localhost:3000`) |
+| `REGISTRY_URL` | Yes | Registry API URL (e.g. `https://registry.racksmith.io`) |
+| `REPOS_WORKSPACE` | No | Path for cloned repos (default: `./workspace`) |
+| `DB_PATH` | No | SQLite path (default: `./data/racksmith.db`) |
+| `REDIS_URL` | No | Redis connection (default: `redis://localhost:6379`) |
+| `SESSION_MAX_AGE` | No | Session lifetime in seconds (default: `604800` / 7 days) |
+
+### Registry — what the operator deploys in the cloud
 
 | Variable | Required | Description |
 |----------|----------|-------------|
 | `GITHUB_CLIENT_ID` | Yes | OAuth App Client ID |
 | `GITHUB_CLIENT_SECRET` | Yes | OAuth App Client Secret |
-| `APP_URL` | Yes | URL where frontend is served (e.g. `http://localhost:3000` for Docker, `http://localhost:5173` for dev) |
-| `REPOS_WORKSPACE` | No | Path for cloned repos (default: `./workspace`) |
-| `DB_PATH` | No | SQLite path for run history (default: `./data/racksmith.db`) |
-| `REDIS_URL` | No | Redis connection (default: `redis://localhost:6379`) |
-| `REGISTRY_URL` | No | Registry API URL (default: `http://localhost:8001`) |
-| `REGISTRY_DB_PASSWORD` | Prod | PostgreSQL password for registry (required in docker-compose.prod) |
-| `RACKSMITH_VERSION` | No | App version (default: `1.0.0`) |
+| `TOKEN_ENCRYPTION_KEY` | Yes | Fernet key for encrypting GH tokens at rest |
+| `REGISTRY_PUBLIC_URL` | Yes | Public URL of the registry (e.g. `https://registry.racksmith.io`) |
+| `DATABASE_URL` | Yes | PostgreSQL connection string |
+| `REGISTRY_DB_PASSWORD` | Prod | PostgreSQL password (for docker-compose.prod) |
 
 See `.env.example` for the full list.
 
@@ -52,7 +61,7 @@ docker compose up -d
 
 ### Production
 
-1. Create `.env` with `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`, `APP_URL`, `REGISTRY_DB_PASSWORD`
+1. Create `.env` with `APP_URL`, `REGISTRY_URL`
 2. Set `APP_URL` to your public frontend URL (e.g. `https://racksmith.example.com`)
 3. Optionally set `RACKSMITH_VERSION` for image tags
 
@@ -76,17 +85,13 @@ For quick start, homelab, or when you don't want docker-compose, use the all-in-
 
 | Variable | Description |
 |----------|-------------|
-| `GITHUB_CLIENT_ID` | OAuth App Client ID |
-| `GITHUB_CLIENT_SECRET` | OAuth App Secret |
-| `APP_URL` | URL where users reach the app (e.g. `http://192.168.1.10:8080`, `https://racksmith.example.com`) |
+| `APP_URL` | URL where users reach the app (e.g. `http://192.168.1.10:8080`) |
 | `REGISTRY_URL` | Your cloud registry (e.g. `https://registry.racksmith.io`) |
 
 **Example `docker run`:**
 
 ```bash
 docker run -p 8080:8080 \
-  -e GITHUB_CLIENT_ID=... \
-  -e GITHUB_CLIENT_SECRET=... \
   -e APP_URL=http://localhost:8080 \
   -e REGISTRY_URL=https://registry.racksmith.io \
   -v ./data:/app/data \
@@ -138,8 +143,9 @@ The `dist/` folder can be served by any static file server (nginx, Caddy, etc.).
 
 1. Install PostgreSQL, create database and user
 2. Set `DATABASE_URL` (e.g. `postgresql+asyncpg://user:pass@host/db`)
-3. Run migrations: `cd registry && alembic upgrade head`
-4. Run: `uv run uvicorn main:app --host 0.0.0.0 --port 8001`
+3. Set `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`, `TOKEN_ENCRYPTION_KEY`, `REGISTRY_PUBLIC_URL`
+4. Run migrations: `cd registry && alembic upgrade head`
+5. Run: `uv run uvicorn main:app --host 0.0.0.0 --port 8001`
 
 Registry requires `ALLOWED_ORIGINS` (comma-separated) for CORS when the frontend/backend run on different origins.
 
@@ -150,6 +156,20 @@ Registry requires `ALLOWED_ORIGINS` (comma-separated) for CORS when the frontend
 
 ## OAuth Setup
 
+The **registry** owns the GitHub OAuth App. Client deployments do not need GH credentials.
+
 1. Create a GitHub OAuth App (Settings → Developer settings → OAuth Apps)
-2. Set Authorization callback URL to `{APP_URL}/api/auth/callback` (e.g. `http://localhost:3000/api/auth/callback`)
-3. Use the Client ID and Client Secret in `.env`
+2. Set Authorization callback URL to `{REGISTRY_PUBLIC_URL}/auth/callback` (e.g. `https://registry.racksmith.io/auth/callback`)
+3. Set `GITHUB_CLIENT_ID` and `GITHUB_CLIENT_SECRET` on the **registry** (not on client)
+4. Generate a Fernet key: `python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"`
+5. Set `TOKEN_ENCRYPTION_KEY` on the registry
+
+## Auth Flow
+
+1. User clicks Login → client backend redirects to registry `/auth/login`
+2. Registry redirects to GitHub OAuth
+3. GitHub calls back to registry → registry exchanges code for GH token, encrypts and stores it
+4. Registry generates a one-time exchange code, redirects back to client
+5. Client backend exchanges code for GH token + user profile via `POST /auth/exchange`
+6. Client stores token in local Redis session (7-day default lifetime)
+7. When session nears expiry, client calls `POST /auth/refresh` to get a fresh token from registry

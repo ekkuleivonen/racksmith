@@ -8,11 +8,12 @@ from db.models import User
 from fastapi import Depends, Header, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.sql import func
 
 logger = structlog.get_logger()
 
 _token_cache: dict[str, tuple[dict, float]] = {}
-_CACHE_TTL = 60  # seconds
+_CACHE_TTL = 3600  # 1 hour — GH tokens don't change during a session
 
 
 async def _verify_github_token(token: str) -> dict:
@@ -46,6 +47,7 @@ async def _upsert_user(session: AsyncSession, gh_user: dict) -> User:
             github_id=gh_user["id"],
             username=gh_user["login"],
             avatar_url=gh_user.get("avatar_url", ""),
+            last_seen=func.now(),
         )
         session.add(user)
         await session.commit()
@@ -54,6 +56,7 @@ async def _upsert_user(session: AsyncSession, gh_user: dict) -> User:
     else:
         user.username = gh_user["login"]
         user.avatar_url = gh_user.get("avatar_url", "")
+        user.last_seen = func.now()
         await session.commit()
 
     return user

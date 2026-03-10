@@ -1,10 +1,10 @@
 from _utils.environ import env
 
 # =============================================================================
-# GitHub
+# GitHub (no longer required — registry owns the OAuth app)
 # =============================================================================
-GITHUB_CLIENT_ID: str = env.str("GITHUB_CLIENT_ID", required=True)
-GITHUB_CLIENT_SECRET: str = env.str("GITHUB_CLIENT_SECRET", required=True)
+GITHUB_CLIENT_ID: str = env.str("GITHUB_CLIENT_ID", default="")
+GITHUB_CLIENT_SECRET: str = env.str("GITHUB_CLIENT_SECRET", default="")
 GITHUB_OAUTH_SCOPES: str = env.str("GITHUB_OAUTH_SCOPES", default="repo read:user")
 GITHUB_API_BASE: str = env.str("GITHUB_API_BASE", default="https://api.github.com")
 GITHUB_OAUTH_BASE: str = env.str("GITHUB_OAUTH_BASE", default="https://github.com")
@@ -50,7 +50,7 @@ GIT_RACKSMITH_BRANCH: str = env.str("GIT_RACKSMITH_BRANCH", default="racksmith")
 # Session
 # =============================================================================
 SESSION_COOKIE_NAME: str = env.str("SESSION_COOKIE_NAME", default="racksmith_session")
-SESSION_MAX_AGE: int = env.int("SESSION_MAX_AGE", default=86400)  # 24h
+SESSION_MAX_AGE: int = env.int("SESSION_MAX_AGE", default=604800)  # 7 days
 
 # =============================================================================
 # Git
