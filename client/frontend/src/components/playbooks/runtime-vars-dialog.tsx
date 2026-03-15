@@ -98,7 +98,6 @@ export function RuntimeVarsDialog({
   if (!hasInteractiveInputs) return null;
 
   const isBoolType = (type: string) => type === "bool" || type === "boolean";
-  const isListType = (type: string) => type === "list" || type === "select";
 
   return (
     <AlertDialog open={open} onOpenChange={(o) => !o && handleCancel()}>
@@ -133,7 +132,7 @@ export function RuntimeVarsDialog({
                       <SelectItem value="false">false</SelectItem>
                     </SelectContent>
                   </Select>
-                ) : isListType(inp.type) && inp.options.length > 0 ? (
+                ) : inp.options.length > 0 ? (
                   <Select
                     value={vars[inp.key] ?? ""}
                     onValueChange={(value) =>

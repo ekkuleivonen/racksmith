@@ -123,7 +123,7 @@ class TestReadRoleActionYaml:
                         },
                         {
                             "key": "state",
-                            "type": "select",
+                            "type": "string",
                             "options": ["present", "absent"],
                         },
                         {"key": "secret", "type": "secret"},
