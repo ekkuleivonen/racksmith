@@ -157,6 +157,22 @@ async def create_role(
     return await _role_to_out(role, session)
 
 
+@router.put("/roles", response_model=RoleOut)
+@limiter.limit("20/minute")
+async def upsert_role(
+    request: Request,
+    data: RoleCreate,
+    session: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    role, created = await managers.upsert_role(session, data, user)
+    out = await _role_to_out(role, session)
+    if created:
+        from starlette.responses import JSONResponse
+        return JSONResponse(content=out.model_dump(mode="json"), status_code=201)
+    return out
+
+
 @router.put("/roles/{slug}", response_model=RoleOut)
 @limiter.limit("20/minute")
 async def update_role(
