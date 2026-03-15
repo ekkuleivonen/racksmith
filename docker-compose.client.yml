@@ -1,0 +1,33 @@
+# Racksmith Client — runs locally on your machine / homelab
+#
+# MUST have env vars (set in .env):
+#   APP_URL — Public URL of the client (e.g. http://localhost:8080)
+
+services:
+  client:
+    image: ghcr.io/ekkuleivonen/racksmith-client:${RACKSMITH_VERSION:-latest}
+    restart: unless-stopped
+    network_mode: host
+    env_file:
+      - .env
+    environment:
+      APP_URL: ${APP_URL}
+    volumes:
+      - ./data:/app/data
+      - ./workspace:/app/workspace
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:8080/api/version"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+  watchtower:
+    image: nickfedor/watchtower
+    environment:
+      - WATCHTOWER_POLL_INTERVAL=60
+      - WATCHTOWER_CLEANUP=true
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ${HOME}/.docker/config.json:/config.json:ro
+    restart: unless-stopped

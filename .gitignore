@@ -1,0 +1,42 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+
+# Virtual environments
+.venv
+
+.env
+
+# Node / JS
+node_modules/
+.npm/
+client/frontend/dist/
+client/backend/data/
+client/backend/workspace/
+data/
+workspace/
+
+.cursor/
+.vscode/
+.idea/
+
+# Keys and certificates
+*.pem
+*.key
+*.crt
+*.p12
+
+# Additional env patterns
+.env.local
+.env.*.local
+
+# Editor swap files
+*.swp
+*.swo

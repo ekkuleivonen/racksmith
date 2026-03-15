@@ -1,0 +1,22 @@
+.git
+.github
+.env
+.env.*
+!.env.example
+*.md
+LICENSE
+**/__pycache__
+**/.pytest_cache
+**/.mypy_cache
+**/.ruff_cache
+**/node_modules
+client/frontend/dist
+**/*.pyc
+.vscode
+.cursor
+
+# Keep test/dev artifacts out of production images
+**/tests/
+**/conftest.py
+**/.coverage
+**/htmlcov/

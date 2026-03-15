@@ -1,0 +1,47 @@
+# Racksmith Registry — cloud-hosted service serving all clients
+#
+# MUST have env vars (set in .env):
+#   GITHUB_CLIENT_ID     — OAuth App Client ID
+#   GITHUB_CLIENT_SECRET — OAuth App Secret
+#   TOKEN_ENCRYPTION_KEY — Fernet key
+#   REGISTRY_PUBLIC_URL  — Public URL (e.g. https://registry.racksmith.io)
+#   REGISTRY_DB_PASSWORD — PostgreSQL password
+
+services:
+  registry-db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: registry
+      POSTGRES_USER: registry
+      POSTGRES_PASSWORD: ${REGISTRY_DB_PASSWORD:-registry}
+    volumes:
+      - registry_db_data:/var/lib/postgresql/data
+      - ./registry/backend/db/init-test-db.sh:/docker-entrypoint-initdb.d/init-test-db.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U registry -d registry"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  registry:
+    build:
+      context: .
+      dockerfile: registry/backend/Dockerfile
+    image: racksmith-registry:dev
+    restart: unless-stopped
+    ports:
+      - "8001:8001"
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://registry:${REGISTRY_DB_PASSWORD:-registry}@registry-db/registry
+      REGISTRY_PUBLIC_URL: ${REGISTRY_PUBLIC_URL:-http://localhost:8001}
+    depends_on:
+      registry-db:
+        condition: service_healthy
+
+volumes:
+  registry_db_data:
