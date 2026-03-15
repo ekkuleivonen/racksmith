@@ -80,7 +80,8 @@ async def list_playbooks(
             selectinload(RegistryPlaybook.owner),
             selectinload(RegistryPlaybook.versions)
             .selectinload(PlaybookVersion.role_entries)
-            .selectinload(PlaybookVersionRole.role),
+            .selectinload(PlaybookVersionRole.role)
+            .selectinload(RegistryRole.versions),
         )
     )
 
