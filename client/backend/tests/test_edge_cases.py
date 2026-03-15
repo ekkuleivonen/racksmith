@@ -216,8 +216,8 @@ def _playbook_download_response(
 
 
 class TestRepushFixed:
-    """push_role now stores result.slug (not result.id/UUID) as registry_id.
-    Second push correctly uses the slug in GET /roles/{slug} → finds it → PUTs.
+    """push_role/push_playbook use a single upsert endpoint (PUT /roles, PUT /playbooks).
+    Registry handles create-or-update. Client stores slug as registry_id.
     """
 
     @respx.mock
@@ -227,19 +227,7 @@ class TestRepushFixed:
 
         role_resp = _role_response(id=ROLE_UUID_A, slug="my-role")
 
-        # First push: no registry_id yet → uses role_id "my_role" as slug
-        respx.get(f"{REGISTRY_URL}/roles/my_role").mock(
-            return_value=httpx.Response(404),
-        )
-        respx.post(f"{REGISTRY_URL}/roles").mock(
-            return_value=httpx.Response(201, json=role_resp),
-        )
-
-        # Second push: uses stored slug "my-role"
-        respx.get(f"{REGISTRY_URL}/roles/my-role").mock(
-            return_value=httpx.Response(200, json=role_resp),
-        )
-        respx.put(f"{REGISTRY_URL}/roles/my-role").mock(
+        upsert_route = respx.put(f"{REGISTRY_URL}/roles").mock(
             return_value=httpx.Response(200, json=role_resp),
         )
 
@@ -255,6 +243,8 @@ class TestRepushFixed:
             second = await registry_manager.push_role(mock_session, "my_role")
             assert second.slug == "my-role"
 
+        assert upsert_route.call_count == 2
+
     @respx.mock
     @pytest.mark.asyncio
     async def test_repush_playbook_after_first_push(self, mock_session, layout, repo_path):
@@ -268,19 +258,7 @@ class TestRepushFixed:
 
         pb_resp = _playbook_response()
 
-        # First push: no registry_id → uses playbook_id "test_pb" as slug
-        respx.get(f"{REGISTRY_URL}/playbooks/test_pb").mock(
-            return_value=httpx.Response(404),
-        )
-        respx.post(f"{REGISTRY_URL}/playbooks").mock(
-            return_value=httpx.Response(201, json=pb_resp),
-        )
-
-        # Second push: uses stored slug "my-playbook"
-        respx.get(f"{REGISTRY_URL}/playbooks/my-playbook").mock(
-            return_value=httpx.Response(200, json=pb_resp),
-        )
-        respx.put(f"{REGISTRY_URL}/playbooks/my-playbook").mock(
+        upsert_route = respx.put(f"{REGISTRY_URL}/playbooks").mock(
             return_value=httpx.Response(200, json=pb_resp),
         )
 
@@ -295,6 +273,8 @@ class TestRepushFixed:
 
             second = await registry_manager.push_playbook(mock_session, "test_pb")
             assert second.slug == "my-playbook"
+
+        assert upsert_route.call_count == 2
 
 
 # ===========================================================================
@@ -432,15 +412,12 @@ class TestPushPlaybookUsesRegistryUuid:
 
         captured_body = {}
 
-        def _capture_post(request):
+        def _capture_upsert(request):
             import json
             captured_body.update(json.loads(request.content))
             return httpx.Response(201, json=_playbook_response())
 
-        respx.get(f"{REGISTRY_URL}/playbooks/test_pb").mock(
-            return_value=httpx.Response(404),
-        )
-        respx.post(f"{REGISTRY_URL}/playbooks").mock(side_effect=_capture_post)
+        respx.put(f"{REGISTRY_URL}/playbooks").mock(side_effect=_capture_upsert)
 
         with _settings_and_repo_patches(repo_path)():
             await registry_manager.push_playbook(mock_session, "test_pb")
@@ -652,15 +629,15 @@ class TestPathSanitization:
 # ===========================================================================
 
 
-class TestPushGetFallthrough:
+class TestPushUpsertErrors:
 
     @respx.mock
     @pytest.mark.asyncio
     async def test_push_role_raises_on_500(self, mock_session, layout, repo_path):
-        """Registry returning 500 on GET should raise, not fall through to POST."""
+        """Registry returning 500 on upsert should raise."""
         _seed_role(layout, "my_role")
 
-        respx.get(f"{REGISTRY_URL}/roles/my_role").mock(
+        respx.put(f"{REGISTRY_URL}/roles").mock(
             return_value=httpx.Response(500, json={"detail": "Internal error"}),
         )
 
@@ -672,7 +649,7 @@ class TestPushGetFallthrough:
     @respx.mock
     @pytest.mark.asyncio
     async def test_push_playbook_raises_on_500(self, mock_session, layout, repo_path):
-        """Registry returning 500 on GET should raise, not fall through to POST."""
+        """Registry returning 500 on upsert should raise."""
         _seed_role(layout, "my_role")
         _mark_role_as_published(layout, "my_role", slug="my-role", uuid=ROLE_UUID_A)
         _seed_playbook(
@@ -681,7 +658,7 @@ class TestPushGetFallthrough:
             roles=[PlaybookRoleEntry(role="my_role", vars={})],
         )
 
-        respx.get(f"{REGISTRY_URL}/playbooks/test_pb").mock(
+        respx.put(f"{REGISTRY_URL}/playbooks").mock(
             return_value=httpx.Response(500, json={"detail": "Internal error"}),
         )
 
@@ -689,26 +666,6 @@ class TestPushGetFallthrough:
             with pytest.raises(httpx.HTTPStatusError) as exc_info:
                 await registry_manager.push_playbook(mock_session, "test_pb")
             assert exc_info.value.response.status_code == 500
-
-    @respx.mock
-    @pytest.mark.asyncio
-    async def test_push_role_404_still_creates(self, mock_session, layout, repo_path):
-        """404 on GET should still trigger POST (create)."""
-        _seed_role(layout, "my_role")
-
-        role_resp = _role_response(id=ROLE_UUID_A, slug="my-role")
-        respx.get(f"{REGISTRY_URL}/roles/my_role").mock(
-            return_value=httpx.Response(404),
-        )
-        post_route = respx.post(f"{REGISTRY_URL}/roles").mock(
-            return_value=httpx.Response(201, json=role_resp),
-        )
-
-        with _settings_and_repo_patches(repo_path)():
-            result = await registry_manager.push_role(mock_session, "my_role")
-
-        assert result.slug == "my-role"
-        assert post_route.called
 
 
 # ===========================================================================
