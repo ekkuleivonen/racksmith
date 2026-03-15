@@ -27,6 +27,7 @@ async def install_ansible_collections_on_startup(
         "ansible-galaxy",
         "collection",
         "install",
+        "--force",
         "-p",
         str(COLLECTIONS_DIR),
         *collections,
