@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { LoaderCircle } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogCancel,
@@ -54,7 +55,7 @@ export interface RuntimeVarsDialogProps {
   open: boolean;
   roles: RoleCatalogEntry[];
   needsBecomePassword: boolean;
-  onConfirm: (vars: Record<string, string>, becomePassword: string | null) => void;
+  onConfirm: (vars: Record<string, string>, becomePassword: string | null) => void | Promise<void>;
   onCancel: () => void;
 }
 
@@ -70,21 +71,27 @@ export function RuntimeVarsDialog({
 
   const [vars, setVars] = useState<Record<string, string>>({});
   const [becomePassword, setBecomePassword] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
   const requiredInteractive = interactiveInputs.filter((i) => i.required);
   const allRequiredFilled =
     requiredInteractive.every((i) => (vars[i.key] ?? "").trim().length > 0) &&
     (!needsBecomePassword || becomePassword.trim().length > 0);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!allRequiredFilled) return;
+    if (!allRequiredFilled || submitting) return;
     const runtimeVars: Record<string, string> = {};
     for (const inp of interactiveInputs) {
       const v = (vars[inp.key] ?? "").trim();
       if (v) runtimeVars[inp.key] = v;
     }
-    onConfirm(runtimeVars, needsBecomePassword ? becomePassword : null);
+    setSubmitting(true);
+    try {
+      await onConfirm(runtimeVars, needsBecomePassword ? becomePassword : null);
+    } finally {
+      setSubmitting(false);
+    }
     setVars({});
     setBecomePassword("");
   };
@@ -100,7 +107,7 @@ export function RuntimeVarsDialog({
   const isBoolType = (type: string) => type === "bool" || type === "boolean";
 
   return (
-    <AlertDialog open={open} onOpenChange={(o) => !o && handleCancel()}>
+    <AlertDialog open={open} onOpenChange={(o) => !o && !submitting && handleCancel()}>
       <AlertDialogContent size="md" className="sm:max-w-md">
         <form onSubmit={handleSubmit}>
           <AlertDialogHeader>
@@ -180,11 +187,18 @@ export function RuntimeVarsDialog({
           </div>
 
           <AlertDialogFooter>
-            <AlertDialogCancel type="button" onClick={handleCancel}>
+            <AlertDialogCancel type="button" onClick={handleCancel} disabled={submitting}>
               Cancel
             </AlertDialogCancel>
-            <Button type="submit" disabled={!allRequiredFilled}>
-              Run
+            <Button type="submit" disabled={!allRequiredFilled || submitting}>
+              {submitting ? (
+                <>
+                  <LoaderCircle className="size-3.5 animate-spin" />
+                  Starting…
+                </>
+              ) : (
+                "Run"
+              )}
             </Button>
           </AlertDialogFooter>
         </form>

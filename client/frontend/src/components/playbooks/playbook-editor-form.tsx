@@ -43,6 +43,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import type {
   RoleCatalogEntry,
   PlaybookRoleEntry,
@@ -140,14 +145,15 @@ function SortableRoleCard({
       </div>
 
       <AccordionContent className="px-3 pb-3">
-        {roleEntry.inputs.filter(
-          (f) => !(f as { interactive?: boolean }).interactive,
-        ).length > 0 ? (
+        {roleEntry.inputs.length > 0 ? (
           <div className="grid gap-2 md:grid-cols-2">
-            {roleEntry.inputs
-              .filter((f) => !(f as { interactive?: boolean }).interactive)
-              .map((field) => (
-                <div key={field.key} className="space-y-1">
+            {roleEntry.inputs.map((field) => {
+              const isInteractive = !!field.interactive;
+              const fieldNode = (
+                <div
+                  key={field.key}
+                  className={`space-y-1${isInteractive ? " cursor-default opacity-50" : ""}`}
+                >
                   <p className="text-xs text-zinc-400">
                     {field.label}
                     {field.required ? (
@@ -165,6 +171,7 @@ function SortableRoleCard({
                           vars: { ...role.vars, [field.key]: value },
                         })
                       }
+                      disabled={isInteractive}
                     >
                       <SelectTrigger className="w-full">
                         <SelectValue placeholder={field.placeholder} />
@@ -195,6 +202,7 @@ function SortableRoleCard({
                           },
                         })
                       }
+                      disabled={isInteractive}
                     >
                       <SelectTrigger className="w-full">
                         <SelectValue placeholder={field.placeholder || "Select..."} />
@@ -219,10 +227,24 @@ function SortableRoleCard({
                         })
                       }
                       placeholder={field.placeholder}
+                      disabled={isInteractive}
                     />
                   )}
                 </div>
-              ))}
+              );
+
+              if (!isInteractive) return fieldNode;
+              return (
+                <Tooltip key={field.key}>
+                  <TooltipTrigger asChild>
+                    {fieldNode}
+                  </TooltipTrigger>
+                  <TooltipContent side="top">
+                    This value is prompted when the playbook runs
+                  </TooltipContent>
+                </Tooltip>
+              );
+            })}
           </div>
         ) : (
           <p className="text-xs text-zinc-500">

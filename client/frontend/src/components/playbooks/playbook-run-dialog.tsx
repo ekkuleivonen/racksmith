@@ -325,7 +325,6 @@ export function PlaybookRunDialog({
         roles={rolesCatalog}
         needsBecomePassword={playbookBecome}
         onConfirm={async (vars, becomePassword) => {
-          setRuntimeDialogOpen(false);
           if (selectedPlaybook)
             await startRun(
               selectedPlaybook.id,
@@ -333,6 +332,7 @@ export function PlaybookRunDialog({
               vars,
               becomePassword,
             );
+          setRuntimeDialogOpen(false);
         }}
         onCancel={() => {
           setRuntimeDialogOpen(false);
