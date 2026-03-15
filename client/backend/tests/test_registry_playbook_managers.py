@@ -210,17 +210,49 @@ class TestPushPlaybook:
         assert body["roles"][0]["registry_role_id"] == ROLE_UUID_A
         assert body["roles"][0]["vars"] == {"port": 80}
 
+    @respx.mock
     @pytest.mark.asyncio
-    async def test_push_fails_when_role_not_published(self, mock_session, layout, repo_path):
-        """If a role hasn't been pushed to registry, push_playbook should fail."""
+    async def test_push_auto_pushes_unpublished_role(self, mock_session, layout, repo_path):
+        """If a role hasn't been pushed, push_playbook auto-pushes it first."""
         _seed_role(layout, "unpushed_role")
         _seed_playbook(layout, "test_pb", roles=[
             PlaybookRoleEntry(role="unpushed_role"),
         ])
 
+        auto_push_role_uuid = "eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee"
+        role_response = {
+            "id": auto_push_role_uuid,
+            "slug": "unpushed-role",
+            "owner": {"username": "alice", "avatar_url": ""},
+            "download_count": 0,
+            "created_at": "2026-01-01",
+            "updated_at": None,
+            "latest_version": None,
+        }
+
+        respx.get(f"{REGISTRY_URL}/roles/unpushed_role").mock(
+            return_value=httpx.Response(404),
+        )
+        role_create_route = respx.post(f"{REGISTRY_URL}/roles").mock(
+            return_value=httpx.Response(201, json=role_response),
+        )
+        respx.get(f"{REGISTRY_URL}/playbooks/test_pb").mock(
+            return_value=httpx.Response(404),
+        )
+        pb_create_route = respx.post(f"{REGISTRY_URL}/playbooks").mock(
+            return_value=httpx.Response(201, json=REGISTRY_PLAYBOOK_RESPONSE),
+        )
+
         with _settings_and_repo_patches(repo_path)():
-            with pytest.raises(ValueError, match="has not been published"):
-                await registry_manager.push_playbook(mock_session, "test_pb")
+            result = await registry_manager.push_playbook(mock_session, "test_pb")
+
+        assert role_create_route.called
+        assert pb_create_route.called
+        assert result.slug == "my-playbook"
+
+        import json
+        pb_body = json.loads(pb_create_route.calls[0].request.content)
+        assert pb_body["roles"][0]["registry_role_id"] == auto_push_role_uuid
 
     @pytest.mark.asyncio
     async def test_push_fails_when_playbook_not_found(self, mock_session, layout, repo_path):
