@@ -154,8 +154,7 @@ function SortableRoleCard({
                       <span className="ml-1 text-red-400">*</span>
                     ) : null}
                   </p>
-                  {field.type === "select" &&
-                  (field.options?.length ?? 0) > 0 ? (
+                  {(field.options?.length ?? 0) > 0 ? (
                     <Select
                       value={String(
                         role.vars[field.key] ?? field.default ?? "",
