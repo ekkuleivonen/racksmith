@@ -318,7 +318,8 @@ class TestImportPlaybook:
         playbook_files = list(layout.playbooks_path.glob("*.yml"))
         pb_id = playbook_files[0].stem
         pb_meta = get_playbook_meta(meta, pb_id)
-        assert pb_meta.get("registry_id") == PLAYBOOK_UUID
+        assert pb_meta.get("registry_id") == "my-playbook"
+        assert pb_meta.get("registry_uuid") == PLAYBOOK_UUID
 
     @respx.mock
     @pytest.mark.asyncio
@@ -331,9 +332,17 @@ class TestImportPlaybook:
         respx.post(f"{REGISTRY_URL}/playbooks/my-playbook/download").mock(
             return_value=httpx.Response(200, json=PLAYBOOK_DOWNLOAD_RESPONSE)
         )
-        # Auto-import flow: list roles to find slug, then download
-        respx.get(f"{REGISTRY_URL}/roles").mock(
-            return_value=httpx.Response(200, json=ROLE_LIST_RESPONSE)
+        # Auto-import flow: look up role by UUID, then download by slug
+        respx.get(f"{REGISTRY_URL}/roles/by-id/{ROLE_UUID_B}").mock(
+            return_value=httpx.Response(200, json={
+                "id": ROLE_UUID_B,
+                "slug": "role-b",
+                "owner": {"username": "bob", "avatar_url": ""},
+                "download_count": 0,
+                "created_at": "2026-01-01",
+                "updated_at": None,
+                "latest_version": None,
+            })
         )
         respx.post(f"{REGISTRY_URL}/roles/role-b/download").mock(
             return_value=httpx.Response(200, json=ROLE_DOWNLOAD_RESPONSE)
