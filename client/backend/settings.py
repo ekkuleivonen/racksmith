@@ -94,6 +94,7 @@ ANSIBLE_EXTENSIONS: list[str] = env.list(
     "ANSIBLE_EXTENSIONS",
     default=["community.general", "ansible.posix"],
 )
+ANSIBLE_IDLE_TIMEOUT: int = env.int("ANSIBLE_IDLE_TIMEOUT", default=600)  # 10 min
 
 # =============================================================================
 # OpenAI (role generation)
