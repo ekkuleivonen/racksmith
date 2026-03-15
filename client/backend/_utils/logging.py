@@ -5,16 +5,38 @@ Handles BOTH structlog loggers (get_logger) and stdlib loggers
 """
 
 import logging
+import re
 import sys
+from collections.abc import Mapping, MutableMapping
+from typing import Any
 
 import structlog
 
 import settings as S
 
+_SENSITIVE_RE = re.compile(
+    r"""(become_password|ansible_become_pass)=('[^']*'|"[^"]*")""",
+    re.IGNORECASE,
+)
+
+
+def _redact_secrets(
+    _logger: Any,
+    _method_name: str,
+    event_dict: MutableMapping[str, Any],
+) -> Mapping[str, Any]:
+    """Scrub passwords from log events (e.g. arq job-start lines)."""
+    event = event_dict.get("event", "")
+    if isinstance(event, str):
+        event_dict["event"] = _SENSITIVE_RE.sub(r"\1='***'", event)
+    return event_dict
+
+
 _shared_processors: list[structlog.types.Processor] = [
     structlog.stdlib.add_log_level,
     structlog.stdlib.add_logger_name,
     structlog.processors.TimeStamper(fmt="iso"),
+    _redact_secrets,
     structlog.processors.StackInfoRenderer(),
     structlog.processors.format_exc_info,
     structlog.processors.UnicodeDecoder(),
