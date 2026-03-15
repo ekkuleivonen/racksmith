@@ -23,7 +23,7 @@ import {
 } from "@/components/ui/select";
 import type { RoleCatalogEntry, RoleInput } from "@/lib/playbooks";
 
-export type InteractiveInput = {
+export type SecretInput = {
   key: string;
   label: string;
   type: string;
@@ -31,12 +31,12 @@ export type InteractiveInput = {
   options: string[];
 };
 
-function collectInteractiveInputs(roles: RoleCatalogEntry[]): InteractiveInput[] {
+function collectSecretInputs(roles: RoleCatalogEntry[]): SecretInput[] {
   const seen = new Set<string>();
-  const result: InteractiveInput[] = [];
+  const result: SecretInput[] = [];
   for (const role of roles) {
     for (const inp of role.inputs ?? []) {
-      if ((inp as RoleInput & { interactive?: boolean }).interactive && !seen.has(inp.key)) {
+      if ((inp as RoleInput & { secret?: boolean }).secret && !seen.has(inp.key)) {
         seen.add(inp.key);
         result.push({
           key: inp.key,
@@ -66,23 +66,23 @@ export function RuntimeVarsDialog({
   onConfirm,
   onCancel,
 }: RuntimeVarsDialogProps) {
-  const interactiveInputs = collectInteractiveInputs(roles);
-  const hasInteractiveInputs = interactiveInputs.length > 0 || needsBecomePassword;
+  const secretInputs = collectSecretInputs(roles);
+  const hasSecretInputs = secretInputs.length > 0 || needsBecomePassword;
 
   const [vars, setVars] = useState<Record<string, string>>({});
   const [becomePassword, setBecomePassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
-  const requiredInteractive = interactiveInputs.filter((i) => i.required);
+  const requiredSecrets = secretInputs.filter((i) => i.required);
   const allRequiredFilled =
-    requiredInteractive.every((i) => (vars[i.key] ?? "").trim().length > 0) &&
+    requiredSecrets.every((i) => (vars[i.key] ?? "").trim().length > 0) &&
     (!needsBecomePassword || becomePassword.trim().length > 0);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!allRequiredFilled || submitting) return;
     const runtimeVars: Record<string, string> = {};
-    for (const inp of interactiveInputs) {
+    for (const inp of secretInputs) {
       const v = (vars[inp.key] ?? "").trim();
       if (v) runtimeVars[inp.key] = v;
     }
@@ -102,7 +102,7 @@ export function RuntimeVarsDialog({
     onCancel();
   };
 
-  if (!hasInteractiveInputs) return null;
+  if (!hasSecretInputs) return null;
 
   const isBoolType = (type: string) => type === "bool" || type === "boolean";
 
@@ -118,7 +118,7 @@ export function RuntimeVarsDialog({
           </AlertDialogHeader>
 
           <div className="space-y-4 py-4">
-            {interactiveInputs.map((inp) => (
+            {secretInputs.map((inp) => (
               <div key={inp.key} className="space-y-2">
                 <Label htmlFor={inp.key}>
                   {inp.label}
@@ -213,5 +213,5 @@ export function needsRuntimeVarsDialog(
   needsBecomePassword: boolean,
 ): boolean {
   if (needsBecomePassword) return true;
-  return collectInteractiveInputs(roles).length > 0;
+  return collectSecretInputs(roles).length > 0;
 }

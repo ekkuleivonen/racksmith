@@ -255,7 +255,7 @@ class RegistryManager:
                 "choices": inp.choices,
                 "no_log": inp.no_log,
                 "racksmith_placeholder": inp.racksmith_placeholder,
-                "racksmith_interactive": inp.racksmith_interactive,
+                "racksmith_secret": inp.racksmith_secret,
             })
             for inp in role.inputs
         ]
@@ -368,7 +368,7 @@ class RegistryManager:
                         choices=raw.get("choices", raw.get("options", [])) or [],
                         no_log=raw.get("no_log", False),
                         racksmith_placeholder=raw.get("placeholder", ""),
-                        racksmith_interactive=raw.get("interactive", False),
+                        racksmith_secret=bool(raw.get("secret", raw.get("interactive", False))),
                     )
                 )
 

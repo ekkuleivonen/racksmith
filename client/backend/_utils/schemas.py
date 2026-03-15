@@ -20,7 +20,7 @@ class RoleInputSpec(BaseModel):
     options: list[str] = Field(default_factory=list)
     choices: list[str] = Field(default_factory=list)
     no_log: bool = False
-    interactive: bool = False
+    secret: bool = False
 
     model_config = {"extra": "ignore"}
 
@@ -34,8 +34,12 @@ class RoleInputSpec(BaseModel):
             d["label"] = d.pop("racksmith_label", "")
         if "racksmith_placeholder" in d and "placeholder" not in d:
             d["placeholder"] = d.pop("racksmith_placeholder", "")
-        if "racksmith_interactive" in d and "interactive" not in d:
-            d["interactive"] = d.pop("racksmith_interactive", False)
+        if "racksmith_secret" in d and "secret" not in d:
+            d["secret"] = d.pop("racksmith_secret", False)
+        if "racksmith_interactive" in d and "secret" not in d:
+            d["secret"] = d.pop("racksmith_interactive", False)
+        if "interactive" in d and "secret" not in d:
+            d["secret"] = d.pop("interactive", False)
         if "choices" in d and not d.get("options"):
             d.setdefault("options", d["choices"])
         for field in ("options", "choices"):

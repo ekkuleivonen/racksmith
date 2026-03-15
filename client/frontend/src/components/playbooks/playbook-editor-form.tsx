@@ -148,11 +148,11 @@ function SortableRoleCard({
         {roleEntry.inputs.length > 0 ? (
           <div className="grid gap-2 md:grid-cols-2">
             {roleEntry.inputs.map((field) => {
-              const isInteractive = !!field.interactive;
+              const isSecret = !!field.secret;
               const fieldNode = (
                 <div
                   key={field.key}
-                  className={`space-y-1${isInteractive ? " cursor-default opacity-50" : ""}`}
+                  className={`space-y-1${isSecret ? " cursor-default opacity-50" : ""}`}
                 >
                   <p className="text-xs text-zinc-400">
                     {field.label}
@@ -171,7 +171,7 @@ function SortableRoleCard({
                           vars: { ...role.vars, [field.key]: value },
                         })
                       }
-                      disabled={isInteractive}
+                      disabled={isSecret}
                     >
                       <SelectTrigger className="w-full">
                         <SelectValue placeholder={field.placeholder} />
@@ -202,7 +202,7 @@ function SortableRoleCard({
                           },
                         })
                       }
-                      disabled={isInteractive}
+                      disabled={isSecret}
                     >
                       <SelectTrigger className="w-full">
                         <SelectValue placeholder={field.placeholder || "Select..."} />
@@ -227,13 +227,13 @@ function SortableRoleCard({
                         })
                       }
                       placeholder={field.placeholder}
-                      disabled={isInteractive}
+                      disabled={isSecret}
                     />
                   )}
                 </div>
               );
 
-              if (!isInteractive) return fieldNode;
+              if (!isSecret) return fieldNode;
               return (
                 <Tooltip key={field.key}>
                   <TooltipTrigger asChild>
