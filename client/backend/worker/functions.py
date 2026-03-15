@@ -100,16 +100,41 @@ async def _run_ansible(
         return
 
     assert process.stdout is not None
+    idle_timeout = settings.ANSIBLE_IDLE_TIMEOUT
+    timed_out = False
     while True:
-        chunk = await process.stdout.read(4096)
+        try:
+            chunk = await asyncio.wait_for(
+                process.stdout.read(4096), timeout=idle_timeout
+            )
+        except TimeoutError:
+            timed_out = True
+            msg = (
+                f"\n\n[racksmith] No output for {idle_timeout}s — "
+                "process appears hung, killing.\n"
+            )
+            output += msg
+            await redis.publish(channel, json.dumps({"type": "output", "data": msg}))
+            logger.warning(
+                f"{log_event}_idle_timeout",
+                run_id=run_id,
+                idle_timeout=idle_timeout,
+            )
+            process.kill()
+            await process.wait()
+            break
         if not chunk:
             break
         text = chunk.decode("utf-8", errors="replace")
         output += text
         await redis.publish(channel, json.dumps({"type": "output", "data": text}))
 
-    exit_code = await process.wait()
-    status = "completed" if exit_code == 0 else "failed"
+    if timed_out:
+        status = "failed"
+        exit_code = -1
+    else:
+        exit_code = await process.wait()
+        status = "completed" if exit_code == 0 else "failed"
     finished_at = now_iso()
 
     await _update_run(redis, run_id, {
