@@ -92,8 +92,9 @@ SSH_DISABLE_HOST_KEY_CHECK: bool = env.bool("SSH_DISABLE_HOST_KEY_CHECK", defaul
 # =============================================================================
 ANSIBLE_EXTENSIONS: list[str] = env.list(
     "ANSIBLE_EXTENSIONS",
-    default=["community.general"],
+    default=["community.general", "ansible.posix"],
 )
+ANSIBLE_IDLE_TIMEOUT: int = env.int("ANSIBLE_IDLE_TIMEOUT", default=600)  # 10 min
 
 # =============================================================================
 # OpenAI (role generation)

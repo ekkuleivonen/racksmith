@@ -13,7 +13,7 @@ export type RoleInput = {
   default: unknown;
   type?: string;
   options?: string[];
-  interactive?: boolean;
+  secret?: boolean;
   required?: boolean;
 };
 

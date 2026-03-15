@@ -58,15 +58,13 @@ def _request_input_to_role_input(inp: RoleInputSpec | dict) -> RoleInput:
     return RoleInput(
         key=inp.get("key", ""),
         description=inp.get("label", "") or inp.get("description", ""),
-        type={"string": "str", "bool": "bool", "boolean": "bool", "select": "str", "secret": "str"}.get(
-            t, "str"
-        ),
+        type={"string": "str", "bool": "bool", "boolean": "bool", "secret": "str"}.get(t, "str"),
         default=inp.get("default"),
         required=inp.get("required", False),
         choices=options,
         no_log=(t == "secret"),
         racksmith_placeholder=inp.get("placeholder", ""),
-        racksmith_interactive=inp.get("interactive", False),
+        racksmith_secret=inp.get("secret", False),
     )
 
 
@@ -84,7 +82,7 @@ def _role_data_to_summary(r: RoleData) -> RoleSummary:
                 "required": inp.required,
                 "options": inp.choices,
                 "placeholder": inp.racksmith_placeholder,
-                "interactive": inp.racksmith_interactive,
+                "secret": inp.racksmith_secret,
             })
             for inp in r.inputs
         ],
@@ -141,7 +139,7 @@ class RoleManager(RunManagerMixin):
                     "required": inp.required,
                     "options": list(inp.choices),
                     "placeholder": inp.racksmith_placeholder,
-                    "interactive": inp.racksmith_interactive,
+                    "secret": inp.racksmith_secret,
                 }
                 for inp in role.inputs
             ],

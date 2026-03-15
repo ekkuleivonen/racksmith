@@ -80,7 +80,8 @@ async def list_playbooks(
             selectinload(RegistryPlaybook.owner),
             selectinload(RegistryPlaybook.versions)
             .selectinload(PlaybookVersion.role_entries)
-            .selectinload(PlaybookVersionRole.role),
+            .selectinload(PlaybookVersionRole.role)
+            .selectinload(RegistryRole.versions),
         )
     )
 
@@ -245,6 +246,70 @@ async def update_playbook(
     await session.commit()
 
     return await get_playbook(session, slug)
+
+
+async def upsert_playbook(
+    session: AsyncSession, data: PlaybookCreate, user: User
+) -> tuple[RegistryPlaybook, bool]:
+    """Create or update a playbook. Returns (playbook, created)."""
+    slug = _slugify(data.name)
+
+    result = await session.execute(
+        select(RegistryPlaybook)
+        .where(RegistryPlaybook.slug == slug)
+        .options(
+            selectinload(RegistryPlaybook.owner),
+            selectinload(RegistryPlaybook.versions)
+            .selectinload(PlaybookVersion.role_entries)
+            .selectinload(PlaybookVersionRole.role)
+            .selectinload(RegistryRole.versions),
+        )
+    )
+    existing = result.scalar_one_or_none()
+
+    if existing is not None:
+        if existing.owner_id != user.id:
+            raise HTTPException(status_code=403, detail="Only the owner can edit this playbook")
+        latest = existing.versions[0] if existing.versions else None
+        next_num = (latest.version_number + 1) if latest else 1
+
+        version = PlaybookVersion(
+            playbook_id=existing.id,
+            version_number=next_num,
+            name=data.name,
+            description=data.description,
+            become=data.become,
+            tags=data.tags,
+        )
+        session.add(version)
+        await session.flush()
+
+        roles_dicts = [r.model_dump(mode="json") for r in data.roles]
+        await _validate_and_create_role_entries(session, roles_dicts, version.id)
+        await session.commit()
+
+        return await get_playbook(session, slug), False
+
+    playbook = RegistryPlaybook(slug=slug, owner_id=user.id)
+    session.add(playbook)
+    await session.flush()
+
+    version = PlaybookVersion(
+        playbook_id=playbook.id,
+        version_number=1,
+        name=data.name,
+        description=data.description,
+        become=data.become,
+        tags=data.tags,
+    )
+    session.add(version)
+    await session.flush()
+
+    roles_dicts = [r.model_dump(mode="json") for r in data.roles]
+    await _validate_and_create_role_entries(session, roles_dicts, version.id)
+    await session.commit()
+
+    return await get_playbook(session, slug), True
 
 
 async def delete_playbook(session: AsyncSession, slug: str, user: User) -> None:

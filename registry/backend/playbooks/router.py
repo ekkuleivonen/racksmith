@@ -172,6 +172,22 @@ async def create_playbook(
     return await _playbook_to_out(playbook, session)
 
 
+@router.put("/playbooks", response_model=PlaybookOut)
+@limiter.limit("20/minute")
+async def upsert_playbook(
+    request: Request,
+    data: PlaybookCreate,
+    session: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    playbook, created = await managers.upsert_playbook(session, data, user)
+    out = await _playbook_to_out(playbook, session)
+    if created:
+        from starlette.responses import JSONResponse
+        return JSONResponse(content=out.model_dump(mode="json"), status_code=201)
+    return out
+
+
 @router.put("/playbooks/{slug}", response_model=PlaybookOut)
 @limiter.limit("20/minute")
 async def update_playbook(

@@ -14,20 +14,28 @@ Optional top-level keys:
 Each input item has these fields:
   key         – variable name (snake_case)
   label       – human-readable label
-  type        – MUST be exactly one of: "string", "bool", "select", "secret"
-                (never use "str", "boolean", "int", or any other type name)
+  type        – MUST be exactly one of: "string", "bool", "secret"
+                (never use "str", "boolean", "int", "select", or any other type name)
   placeholder – hint text (string, use "" if not applicable)
-  default     – default value (string for string/select/secret, true/false for bool)
+  default     – default value (string for string/secret, true/false for bool)
   required    – true or false
-  options     – list of choices (only for type: select, use [] otherwise)
-  interactive – true if the value should be prompted at runtime, false otherwise
+  options     – list of allowed choices (renders as a dropdown); use [] when any value is accepted
+  secret      – true if the value should be prompted at runtime (never stored), false otherwise
 
 Validation rules:
   If an input has a default value, required MUST be false.
   Use required: true only when there is no default.
-  If an input has options, type MUST be "select".
-  If type is "select", options must be a non-empty list.
-  If type is "select" and default is set, default must be one of the options."""
+  If options is non-empty, default must be one of the options.
+  Do NOT use a "select" type — use type "string" with a non-empty options list instead.
+
+Task FQCN rules — always use fully-qualified collection names for modules:
+  Prefer ansible.builtin.* where possible (package, service, copy, template,
+  lineinfile, file, command, shell, apt, yum, dnf, user, group, systemd, etc.).
+  Common modules in community.general: timezone, locale_gen, ufw, npm, pip,
+  snap, modprobe, sysctl (also in ansible.posix), hostname, ini_file, etc.
+  ansible.posix contains: acl, at, authorized_key, firewalld, mount, patch,
+  seboolean, selinux, synchronize, sysctl — but NOT timezone.
+  NEVER use ansible.posix.timezone — use community.general.timezone instead."""
 
 _JSON_EXAMPLE = """\
 {

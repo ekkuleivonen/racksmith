@@ -37,6 +37,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY client/backend/pyproject.toml client/backend/uv.lock ./
 RUN uv sync --frozen --no-dev
 
+# Pre-install Ansible Galaxy collections at build time
+RUN uv run ansible-galaxy collection install --force community.general ansible.posix \
+    -p /app/.ansible/collections
+
 # Backend code
 COPY client/backend/ .
 

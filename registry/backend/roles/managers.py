@@ -348,6 +348,62 @@ async def update_role(
     return await get_role(session, slug)
 
 
+async def upsert_role(
+    session: AsyncSession, data: RoleCreate, user: User
+) -> tuple[RegistryRole, bool]:
+    """Create or update a role. Returns (role, created) where created is True for new roles."""
+    slug = _slugify(data.name)
+
+    result = await session.execute(
+        select(RegistryRole)
+        .where(RegistryRole.slug == slug)
+        .options(selectinload(RegistryRole.owner), selectinload(RegistryRole.versions))
+    )
+    existing = result.scalar_one_or_none()
+
+    if existing is not None:
+        if existing.owner_id != user.id:
+            raise HTTPException(status_code=403, detail="Only the owner can edit this role")
+        latest = existing.versions[0] if existing.versions else None
+        next_num = (latest.version_number + 1) if latest else 1
+        version = RoleVersion(
+            role_id=existing.id,
+            version_number=next_num,
+            name=data.name,
+            description=data.description,
+            platforms=[p.model_dump() for p in data.platforms],
+            tags=data.tags,
+            inputs=[i.model_dump() for i in data.inputs],
+            tasks_yaml=data.tasks_yaml,
+            defaults_yaml=data.defaults_yaml,
+            meta_yaml=data.meta_yaml,
+        )
+        session.add(version)
+        await session.commit()
+        return await get_role(session, slug), False
+
+    role = RegistryRole(slug=slug, owner_id=user.id)
+    session.add(role)
+    await session.flush()
+
+    version = RoleVersion(
+        role_id=role.id,
+        version_number=1,
+        name=data.name,
+        description=data.description,
+        platforms=[p.model_dump() for p in data.platforms],
+        tags=data.tags,
+        inputs=[i.model_dump() for i in data.inputs],
+        tasks_yaml=data.tasks_yaml,
+        defaults_yaml=data.defaults_yaml,
+        meta_yaml=data.meta_yaml,
+    )
+    session.add(version)
+    await session.commit()
+
+    return await get_role(session, slug), True
+
+
 async def delete_role(session: AsyncSession, slug: str, user: User) -> None:
     role = await get_role(session, slug)
     is_owner = role.owner_id == user.id

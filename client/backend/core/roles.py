@@ -43,7 +43,7 @@ class RoleInput:
     choices: list[Any] = field(default_factory=list)
     no_log: bool = False
     racksmith_placeholder: str = ""
-    racksmith_interactive: bool = False
+    racksmith_secret: bool = False
 
 
 @dataclass
@@ -60,7 +60,7 @@ class RoleData:
 
 
 def _action_type_to_ansible(t: str) -> str:
-    mapping = {"string": "str", "bool": "bool", "boolean": "bool", "select": "str", "secret": "str"}
+    mapping = {"string": "str", "bool": "bool", "boolean": "bool", "secret": "str"}
     return mapping.get(t, "str")
 
 
@@ -88,7 +88,7 @@ def _parse_action_input(inp: dict) -> RoleInput:
         choices=options,
         no_log=(t == "secret"),
         racksmith_placeholder=inp.get("placeholder", ""),
-        racksmith_interactive=inp.get("interactive", False),
+        racksmith_secret=inp.get("secret", False),
     )
 
 
@@ -190,7 +190,7 @@ def _overlay_racksmith_meta(role: RoleData, role_meta: dict) -> None:
 
     Core role metadata (name, description, labels, compatibility) comes
     exclusively from ``meta/main.yml`` (galaxy_info).  ``.racksmith.yml``
-    stores only per-input UI hints (interactive + placeholder) and the
+    stores only per-input UI hints (secret + placeholder) and the
     registry slug for imported roles.
     """
     role.registry_id = str(role_meta.get("registry_id", ""))
@@ -201,7 +201,7 @@ def _overlay_racksmith_meta(role: RoleData, role_meta: dict) -> None:
             inp_meta = inputs_meta.get(inp.key) or {}
             if isinstance(inp_meta, dict):
                 inp.racksmith_placeholder = str(inp_meta.get("placeholder", inp.racksmith_placeholder))
-                inp.racksmith_interactive = bool(inp_meta.get("interactive", inp.racksmith_interactive))
+                inp.racksmith_secret = bool(inp_meta.get("secret", inp.racksmith_secret))
 
 
 def list_roles(layout: AnsibleLayout) -> list[RoleData]:
@@ -301,15 +301,15 @@ def write_role(
         tasks_content = "---\n# Add your Ansible tasks here\n"
     (role_dir / TASKS_MAIN).write_text(tasks_content, encoding="utf-8")
 
-    # Racksmith-specific metadata: only per-input UI hints (interactive + placeholder)
+    # Racksmith-specific metadata: only per-input UI hints (secret + placeholder)
     role_meta: dict[str, Any] = {}
     inputs_meta: dict[str, dict] = {}
     for inp in role.inputs:
         inp_data: dict[str, Any] = {}
         if inp.racksmith_placeholder:
             inp_data["placeholder"] = inp.racksmith_placeholder
-        if inp.racksmith_interactive:
-            inp_data["interactive"] = inp.racksmith_interactive
+        if inp.racksmith_secret:
+            inp_data["secret"] = inp.racksmith_secret
         if inp_data:
             inputs_meta[inp.key] = inp_data
     if inputs_meta:

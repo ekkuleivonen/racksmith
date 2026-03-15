@@ -167,6 +167,8 @@ def _handle_registry_error(exc: Exception) -> NoReturn:
     if isinstance(exc, FileNotFoundError):
         logger.warning("registry_not_found", error=str(exc), exc_info=True)
         raise HTTPException(status_code=404, detail="Resource not found") from exc
+    if isinstance(exc, ValueError):
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     logger.error("registry_unexpected_error", error=str(exc), exc_info=True)
     raise HTTPException(status_code=500, detail="Internal server error") from exc
 

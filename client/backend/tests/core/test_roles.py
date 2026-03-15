@@ -65,7 +65,7 @@ class TestReadRoleMetaMain:
         assert by_key["enabled"].type == "bool"
 
     def test_racksmith_input_hints_from_meta(self, layout) -> None:
-        """Racksmith input hints (placeholder, interactive) come from .racksmith.yml overlay."""
+        """Racksmith input hints (placeholder, secret) come from .racksmith.yml overlay."""
         role_dir = layout.roles_path / "foo"
         role_dir.mkdir(parents=True, exist_ok=True)
         (role_dir / "meta").mkdir()
@@ -88,7 +88,7 @@ class TestReadRoleMetaMain:
             "inputs": {
                 "x": {
                     "placeholder": "hint",
-                    "interactive": True,
+                    "secret": True,
                 },
             },
         }
@@ -97,7 +97,7 @@ class TestReadRoleMetaMain:
         assert len(roles) == 1
         inp = roles[0].inputs[0]
         assert inp.racksmith_placeholder == "hint"
-        assert inp.racksmith_interactive is True
+        assert inp.racksmith_secret is True
 
 
 class TestReadRoleActionYaml:
@@ -123,7 +123,7 @@ class TestReadRoleActionYaml:
                         },
                         {
                             "key": "state",
-                            "type": "select",
+                            "type": "string",
                             "options": ["present", "absent"],
                         },
                         {"key": "secret", "type": "secret"},

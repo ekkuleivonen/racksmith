@@ -28,5 +28,6 @@ class WorkerSettings:
     functions = [execute_playbook_run, execute_role_run, execute_network_scan]
     redis_settings = REDIS_SETTINGS
     max_jobs = 10
+    job_timeout = 3600
     on_startup = _on_startup
     on_shutdown = _on_shutdown

@@ -63,10 +63,6 @@ from roles.registry_schemas import (
     RegistryVersion,
     RoleCreate,
     RoleImportResponse,
-    RoleUpdate,
-)
-from roles.registry_schemas import (
-    PlaybookUpdate as RegistryPlaybookUpdate,
 )
 
 logger = get_logger(__name__)
@@ -255,7 +251,7 @@ class RegistryManager:
                 "choices": inp.choices,
                 "no_log": inp.no_log,
                 "racksmith_placeholder": inp.racksmith_placeholder,
-                "racksmith_interactive": inp.racksmith_interactive,
+                "racksmith_secret": inp.racksmith_secret,
             })
             for inp in role.inputs
         ]
@@ -271,40 +267,12 @@ class RegistryManager:
             meta_yaml=meta_yaml,
         )
 
-        meta = read_meta(layout)
-        role_meta = get_role_meta(meta, role_id)
-        registry_slug = str(role_meta.get("registry_id", "")) or role_id
-
         async with httpx.AsyncClient() as client:
-            existing = await client.get(
-                f"{settings.REGISTRY_URL}/roles/{registry_slug}",
+            resp = await client.put(
+                f"{settings.REGISTRY_URL}/roles",
+                json=payload.model_dump(),
                 headers=self._headers(session),
             )
-            if existing.status_code == 200:
-                update_payload = RoleUpdate(
-                    name=payload.name,
-                    description=payload.description,
-                    platforms=payload.platforms,
-                    tags=payload.tags,
-                    inputs=payload.inputs,
-                    tasks_yaml=payload.tasks_yaml,
-                    defaults_yaml=payload.defaults_yaml,
-                    meta_yaml=payload.meta_yaml,
-                )
-                slug = existing.json().get("slug", registry_slug)
-                resp = await client.put(
-                    f"{settings.REGISTRY_URL}/roles/{slug}",
-                    json=update_payload.model_dump(),
-                    headers=self._headers(session),
-                )
-            elif existing.status_code == 404:
-                resp = await client.post(
-                    f"{settings.REGISTRY_URL}/roles",
-                    json=payload.model_dump(),
-                    headers=self._headers(session),
-                )
-            else:
-                existing.raise_for_status()
 
         try:
             resp.raise_for_status()
@@ -313,6 +281,9 @@ class RegistryManager:
             raise
 
         result = RegistryRole.model_validate(resp.json())
+
+        meta = read_meta(layout)
+        role_meta = get_role_meta(meta, role_id)
 
         role_meta["registry_id"] = result.slug
         role_meta["registry_uuid"] = result.id
@@ -368,7 +339,7 @@ class RegistryManager:
                         choices=raw.get("choices", raw.get("options", [])) or [],
                         no_log=raw.get("no_log", False),
                         racksmith_placeholder=raw.get("placeholder", ""),
-                        racksmith_interactive=raw.get("interactive", False),
+                        racksmith_secret=bool(raw.get("secret", raw.get("interactive", False))),
                     )
                 )
 
@@ -578,10 +549,9 @@ class RegistryManager:
             role_meta = get_role_meta(meta, re_entry.role)
             registry_uuid = str(role_meta.get("registry_uuid", role_meta.get("registry_id", "")))
             if not registry_uuid:
-                raise ValueError(
-                    f"Role '{re_entry.role}' has not been published to the registry. "
-                    f"Push all roles first before pushing a playbook."
-                )
+                pushed = await self.push_role(session, re_entry.role)
+                registry_uuid = pushed.id
+                meta = read_meta(layout)
             role_refs.append(PlaybookRoleRef(
                 registry_role_id=registry_uuid,
                 vars=re_entry.vars,
@@ -595,36 +565,12 @@ class RegistryManager:
             tags=[],
         )
 
-        pb_meta = get_playbook_meta(meta, playbook_id)
-        registry_slug = str(pb_meta.get("registry_id", "")) or playbook_id
-
         async with httpx.AsyncClient() as client:
-            existing = await client.get(
-                f"{settings.REGISTRY_URL}/playbooks/{registry_slug}",
+            resp = await client.put(
+                f"{settings.REGISTRY_URL}/playbooks",
+                json=payload.model_dump(mode="json"),
                 headers=self._headers(session),
             )
-            if existing.status_code == 200:
-                update_payload = RegistryPlaybookUpdate(
-                    name=payload.name,
-                    description=payload.description,
-                    become=payload.become,
-                    roles=payload.roles,
-                    tags=payload.tags,
-                )
-                slug = existing.json().get("slug", registry_slug)
-                resp = await client.put(
-                    f"{settings.REGISTRY_URL}/playbooks/{slug}",
-                    json=update_payload.model_dump(mode="json"),
-                    headers=self._headers(session),
-                )
-            elif existing.status_code == 404:
-                resp = await client.post(
-                    f"{settings.REGISTRY_URL}/playbooks",
-                    json=payload.model_dump(mode="json"),
-                    headers=self._headers(session),
-                )
-            else:
-                existing.raise_for_status()
 
         try:
             resp.raise_for_status()
@@ -634,6 +580,8 @@ class RegistryManager:
 
         result = RegistryPlaybook.model_validate(resp.json())
 
+        meta = read_meta(layout)
+        pb_meta = get_playbook_meta(meta, playbook_id)
         pb_meta["registry_id"] = result.slug
         pb_meta["registry_uuid"] = result.id
         set_playbook_meta(meta, playbook_id, pb_meta)

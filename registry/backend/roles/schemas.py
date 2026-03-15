@@ -13,14 +13,14 @@ class RoleInputSpec(BaseModel):
     key: str = Field(min_length=1, max_length=80)
     label: str = ""
     description: str = ""
-    type: Literal["string", "boolean", "select", "secret", "str", "bool"] = "string"
+    type: Literal["string", "boolean", "secret", "str", "bool"] = "string"
     placeholder: str = ""
     default: str | bool | int | None = None
     required: bool = False
     options: list[str] = Field(default_factory=list)
     choices: list[str] = Field(default_factory=list)
     no_log: bool = False
-    interactive: bool = False
+    secret: bool = False
 
     model_config = {"extra": "ignore"}
 
@@ -34,8 +34,12 @@ class RoleInputSpec(BaseModel):
             d["label"] = d.pop("racksmith_label", "")
         if "racksmith_placeholder" in d and "placeholder" not in d:
             d["placeholder"] = d.pop("racksmith_placeholder", "")
-        if "racksmith_interactive" in d and "interactive" not in d:
-            d["interactive"] = d.pop("racksmith_interactive", False)
+        if "racksmith_secret" in d and "secret" not in d:
+            d["secret"] = d.pop("racksmith_secret", False)
+        if "racksmith_interactive" in d and "secret" not in d:
+            d["secret"] = d.pop("racksmith_interactive", False)
+        if "interactive" in d and "secret" not in d:
+            d["secret"] = d.pop("interactive", False)
         if "choices" in d and not d.get("options"):
             d.setdefault("options", d["choices"])
         for field in ("options", "choices"):
@@ -44,8 +48,6 @@ class RoleInputSpec(BaseModel):
                     ("yes" if v else "no") if isinstance(v, bool) else str(v)
                     for v in d[field]
                 ]
-        if d.get("type") == "select" and isinstance(d.get("default"), bool):
-            d["default"] = "yes" if d["default"] else "no"
         return d
 
 

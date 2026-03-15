@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import asyncio
+from pathlib import Path
 
 import settings
 from _utils.logging import get_logger
 
 logger = get_logger(__name__)
+
+COLLECTIONS_DIR = Path.home() / ".ansible" / "collections"
 
 
 async def install_ansible_collections_on_startup(
@@ -24,6 +27,8 @@ async def install_ansible_collections_on_startup(
         "ansible-galaxy",
         "collection",
         "install",
+        "-p",
+        str(COLLECTIONS_DIR),
         *collections,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.STDOUT,
