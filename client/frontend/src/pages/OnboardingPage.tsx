@@ -1,10 +1,13 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Navigate, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { toastApiError } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
-import { UserConfigForm } from "@/components/onboarding/user-config-form";
+import {
+  UserConfigForm,
+  type UserConfigFormHandle,
+} from "@/components/onboarding/user-config-form";
 import { RepoStep } from "@/components/onboarding/repo-step";
 import { HostsStep } from "@/components/onboarding/hosts-step";
 import { PageContainer } from "@/components/shared/page-container";
@@ -39,6 +42,7 @@ export function OnboardingPage() {
   const { data: hosts = [] } = useHosts();
   const managedCount = hosts.filter(isManagedHost).length;
 
+  const configFormRef = useRef<UserConfigFormHandle>(null);
   const [step, setStep] = useState<Step>(1);
   const [completing, setCompleting] = useState(false);
 
@@ -103,13 +107,20 @@ export function OnboardingPage() {
               </p>
             </div>
 
-            <UserConfigForm showSaveButton={false} />
+            <UserConfigForm ref={configFormRef} showSaveButton={false} />
 
             <div className="flex justify-between">
               <Button variant="outline" onClick={() => setStep(2)}>
                 Skip for now
               </Button>
-              <Button onClick={() => setStep(2)}>Continue</Button>
+              <Button
+                onClick={async () => {
+                  await configFormRef.current?.save();
+                  setStep(2);
+                }}
+              >
+                Continue
+              </Button>
             </div>
           </>
         )}

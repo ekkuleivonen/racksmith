@@ -1,4 +1,10 @@
-import { useCallback, useEffect, useState } from "react";
+import {
+  forwardRef,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useState,
+} from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -29,15 +35,19 @@ const EMPTY_SETTINGS: AppSettings = {
   REGISTRY_URL: "",
 };
 
+export type UserConfigFormHandle = {
+  save: () => Promise<void>;
+};
+
 type UserConfigFormProps = {
   onSaved?: () => void;
   showSaveButton?: boolean;
 };
 
-export function UserConfigForm({
-  onSaved,
-  showSaveButton = true,
-}: UserConfigFormProps) {
+export const UserConfigForm = forwardRef<
+  UserConfigFormHandle,
+  UserConfigFormProps
+>(function UserConfigForm({ onSaved, showSaveButton = true }, ref) {
   const [settings, setSettings] = useState<AppSettings>(EMPTY_SETTINGS);
   const [loadingSettings, setLoadingSettings] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -93,6 +103,8 @@ export function UserConfigForm({
       setSaving(false);
     }
   };
+
+  useImperativeHandle(ref, () => ({ save: handleSave }));
 
   return (
     <div className="space-y-4">
@@ -235,4 +247,4 @@ export function UserConfigForm({
       )}
     </div>
   );
-}
+});
