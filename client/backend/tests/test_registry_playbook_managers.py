@@ -14,6 +14,7 @@ from core.racksmith_meta import (
     get_playbook_meta,
     get_role_meta,
     read_meta,
+    set_playbook_meta,
     set_role_meta,
     write_meta,
 )
@@ -146,6 +147,15 @@ def _mark_role_as_published(layout, role_id: str, registry_id: str) -> None:
     write_meta(layout, meta)
 
 
+def _mark_playbook_as_published(layout, playbook_id: str, registry_id: str) -> None:
+    """Write registry_id into .racksmith.yml for a playbook."""
+    meta = read_meta(layout)
+    pmeta = get_playbook_meta(meta, playbook_id)
+    pmeta["registry_id"] = registry_id
+    set_playbook_meta(meta, playbook_id, pmeta)
+    write_meta(layout, meta)
+
+
 def _settings_and_repo_patches(repo_path):
     """Return a combined context manager that patches settings + repos_manager + cache + git."""
     from contextlib import contextmanager
@@ -192,10 +202,7 @@ class TestPushPlaybook:
             PlaybookRoleEntry(role="my_role", vars={"port": 80}),
         ])
 
-        respx.get(f"{REGISTRY_URL}/playbooks/test_pb").mock(
-            return_value=httpx.Response(404)
-        )
-        create_route = respx.post(f"{REGISTRY_URL}/playbooks").mock(
+        upsert_route = respx.put(f"{REGISTRY_URL}/playbooks").mock(
             return_value=httpx.Response(201, json=REGISTRY_PLAYBOOK_RESPONSE)
         )
 
@@ -203,8 +210,8 @@ class TestPushPlaybook:
             result = await registry_manager.push_playbook(mock_session, "test_pb")
 
         assert result.slug == "my-playbook"
-        assert create_route.called
-        sent_body = create_route.calls[0].request.content
+        assert upsert_route.called
+        sent_body = upsert_route.calls[0].request.content
         import json
         body = json.loads(sent_body)
         assert body["roles"][0]["registry_role_id"] == ROLE_UUID_A
@@ -230,28 +237,22 @@ class TestPushPlaybook:
             "latest_version": None,
         }
 
-        respx.get(f"{REGISTRY_URL}/roles/unpushed_role").mock(
-            return_value=httpx.Response(404),
-        )
-        role_create_route = respx.post(f"{REGISTRY_URL}/roles").mock(
+        role_upsert_route = respx.put(f"{REGISTRY_URL}/roles").mock(
             return_value=httpx.Response(201, json=role_response),
         )
-        respx.get(f"{REGISTRY_URL}/playbooks/test_pb").mock(
-            return_value=httpx.Response(404),
-        )
-        pb_create_route = respx.post(f"{REGISTRY_URL}/playbooks").mock(
+        pb_upsert_route = respx.put(f"{REGISTRY_URL}/playbooks").mock(
             return_value=httpx.Response(201, json=REGISTRY_PLAYBOOK_RESPONSE),
         )
 
         with _settings_and_repo_patches(repo_path)():
             result = await registry_manager.push_playbook(mock_session, "test_pb")
 
-        assert role_create_route.called
-        assert pb_create_route.called
+        assert role_upsert_route.called
+        assert pb_upsert_route.called
         assert result.slug == "my-playbook"
 
         import json
-        pb_body = json.loads(pb_create_route.calls[0].request.content)
+        pb_body = json.loads(pb_upsert_route.calls[0].request.content)
         assert pb_body["roles"][0]["registry_role_id"] == auto_push_role_uuid
 
     @pytest.mark.asyncio
@@ -264,17 +265,15 @@ class TestPushPlaybook:
     @respx.mock
     @pytest.mark.asyncio
     async def test_push_updates_existing_playbook(self, mock_session, layout, repo_path):
-        """When registry already has the playbook, push sends PUT instead of POST."""
+        """Re-push uses the same upsert endpoint; registry handles create-or-update."""
         _seed_role(layout, "my_role")
         _mark_role_as_published(layout, "my_role", ROLE_UUID_A)
         _seed_playbook(layout, "test_pb", roles=[
             PlaybookRoleEntry(role="my_role"),
         ])
+        _mark_playbook_as_published(layout, "test_pb", "my-playbook")
 
-        respx.get(f"{REGISTRY_URL}/playbooks/test_pb").mock(
-            return_value=httpx.Response(200, json=REGISTRY_PLAYBOOK_RESPONSE)
-        )
-        update_route = respx.put(f"{REGISTRY_URL}/playbooks/my-playbook").mock(
+        upsert_route = respx.put(f"{REGISTRY_URL}/playbooks").mock(
             return_value=httpx.Response(200, json=REGISTRY_PLAYBOOK_RESPONSE)
         )
 
@@ -282,7 +281,7 @@ class TestPushPlaybook:
             result = await registry_manager.push_playbook(mock_session, "test_pb")
 
         assert result.slug == "my-playbook"
-        assert update_route.called
+        assert upsert_route.called
 
 
 # ---------------------------------------------------------------------------
