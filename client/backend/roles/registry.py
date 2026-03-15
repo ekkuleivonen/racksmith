@@ -578,10 +578,9 @@ class RegistryManager:
             role_meta = get_role_meta(meta, re_entry.role)
             registry_uuid = str(role_meta.get("registry_uuid", role_meta.get("registry_id", "")))
             if not registry_uuid:
-                raise ValueError(
-                    f"Role '{re_entry.role}' has not been published to the registry. "
-                    f"Push all roles first before pushing a playbook."
-                )
+                pushed = await self.push_role(session, re_entry.role)
+                registry_uuid = pushed.id
+                meta = read_meta(layout)
             role_refs.append(PlaybookRoleRef(
                 registry_role_id=registry_uuid,
                 vars=re_entry.vars,
