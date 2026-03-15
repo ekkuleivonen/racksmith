@@ -17,6 +17,11 @@ import {
   X,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -162,13 +167,12 @@ function RoleCard({
                 </Badge>
               )}
               {imported && !upgradeAvailable && (
-                <Badge
-                  variant="outline"
-                  className="shrink-0 gap-1 border-emerald-700/50 bg-emerald-950/30 text-[10px] text-emerald-400"
-                >
-                  <Check className="size-2.5" />
-                  Imported
-                </Badge>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Check className="size-3.5 shrink-0 text-emerald-400" />
+                  </TooltipTrigger>
+                  <TooltipContent>Imported</TooltipContent>
+                </Tooltip>
               )}
             </div>
             <p className="line-clamp-2 text-xs leading-relaxed text-zinc-500">
@@ -182,7 +186,7 @@ function RoleCard({
                 <Badge
                   key={name}
                   variant="outline"
-                  className="gap-1 border-emerald-800/50 bg-emerald-950/30 text-[10px] text-emerald-400"
+                  className="gap-1 border-sky-800/50 bg-sky-950/30 text-[10px] text-sky-400"
                 >
                   <Monitor className="size-2.5" />
                   {name}
@@ -264,13 +268,12 @@ function PlaybookCard({
                 </Badge>
               )}
               {imported && !upgradeAvailable && (
-                <Badge
-                  variant="outline"
-                  className="shrink-0 gap-1 border-emerald-700/50 bg-emerald-950/30 text-[10px] text-emerald-400"
-                >
-                  <Check className="size-2.5" />
-                  Imported
-                </Badge>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Check className="size-3.5 shrink-0 text-emerald-400" />
+                  </TooltipTrigger>
+                  <TooltipContent>Imported</TooltipContent>
+                </Tooltip>
               )}
               {roleCount > 0 && (
                 <Badge
@@ -369,13 +372,12 @@ function RecommendedCard({
                 </Badge>
               )}
               {imported && !upgradeAvailable && (
-                <Badge
-                  variant="outline"
-                  className="shrink-0 gap-0.5 border-emerald-700/50 bg-emerald-950/30 px-1 text-[9px] text-emerald-400"
-                >
-                  <Check className="size-2" />
-                  Imported
-                </Badge>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Check className="size-3 shrink-0 text-emerald-400" />
+                  </TooltipTrigger>
+                  <TooltipContent>Imported</TooltipContent>
+                </Tooltip>
               )}
             </div>
             <p className="line-clamp-2 text-[11px] leading-relaxed text-zinc-500">
@@ -389,7 +391,7 @@ function RecommendedCard({
                 <Badge
                   key={name}
                   variant="outline"
-                  className="gap-1 border-emerald-800/50 bg-emerald-950/30 text-[9px] text-emerald-400"
+                  className="gap-1 border-sky-800/50 bg-sky-950/30 text-[9px] text-sky-400"
                 >
                   <Monitor className="size-2" />
                   {name}
@@ -705,7 +707,7 @@ function RolesTabContent() {
               <Badge
                 key={`p-${p}`}
                 variant="outline"
-                className="cursor-pointer gap-1 border-emerald-800/50 bg-emerald-950/30 text-[10px] text-emerald-400"
+                className="cursor-pointer gap-1 border-sky-800/50 bg-sky-950/30 text-[10px] text-sky-400"
                 onClick={() => togglePlatform(p)}
               >
                 <Monitor className="size-2.5" />
