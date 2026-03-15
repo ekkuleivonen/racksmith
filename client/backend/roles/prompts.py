@@ -20,7 +20,7 @@ Each input item has these fields:
   default     – default value (string for string/secret, true/false for bool)
   required    – true or false
   options     – list of allowed choices (renders as a dropdown); use [] when any value is accepted
-  interactive – true if the value should be prompted at runtime, false otherwise
+  secret      – true if the value should be prompted at runtime (never stored), false otherwise
 
 Validation rules:
   If an input has a default value, required MUST be false.
