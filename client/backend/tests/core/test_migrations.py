@@ -13,8 +13,8 @@ from core.racksmith_meta import read_meta
 class TestDetectSchemaVersion:
     """detect_schema_version(layout)."""
 
-    def test_defaults_to_current_when_no_file(self, layout) -> None:
-        assert detect_schema_version(layout) == 1
+    def test_defaults_to_zero_when_no_file(self, layout) -> None:
+        assert detect_schema_version(layout) == 0
 
     def test_reads_from_racksmith_yml(self, layout) -> None:
         _write_racksmith_yml(layout, {"schema_version": 2})
@@ -24,7 +24,7 @@ class TestDetectSchemaVersion:
         path = layout.racksmith_base / ".racksmith.yml"
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text("not valid: yaml: [")
-        assert detect_schema_version(layout) == 1
+        assert detect_schema_version(layout) == 0
 
 
 class TestWriteSchemaVersion:

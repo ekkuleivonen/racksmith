@@ -33,7 +33,7 @@ class TestReadMeta:
 
     def test_returns_defaults_when_no_file(self, layout) -> None:
         meta = read_meta(layout)
-        assert meta.schema_version == 1
+        assert meta.schema_version == 0
         assert meta.hosts == {}
         assert meta.racks == {}
         assert meta.rack_nodes == {}
@@ -58,14 +58,14 @@ class TestReadMeta:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text("not valid: yaml: [")
         meta = read_meta(layout)
-        assert meta.schema_version == 1
+        assert meta.schema_version == 0
 
     def test_handles_non_dict_root(self, layout) -> None:
         path = _meta_path(layout)
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text("- list\n")
         meta = read_meta(layout)
-        assert meta.schema_version == 1
+        assert meta.schema_version == 0
 
 
 class TestWriteMeta:
