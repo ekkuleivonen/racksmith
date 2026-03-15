@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useState } from "react";
+import {
+  forwardRef,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useRef,
+  useState,
+} from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -29,15 +36,19 @@ const EMPTY_SETTINGS: AppSettings = {
   REGISTRY_URL: "",
 };
 
+export type UserConfigFormHandle = {
+  save: () => Promise<void>;
+};
+
 type UserConfigFormProps = {
   onSaved?: () => void;
   showSaveButton?: boolean;
 };
 
-export function UserConfigForm({
-  onSaved,
-  showSaveButton = true,
-}: UserConfigFormProps) {
+export const UserConfigForm = forwardRef<
+  UserConfigFormHandle,
+  UserConfigFormProps
+>(function UserConfigForm({ onSaved, showSaveButton = true }, ref) {
   const [settings, setSettings] = useState<AppSettings>(EMPTY_SETTINGS);
   const [loadingSettings, setLoadingSettings] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -73,6 +84,28 @@ export function UserConfigForm({
     void fetchSettings().then(() => void loadOpenaiModels());
   }, [fetchSettings, loadOpenaiModels]);
 
+  const initialKeyRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (loadingSettings) return;
+    if (initialKeyRef.current === null) {
+      initialKeyRef.current = settings.OPENAI_API_KEY;
+      return;
+    }
+    if (settings.OPENAI_API_KEY === initialKeyRef.current) return;
+    // Don't trigger on masked values coming back from the server
+    if (settings.OPENAI_API_KEY.includes("•")) return;
+
+    const timer = setTimeout(async () => {
+      try {
+        await apiPut("/settings", { values: { OPENAI_API_KEY: settings.OPENAI_API_KEY } });
+        await loadOpenaiModels();
+      } catch {
+        setOpenaiModels([]);
+      }
+    }, 800);
+    return () => clearTimeout(timer);
+  }, [settings.OPENAI_API_KEY, loadingSettings, loadOpenaiModels]);
+
   const updateSetting = (key: keyof AppSettings, value: string) => {
     setSettings((prev) => ({ ...prev, [key]: value }));
   };
@@ -93,6 +126,8 @@ export function UserConfigForm({
       setSaving(false);
     }
   };
+
+  useImperativeHandle(ref, () => ({ save: handleSave }));
 
   return (
     <div className="space-y-4">
@@ -142,46 +177,36 @@ export function UserConfigForm({
           </div>
           <div className="space-y-2">
             <Label className="text-xs text-zinc-400">OPENAI_MODEL</Label>
-            {openaiModels.length > 0 ? (
-              <Select
-                value={settings.OPENAI_MODEL}
-                onValueChange={(v) => updateSetting("OPENAI_MODEL", v)}
-                disabled={loadingSettings}
-              >
-                <SelectTrigger className="w-full" size="sm">
-                  <SelectValue placeholder="Select model" />
-                </SelectTrigger>
-                <SelectContent>
-                  {settings.OPENAI_MODEL &&
-                    !openaiModels.includes(settings.OPENAI_MODEL) && (
-                      <SelectItem value={settings.OPENAI_MODEL}>
-                        {settings.OPENAI_MODEL}
-                      </SelectItem>
-                    )}
-                  {openaiModels.map((m) => (
-                    <SelectItem key={m} value={m}>
-                      {m}
+            <Select
+              value={settings.OPENAI_MODEL}
+              onValueChange={(v) => updateSetting("OPENAI_MODEL", v)}
+              disabled={loadingSettings || openaiModels.length === 0}
+            >
+              <SelectTrigger className="w-full" size="sm">
+                <SelectValue
+                  placeholder={
+                    loadingModels
+                      ? "Loading models..."
+                      : openaiModels.length === 0
+                        ? "Enter a valid API key to load models"
+                        : "Select model"
+                  }
+                />
+              </SelectTrigger>
+              <SelectContent>
+                {settings.OPENAI_MODEL &&
+                  !openaiModels.includes(settings.OPENAI_MODEL) && (
+                    <SelectItem value={settings.OPENAI_MODEL}>
+                      {settings.OPENAI_MODEL}
                     </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            ) : (
-              <Input
-                placeholder={
-                  loadingModels ? "Loading models..." : "gpt-4o-mini"
-                }
-                value={settings.OPENAI_MODEL}
-                onChange={(e) =>
-                  updateSetting("OPENAI_MODEL", e.target.value)
-                }
-                disabled={loadingSettings}
-              />
-            )}
-            {openaiModels.length === 0 && !loadingModels && (
-              <p className="text-[11px] text-zinc-500">
-                Save a valid API key to load available models.
-              </p>
-            )}
+                  )}
+                {openaiModels.map((m) => (
+                  <SelectItem key={m} value={m}>
+                    {m}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
         </CardContent>
       </Card>
@@ -235,4 +260,4 @@ export function UserConfigForm({
       )}
     </div>
   );
-}
+});
