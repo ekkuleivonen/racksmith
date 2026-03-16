@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   DndContext,
   PointerSensor,
@@ -103,12 +103,26 @@ type VarSource =
   | { kind: "host_var"; group: "Host variables"; key: string }
   | { kind: "group_var"; group: string; key: string };
 
-const WIRE_RE = /^\{\{\s*(\S+)\s*\}\}$/;
+type Segment =
+  | { kind: "text"; value: string }
+  | { kind: "var"; key: string };
 
-function parseWire(value: unknown): string | null {
-  if (typeof value !== "string") return null;
-  const m = WIRE_RE.exec(value);
-  return m ? m[1] : null;
+const TOKEN_RE = /\{\{\s*(\S+)\s*\}\}/g;
+
+function tokenize(value: string): Segment[] {
+  const segments: Segment[] = [];
+  let last = 0;
+  for (const m of value.matchAll(TOKEN_RE)) {
+    if (m.index > last) segments.push({ kind: "text", value: value.slice(last, m.index) });
+    segments.push({ kind: "var", key: m[1] });
+    last = m.index + m[0].length;
+  }
+  if (last < value.length) segments.push({ kind: "text", value: value.slice(last) });
+  return segments;
+}
+
+function hasVarTokens(value: string): boolean {
+  return /\{\{\s*\S+\s*\}\}/.test(value);
 }
 
 function normalizeType(t?: string): string {
@@ -173,62 +187,6 @@ function compatibleVars(
   });
 }
 
-function resolveWireSource(factKey: string, allVars: VarSource[]): string {
-  const match = allVars.find((v) => v.key === factKey);
-  if (!match) return "variable";
-  if (match.kind === "output") return match.group;
-  if (match.kind === "host_var") return "host var";
-  return match.group.toLowerCase();
-}
-
-// ---------------------------------------------------------------------------
-// WiredPill: read-only display of a {{ fact_key }} reference
-// ---------------------------------------------------------------------------
-
-function WiredPill({
-  factKey,
-  sourceName,
-  compatible,
-  onRewire,
-  onClear,
-}: {
-  factKey: string;
-  sourceName: string;
-  compatible: VarSource[];
-  onRewire: (factKey: string) => void;
-  onClear: () => void;
-}) {
-  return (
-    <div className="flex items-center gap-1.5 rounded border border-zinc-700 bg-zinc-800/60 px-2 py-1.5 text-xs">
-      <Link2 className="size-3 shrink-0 text-zinc-500" />
-      <span className="truncate text-zinc-400">{sourceName}</span>
-      <span className="text-zinc-600">&rarr;</span>
-      <span className="truncate font-mono text-zinc-300">{factKey}</span>
-      <div className="ml-auto flex shrink-0 items-center gap-0.5">
-        {compatible.length > 0 && (
-          <VarPickerPopover vars={compatible} onSelect={onRewire}>
-            <button
-              type="button"
-              className="text-zinc-500 hover:text-zinc-300"
-              title="Change linked variable"
-            >
-              <Link2 className="size-3" />
-            </button>
-          </VarPickerPopover>
-        )}
-        <button
-          type="button"
-          onClick={onClear}
-          className="text-zinc-500 hover:text-zinc-300"
-          title="Unlink"
-        >
-          <X className="size-3" />
-        </button>
-      </div>
-    </div>
-  );
-}
-
 // ---------------------------------------------------------------------------
 // VarPickerPopover: unified dropdown for outputs, host vars, group vars
 // ---------------------------------------------------------------------------
@@ -244,8 +202,6 @@ function VarPickerPopover({
 }) {
   const [open, setOpen] = useState(false);
 
-  if (vars.length === 0) return null;
-
   const grouped = new Map<string, VarSource[]>();
   for (const v of vars) {
     const list = grouped.get(v.group) ?? [];
@@ -260,60 +216,192 @@ function VarPickerPopover({
         align="start"
         className="max-h-72 w-72 overflow-y-auto p-1"
       >
-        {Array.from(grouped.entries()).map(([groupName, items]) => (
-          <div key={groupName}>
-            <p className="px-2 pt-1.5 pb-0.5 text-[10px] font-semibold tracking-wide text-zinc-500 uppercase">
-              {groupName}
-            </p>
-            {items.map((v) => (
-              <button
-                key={`${v.kind}-${v.key}`}
-                type="button"
-                className="flex w-full items-start gap-2 rounded px-2 py-1.5 text-left text-xs hover:bg-zinc-800"
-                onClick={() => {
-                  onSelect(v.key);
-                  setOpen(false);
-                }}
-              >
-                <code className="shrink-0 font-mono text-zinc-300">
-                  {v.key}
-                </code>
-                {v.kind === "output" && v.description ? (
-                  <span className="truncate text-zinc-500">
-                    {v.description}
-                  </span>
-                ) : null}
-              </button>
-            ))}
-          </div>
-        ))}
+        {vars.length === 0 ? (
+          <p className="px-2 py-3 text-xs text-zinc-500">
+            No variables available. Add host variables, group variables, or
+            upstream role outputs to link here.
+          </p>
+        ) : (
+          Array.from(grouped.entries()).map(([groupName, items]) => (
+            <div key={groupName}>
+              <p className="px-2 pt-1.5 pb-0.5 text-[10px] font-semibold tracking-wide text-zinc-500 uppercase">
+                {groupName}
+              </p>
+              {items.map((v) => (
+                <button
+                  key={`${v.kind}-${v.key}`}
+                  type="button"
+                  className="flex w-full items-start gap-2 rounded px-2 py-1.5 text-left text-xs hover:bg-zinc-800"
+                  onClick={() => {
+                    onSelect(v.key);
+                    setOpen(false);
+                  }}
+                >
+                  <code className="shrink-0 font-mono text-zinc-300">
+                    {v.key}
+                  </code>
+                  {v.kind === "output" && v.description ? (
+                    <span className="truncate text-zinc-500">
+                      {v.description}
+                    </span>
+                  ) : null}
+                </button>
+              ))}
+            </div>
+          ))
+        )}
       </PopoverContent>
     </Popover>
   );
 }
 
 // ---------------------------------------------------------------------------
-// LinkButton: visible button that opens VarPickerPopover
+// TokenInput: inline pill display + raw edit mode
 // ---------------------------------------------------------------------------
 
-function LinkButton({
+function TokenInput({
+  value,
+  onChange,
+  placeholder,
+  disabled,
   vars,
-  onSelect,
 }: {
+  value: string;
+  onChange: (v: string) => void;
+  placeholder?: string;
+  disabled?: boolean;
   vars: VarSource[];
-  onSelect: (key: string) => void;
 }) {
+  const [editing, setEditing] = useState(false);
+  const [editValue, setEditValue] = useState(value);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const startEditing = () => {
+    setEditValue(value);
+    setEditing(true);
+  };
+
+  useEffect(() => {
+    if (editing) {
+      inputRef.current?.focus();
+    }
+  }, [editing]);
+
+  const commitEdit = () => {
+    setEditing(false);
+    if (editValue !== value) onChange(editValue);
+  };
+
+  const appendVar = (key: string) => {
+    const next = value ? `${value}{{ ${key} }}` : `{{ ${key} }}`;
+    onChange(next);
+  };
+
+  const replaceToken = (tokenIndex: number, newKey: string) => {
+    const segs = tokenize(value);
+    const rebuilt = segs
+      .map((s, i) =>
+        i === tokenIndex ? `{{ ${newKey} }}` : s.kind === "var" ? `{{ ${s.key} }}` : s.value,
+      )
+      .join("");
+    onChange(rebuilt);
+  };
+
+  const removeToken = (tokenIndex: number) => {
+    const segs = tokenize(value);
+    const rebuilt = segs
+      .filter((_, i) => i !== tokenIndex)
+      .map((s) => (s.kind === "var" ? `{{ ${s.key} }}` : s.value))
+      .join("");
+    onChange(rebuilt);
+  };
+
+  if (editing) {
+    return (
+      <div className="flex gap-1">
+        <Input
+          ref={inputRef}
+          className="min-w-0 flex-1 font-mono text-xs"
+          value={editValue}
+          onChange={(e) => setEditValue(e.target.value)}
+          onBlur={commitEdit}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === "Escape") {
+              e.preventDefault();
+              commitEdit();
+            }
+          }}
+          placeholder={placeholder}
+          disabled={disabled}
+        />
+      </div>
+    );
+  }
+
+  const segments = tokenize(String(value));
+  const hasTokens = segments.some((s) => s.kind === "var");
+  const isEmpty = !value;
+
   return (
-    <VarPickerPopover vars={vars} onSelect={onSelect}>
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon"
-        className="h-9 w-9 shrink-0"
+    <div className="flex gap-1">
+      <div
+        className="flex min-h-9 min-w-0 flex-1 cursor-text flex-wrap items-center gap-1 rounded-md border border-zinc-800 bg-transparent px-3 py-1.5 text-sm"
+        onClick={() => {
+          if (!disabled) startEditing();
+        }}
       >
-        <Link2 className="size-3.5" />
-      </Button>
-    </VarPickerPopover>
+        {isEmpty ? (
+          <span className="text-zinc-500">{placeholder}</span>
+        ) : hasTokens ? (
+          segments.map((seg, i) =>
+            seg.kind === "text" ? (
+              <span key={i} className="text-zinc-300 break-all">
+                {seg.value}
+              </span>
+            ) : (
+              <VarPickerPopover
+                key={i}
+                vars={vars}
+                onSelect={(key) => replaceToken(i, key)}
+              >
+                <span
+                  role="button"
+                  onClick={(e) => e.stopPropagation()}
+                  className="inline-flex items-center gap-0.5 rounded bg-violet-500/15 px-1.5 py-0.5 font-mono text-[11px] text-violet-300 hover:bg-violet-500/25 transition-colors"
+                >
+                  <Link2 className="size-2.5 shrink-0 opacity-60" />
+                  {seg.key}
+                  <button
+                    type="button"
+                    className="ml-0.5 opacity-50 hover:opacity-100"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      removeToken(i);
+                    }}
+                  >
+                    <X className="size-2.5" />
+                  </button>
+                </span>
+              </VarPickerPopover>
+            ),
+          )
+        ) : (
+          <span className="text-zinc-300 break-all">{String(value)}</span>
+        )}
+      </div>
+      {!disabled && (
+        <VarPickerPopover vars={vars} onSelect={appendVar}>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="h-9 w-9 shrink-0"
+          >
+            <Link2 className="size-3.5" />
+          </Button>
+        </VarPickerPopover>
+      )}
+    </div>
   );
 }
 
@@ -350,12 +438,6 @@ function SortableRoleCard({
       ...role,
       vars: { ...role.vars, [key]: value },
     });
-
-  const clearVar = (key: string) => {
-    const next = { ...role.vars };
-    delete next[key];
-    updateRole(index, { ...role, vars: next });
-  };
 
   return (
     <AccordionItem
@@ -404,8 +486,14 @@ function SortableRoleCard({
             {roleEntry.inputs.map((field) => {
               const isSecret = !!field.secret;
               const rawValue = role.vars[field.key] ?? field.default ?? "";
-              const wiredFact = parseWire(rawValue);
               const matched = compatibleVars(allVars, field.type);
+              const wire = (fk: string) => setVar(field.key, `{{ ${fk} }}`);
+              const rawStr = String(rawValue);
+              const isWired = hasVarTokens(rawStr);
+
+              const isBool = field.type === "bool" || field.type === "boolean";
+              const hasOptions = (field.options?.length ?? 0) > 0;
+              const isSelectField = (hasOptions || isBool) && !isWired;
 
               const fieldNode = (
                 <div
@@ -429,82 +517,75 @@ function SortableRoleCard({
                     ) : null}
                   </p>
 
-                  {wiredFact ? (
-                    <WiredPill
-                      factKey={wiredFact}
-                      sourceName={resolveWireSource(wiredFact, allVars)}
-                      compatible={matched}
-                      onRewire={(fk) =>
-                        setVar(field.key, `{{ ${fk} }}`)
-                      }
-                      onClear={() => clearVar(field.key)}
-                    />
-                  ) : (field.options?.length ?? 0) > 0 ? (
-                    <div className="flex gap-1">
-                      <Select
-                        value={String(rawValue)}
-                        onValueChange={(value) => setVar(field.key, value)}
-                        disabled={isSecret}
-                      >
-                        <SelectTrigger className="w-full">
-                          <SelectValue placeholder={field.placeholder} />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {field.options!.map((opt) => (
-                            <SelectItem key={opt} value={opt}>
-                              {opt}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      {matched.length > 0 && !isSecret ? (
-                        <LinkButton vars={matched} onSelect={(fk) => setVar(field.key, `{{ ${fk} }}`)} />
-                      ) : null}
-                    </div>
-                  ) : field.type === "bool" || field.type === "boolean" ? (
-                    <div className="flex gap-1">
-                      <Select
-                        value={
-                          String(
-                            role.vars[field.key] !== undefined
-                              ? role.vars[field.key] === true
-                              : field.default === true,
-                          )
-                        }
-                        onValueChange={(value) =>
-                          setVar(field.key, value === "true")
-                        }
-                        disabled={isSecret}
-                      >
-                        <SelectTrigger className="w-full">
-                          <SelectValue
-                            placeholder={field.placeholder || "Select..."}
-                          />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="true">true</SelectItem>
-                          <SelectItem value="false">false</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      {matched.length > 0 && !isSecret ? (
-                        <LinkButton vars={matched} onSelect={(fk) => setVar(field.key, `{{ ${fk} }}`)} />
-                      ) : null}
-                    </div>
+                  {isSelectField ? (
+                    hasOptions ? (
+                      <div className="flex gap-1">
+                        <Select
+                          value={rawStr}
+                          onValueChange={(value) => setVar(field.key, value)}
+                          disabled={isSecret}
+                        >
+                          <SelectTrigger className="w-full">
+                            <SelectValue placeholder={field.placeholder} />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {field.options!.map((opt) => (
+                              <SelectItem key={opt} value={opt}>
+                                {opt}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        {!isSecret && (
+                          <VarPickerPopover vars={matched} onSelect={wire}>
+                            <Button type="button" variant="ghost" size="icon" className="h-9 w-9 shrink-0">
+                              <Link2 className="size-3.5" />
+                            </Button>
+                          </VarPickerPopover>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="flex gap-1">
+                        <Select
+                          value={
+                            String(
+                              role.vars[field.key] !== undefined
+                                ? role.vars[field.key] === true
+                                : field.default === true,
+                            )
+                          }
+                          onValueChange={(value) =>
+                            setVar(field.key, value === "true")
+                          }
+                          disabled={isSecret}
+                        >
+                          <SelectTrigger className="w-full">
+                            <SelectValue
+                              placeholder={field.placeholder || "Select..."}
+                            />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="true">true</SelectItem>
+                            <SelectItem value="false">false</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        {!isSecret && (
+                          <VarPickerPopover vars={matched} onSelect={wire}>
+                            <Button type="button" variant="ghost" size="icon" className="h-9 w-9 shrink-0">
+                              <Link2 className="size-3.5" />
+                            </Button>
+                          </VarPickerPopover>
+                        )}
+                      </div>
+                    )
                   ) : (
-                    <div className="flex gap-1">
-                      <Input
-                        className="min-w-0 flex-1"
-                        value={String(rawValue)}
-                        onChange={(event) =>
-                          setVar(field.key, event.target.value)
-                        }
-                        placeholder={field.placeholder}
-                        disabled={isSecret}
-                      />
-                      {matched.length > 0 && !isSecret ? (
-                        <LinkButton vars={matched} onSelect={(fk) => setVar(field.key, `{{ ${fk} }}`)} />
-                      ) : null}
-                    </div>
+                    <TokenInput
+                      value={rawStr}
+                      onChange={(v) => setVar(field.key, v)}
+                      placeholder={field.placeholder}
+                      disabled={isSecret}
+                      vars={matched}
+                    />
                   )}
                 </div>
               );

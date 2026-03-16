@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Loader2 as PushLoader, Package, Play } from "lucide-react";
 import { toast } from "sonner";
@@ -144,44 +144,60 @@ export function PlaybookDetailPage() {
     setRolesCatalog(playbook.roles_catalog);
   }, [playbook]);
 
-  useEffect(() => {
-    if (!draft || !playbookId || !savedDraftRef.current) return;
-    if (
-      draft.name === savedDraftRef.current.name &&
-      draft.description === savedDraftRef.current.description &&
-      JSON.stringify(draft.roles) === JSON.stringify(savedDraftRef.current.roles) &&
-      (draft.become ?? false) === (savedDraftRef.current.become ?? false)
-    ) {
-      return;
+  const isDirty = useCallback(() => {
+    if (!draft || !savedDraftRef.current) return false;
+    return (
+      draft.name !== savedDraftRef.current.name ||
+      draft.description !== savedDraftRef.current.description ||
+      JSON.stringify(draft.roles) !== JSON.stringify(savedDraftRef.current.roles) ||
+      (draft.become ?? false) !== (savedDraftRef.current.become ?? false)
+    );
+  }, [draft]);
+
+  const saveIfDirty = useCallback(async () => {
+    if (!draft || !playbookId || !isDirty()) return;
+    setSaving(true);
+    try {
+      const result = await updatePlaybook(playbookId, draft);
+      const next = {
+        name: result.playbook.name,
+        description: result.playbook.description,
+        roles: result.playbook.role_entries,
+        become: result.playbook.become ?? false,
+      };
+      setDraft(next);
+      savedDraftRef.current = next;
+      setRolesCatalog(result.playbook.roles_catalog);
+      toast.success("Playbook saved");
+    } catch (error) {
+      toastApiError(error, "Failed to save playbook");
+    } finally {
+      setSaving(false);
     }
-    const timer = setTimeout(async () => {
-      setSaving(true);
-      try {
-        const result = await updatePlaybook(playbookId, draft);
-        const next = {
-          name: result.playbook.name,
-          description: result.playbook.description,
-          roles: result.playbook.role_entries,
-          become: result.playbook.become ?? false,
-        };
-        setDraft(next);
-        savedDraftRef.current = next;
-        setRolesCatalog(result.playbook.roles_catalog);
-        toast.success("Playbook saved");
-      } catch (error) {
-        toastApiError(error, "Failed to save playbook");
-      } finally {
-        setSaving(false);
-      }
-    }, 800);
-    return () => clearTimeout(timer);
-  }, [draft, playbookId]);
+  }, [draft, playbookId, isDirty]);
+
+  useEffect(() => {
+    const handler = () => {
+      if (isDirty()) navigator.sendBeacon?.(`/api/playbooks/${playbookId}`, JSON.stringify(draft));
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [draft, playbookId, isDirty]);
+
+  const handleFormBlur = useCallback(
+    (e: React.FocusEvent<HTMLDivElement>) => {
+      if (e.currentTarget.contains(e.relatedTarget as Node)) return;
+      void saveIfDirty();
+    },
+    [saveIfDirty],
+  );
 
   if (loading || !draft) return <DetailLoading message="Loading playbook..." />;
 
   return (
     <>
     <PageContainer>
+      <div onBlur={handleFormBlur}>
         <section className="border border-zinc-800 bg-zinc-900/30 p-4">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="min-w-0 flex-1 space-y-1">
@@ -197,7 +213,13 @@ export function PlaybookDetailPage() {
               />
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              {saving && <span className="text-xs text-zinc-500">Saving...</span>}
+              {saving ? (
+                <span className="text-xs text-zinc-500">Saving...</span>
+              ) : isDirty() ? (
+                <Button size="sm" variant="outline" onClick={() => void saveIfDirty()}>
+                  Save
+                </Button>
+              ) : null}
               <Badge variant="outline">{draft.roles.length} roles</Badge>
               <Button
                 size="sm"
@@ -240,6 +262,7 @@ export function PlaybookDetailPage() {
           compact
           onChange={setDraft}
         />
+      </div>
     </PageContainer>
 
       <PlaybookRunDialog
