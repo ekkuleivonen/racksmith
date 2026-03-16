@@ -1,5 +1,11 @@
 import { useEffect, useRef, useState } from "react";
-import { Loader2, Sparkles, Square, Wand2 } from "lucide-react";
+import {
+  ChevronRight,
+  Loader2,
+  Sparkles,
+  Square,
+  Wand2,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { YamlFileView } from "@/components/files/yaml-file-view";
@@ -40,6 +46,7 @@ export function YamlEditorWithAi({
 }: YamlEditorWithAiProps) {
   const [showPrompt, setShowPrompt] = useState(false);
   const [prompt, setPrompt] = useState("");
+  const [thinkingExpanded, setThinkingExpanded] = useState(true);
 
   const { yaml, thinking, generating, error, generate, cancel } =
     useStreamingYaml({
@@ -48,10 +55,10 @@ export function YamlEditorWithAi({
 
   const thinkingRef = useRef<HTMLPreElement>(null);
   useEffect(() => {
-    if (thinkingRef.current) {
+    if (thinkingRef.current && thinkingExpanded) {
       thinkingRef.current.scrollTop = thinkingRef.current.scrollHeight;
     }
-  }, [thinking]);
+  }, [thinking, thinkingExpanded]);
 
   useEffect(() => {
     onGeneratingChange?.(generating);
@@ -59,11 +66,13 @@ export function YamlEditorWithAi({
 
   async function handleGenerate() {
     if (!prompt.trim()) return;
+    setThinkingExpanded(true);
     const body = buildBody(prompt.trim());
     onBeforeGenerate?.();
     await generate(apiEndpoint, body);
   }
 
+  const isThinkingPhase = generating && thinking && !yaml;
   const displayValue = generating ? yaml : value;
 
   return (
@@ -73,14 +82,14 @@ export function YamlEditorWithAi({
         <div className="flex gap-2">
           {headerActions}
           <Button
-          variant={showPrompt ? "secondary" : "outline"}
-          size="sm"
-          onClick={() => setShowPrompt((v) => !v)}
-          disabled={generating}
-          title="AI generate"
-        >
-          <Wand2 className="size-3.5" />
-        </Button>
+            variant={showPrompt ? "secondary" : "outline"}
+            size="sm"
+            onClick={() => setShowPrompt((v) => !v)}
+            disabled={generating}
+            title="AI generate"
+          >
+            <Wand2 className="size-3.5" />
+          </Button>
         </div>
       </div>
 
@@ -124,6 +133,32 @@ export function YamlEditorWithAi({
         </div>
       )}
 
+      {thinking && (
+        <div>
+          <button
+            type="button"
+            onClick={() => setThinkingExpanded((v) => !v)}
+            className="flex items-center gap-1.5 text-xs text-violet-400/80 hover:text-violet-300 transition-colors w-full text-left"
+          >
+            <ChevronRight
+              className={`size-3 shrink-0 transition-transform ${thinkingExpanded ? "rotate-90" : ""}`}
+            />
+            <Sparkles className="size-3 shrink-0" />
+            <span>
+              {isThinkingPhase ? "Thinking..." : "AI reasoning"}
+            </span>
+          </button>
+          {thinkingExpanded && (
+            <pre
+              ref={thinkingRef}
+              className="mt-1 ml-[18px] max-h-28 overflow-y-auto rounded bg-zinc-950/80 p-2 text-[11px] leading-relaxed text-zinc-500 whitespace-pre-wrap"
+            >
+              {thinking}
+            </pre>
+          )}
+        </div>
+      )}
+
       {editorHidden ? (
         <pre className="overflow-auto rounded border border-zinc-800 bg-zinc-950/60 p-3 text-xs text-zinc-400 font-mono max-h-[500px]">
           {value}
@@ -141,25 +176,10 @@ export function YamlEditorWithAi({
         </div>
       )}
 
-      {generating && thinking && (
-        <div className="space-y-1">
-          <div className="flex items-center gap-1.5 text-xs text-violet-400">
-            <Sparkles className="size-3" />
-            Thinking...
-          </div>
-          <pre
-            ref={thinkingRef}
-            className="max-h-32 overflow-y-auto rounded bg-zinc-950/80 p-2 text-[11px] leading-relaxed text-zinc-400 whitespace-pre-wrap"
-          >
-            {thinking}
-          </pre>
-        </div>
-      )}
-
       {generating && (
         <div className="flex items-center gap-2 text-xs text-zinc-500">
           <Loader2 className="size-3.5 animate-spin" />
-          {thinking && !yaml ? "Thinking..." : "Generating..."}
+          {isThinkingPhase ? "Thinking..." : "Generating..."}
         </div>
       )}
 

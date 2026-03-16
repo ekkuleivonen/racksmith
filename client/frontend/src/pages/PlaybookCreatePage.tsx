@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
+  ArrowRight,
   Check,
+  ChevronRight,
   CircleAlert,
   Loader2,
   Sparkles,
@@ -30,32 +32,59 @@ const EMPTY_DRAFT: PlaybookUpsert = {
   become: false,
 };
 
-function ThinkingBlock({ text, label }: { text: string; label?: string }) {
+function ThinkingBlock({
+  text,
+  label,
+  expanded,
+  onToggle,
+}: {
+  text: string;
+  label: string;
+  expanded: boolean;
+  onToggle: () => void;
+}) {
   const ref = useRef<HTMLPreElement>(null);
+
   useEffect(() => {
-    if (ref.current) {
+    if (ref.current && expanded) {
       ref.current.scrollTop = ref.current.scrollHeight;
     }
-  }, [text]);
+  }, [text, expanded]);
+
   return (
-    <div className="space-y-1">
-      {label && (
-        <div className="flex items-center gap-1.5 text-xs text-violet-400">
-          <Sparkles className="size-3" />
-          {label}
-        </div>
-      )}
-      <pre
-        ref={ref}
-        className="max-h-32 overflow-y-auto rounded bg-zinc-950/80 p-2 text-[11px] leading-relaxed text-zinc-400 whitespace-pre-wrap"
+    <div>
+      <button
+        type="button"
+        onClick={onToggle}
+        className="flex items-center gap-1.5 text-xs text-violet-400/80 hover:text-violet-300 transition-colors w-full text-left"
       >
-        {text}
-      </pre>
+        <ChevronRight
+          className={`size-3 shrink-0 transition-transform ${expanded ? "rotate-90" : ""}`}
+        />
+        <Sparkles className="size-3 shrink-0" />
+        <span className="truncate">{label}</span>
+      </button>
+      {expanded && (
+        <pre
+          ref={ref}
+          className="mt-1 ml-[18px] max-h-28 overflow-y-auto rounded bg-zinc-950/80 p-2 text-[11px] leading-relaxed text-zinc-500 whitespace-pre-wrap"
+        >
+          {text}
+        </pre>
+      )}
     </div>
   );
 }
 
-function StepIndicator({ step }: { step: GenerationStep }) {
+function StepIndicator({
+  step,
+  expanded,
+  onToggle,
+}: {
+  step: GenerationStep;
+  expanded: boolean;
+  onToggle: () => void;
+}) {
   switch (step.step) {
     case "planning":
       return (
@@ -65,22 +94,30 @@ function StepIndicator({ step }: { step: GenerationStep }) {
         </div>
       );
     case "thinking":
-      return <ThinkingBlock text={step.text} />;
+      return (
+        <ThinkingBlock
+          text={step.text}
+          label="Planning..."
+          expanded={expanded}
+          onToggle={onToggle}
+        />
+      );
     case "planned":
       return (
         <div className="flex items-center gap-2 text-xs text-emerald-400">
           <Check className="size-3" />
-          Planned "{step.plan_name}" — {step.total_new} role
+          Planned &ldquo;{step.plan_name}&rdquo; &mdash; {step.total_new} role
           {step.total_new !== 1 ? "s" : ""} to create
-          {step.total_reuse > 0 &&
-            `, ${step.total_reuse} reused`}
+          {step.total_reuse > 0 && `, ${step.total_reuse} reused`}
         </div>
       );
     case "thinking_role":
       return (
         <ThinkingBlock
           text={step.text}
-          label={`Thinking: ${step.name} (${step.index}/${step.total})`}
+          label={`${step.name} (${step.index}/${step.total})`}
+          expanded={expanded}
+          onToggle={onToggle}
         />
       );
     case "role_created":
@@ -129,19 +166,37 @@ export function PlaybookCreatePage() {
   const [saving, setSaving] = useState(false);
   const [showPrompt, setShowPrompt] = useState(false);
   const [prompt, setPrompt] = useState("");
+  const [completedId, setCompletedId] = useState<string | null>(null);
+  const [expandedSteps, setExpandedSteps] = useState<Set<number>>(new Set());
+  const stepsEndRef = useRef<HTMLDivElement>(null);
 
   const {
     generating,
     steps,
     error: genError,
-    generate,
+    generate: rawGenerate,
     cancel,
   } = usePlaybookGenerate({
     onComplete: (playbookId) => {
       toast.success("Playbook generated");
-      navigate(`/playbooks/${playbookId}`);
+      setCompletedId(playbookId);
     },
   });
+
+  const generate = useCallback(
+    (p: string) => {
+      setCompletedId(null);
+      setExpandedSteps(new Set());
+      return rawGenerate(p);
+    },
+    [rawGenerate],
+  );
+
+  const aiActive = generating || completedId !== null || steps.length > 0;
+
+  useEffect(() => {
+    stepsEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+  }, [steps.length]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -223,11 +278,43 @@ export function PlaybookCreatePage() {
             </div>
 
             {steps.length > 0 && (
-              <div className="space-y-1.5 rounded border border-zinc-800 bg-zinc-950/60 p-3">
-                {steps.map((step, i) => (
-                  <StepIndicator key={i} step={step} />
-                ))}
+              <div className="max-h-80 overflow-y-auto rounded border border-zinc-800 bg-zinc-950/60 p-3 space-y-1">
+                {steps.map((step, i) => {
+                  const isThinking =
+                    step.step === "thinking" || step.step === "thinking_role";
+                  const isLast = i === steps.length - 1;
+                  const expanded = isThinking
+                    ? isLast || expandedSteps.has(i)
+                    : false;
+                  return (
+                    <StepIndicator
+                      key={i}
+                      step={step}
+                      expanded={expanded}
+                      onToggle={() =>
+                        setExpandedSteps((prev) => {
+                          const next = new Set(prev);
+                          if (next.has(i)) next.delete(i);
+                          else next.add(i);
+                          return next;
+                        })
+                      }
+                    />
+                  );
+                })}
+                <div ref={stepsEndRef} />
               </div>
+            )}
+
+            {completedId && (
+              <Button
+                size="sm"
+                onClick={() => navigate(`/playbooks/${completedId}`)}
+                className="w-full"
+              >
+                View Playbook
+                <ArrowRight className="size-3.5" />
+              </Button>
             )}
 
             {genError && (
@@ -239,64 +326,69 @@ export function PlaybookCreatePage() {
         )}
       </section>
 
-      {/* Manual creation section */}
-      <section className="space-y-4 border border-zinc-800 bg-zinc-900/30 p-4">
-        <div className="space-y-1">
-          <p className="text-xs text-zinc-400">Name</p>
-          <Input
-            value={draft.name}
-            onChange={(e) =>
-              setDraft((d: PlaybookUpsert) => ({ ...d, name: e.target.value }))
-            }
-            placeholder="Playbook name"
-            disabled={generating}
-          />
-        </div>
-        <div className="space-y-1">
-          <p className="text-xs text-zinc-400">Description</p>
-          <Textarea
-            value={draft.description}
-            onChange={(e) =>
-              setDraft((d: PlaybookUpsert) => ({
-                ...d,
-                description: e.target.value,
-              }))
-            }
-            placeholder="Short description shown in the UI."
-            className="min-h-20"
-            disabled={generating}
-          />
-        </div>
-      </section>
+      {/* Manual creation section — hidden while AI is active */}
+      {!aiActive && (
+        <>
+          <section className="space-y-4 border border-zinc-800 bg-zinc-900/30 p-4">
+            <div className="space-y-1">
+              <p className="text-xs text-zinc-400">Name</p>
+              <Input
+                value={draft.name}
+                onChange={(e) =>
+                  setDraft((d: PlaybookUpsert) => ({
+                    ...d,
+                    name: e.target.value,
+                  }))
+                }
+                placeholder="Playbook name"
+              />
+            </div>
+            <div className="space-y-1">
+              <p className="text-xs text-zinc-400">Description</p>
+              <Textarea
+                value={draft.description}
+                onChange={(e) =>
+                  setDraft((d: PlaybookUpsert) => ({
+                    ...d,
+                    description: e.target.value,
+                  }))
+                }
+                placeholder="Short description shown in the UI."
+                className="min-h-20"
+              />
+            </div>
+          </section>
 
-      <PlaybookEditorForm
-        draft={draft}
-        roles={roles_catalog}
-        onChange={setDraft}
-      />
+          <PlaybookEditorForm
+            draft={draft}
+            roles={roles_catalog}
+            onChange={setDraft}
+          />
 
-      <div className="flex flex-wrap items-center gap-2">
-        <Button
-          size="sm"
-          disabled={
-            saving || generating || !draft.name.trim() || draft.roles.length === 0
-          }
-          onClick={async () => {
-            setSaving(true);
-            try {
-              const result = await createPlaybook(draft);
-              toast.success("Playbook created");
-              navigate(`/playbooks/${result.playbook.id}`);
-            } catch (error) {
-              toastApiError(error, "Failed to create playbook");
-            } finally {
-              setSaving(false);
-            }
-          }}
-        >
-          {saving ? "Creating..." : "Create playbook"}
-        </Button>
-      </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              size="sm"
+              disabled={
+                saving || !draft.name.trim() || draft.roles.length === 0
+              }
+              onClick={async () => {
+                setSaving(true);
+                try {
+                  const result = await createPlaybook(draft);
+                  toast.success("Playbook created");
+                  navigate(`/playbooks/${result.playbook.id}`);
+                } catch (error) {
+                  toastApiError(error, "Failed to create playbook");
+                } finally {
+                  setSaving(false);
+                }
+              }}
+            >
+              {saving ? "Creating..." : "Create playbook"}
+            </Button>
+          </div>
+        </>
+      )}
     </CreatePageShell>
   );
 }
