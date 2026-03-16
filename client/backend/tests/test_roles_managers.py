@@ -82,6 +82,23 @@ class TestRoleManagerCreateRole:
         assert role2.id.startswith("role_")
 
 
+class TestRoleManagerCreateWithListDictInputs:
+    def test_create_role_with_list_dict_inputs(self, with_repo_mock):
+        body = RoleCreate(
+            name="Storage Dirs",
+            description="Create directories",
+            inputs=[
+                {"key": "directories", "type": "list", "label": "Directories", "default": ["/mnt/data"]},
+                {"key": "mount_options", "type": "dict", "label": "Mount options", "default": {"fstype": "ext4"}},
+            ],
+            tasks=[{"name": "noop", "debug": {"msg": "ok"}}],
+        )
+        role = role_manager.create_role(with_repo_mock, body)
+        by_key = {i.key: i for i in role.inputs}
+        assert by_key["directories"].type == "list"
+        assert by_key["mount_options"].type == "dict"
+
+
 class TestRoleLabelDerivation:
     def test_label_derived_from_description(self, with_repo_mock, layout):
         layout.roles_path.mkdir(parents=True, exist_ok=True)

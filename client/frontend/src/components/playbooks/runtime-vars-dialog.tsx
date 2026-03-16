@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -105,6 +106,7 @@ export function RuntimeVarsDialog({
   if (!hasSecretInputs) return null;
 
   const isBoolType = (type: string) => type === "bool" || type === "boolean";
+  const isStructuredType = (type: string) => type === "list" || type === "dict";
 
   return (
     <AlertDialog open={open} onOpenChange={(o) => !o && !submitting && handleCancel()}>
@@ -157,6 +159,22 @@ export function RuntimeVarsDialog({
                       ))}
                     </SelectContent>
                   </Select>
+                ) : isStructuredType(inp.type) ? (
+                  <Textarea
+                    id={inp.key}
+                    className="font-mono text-xs"
+                    rows={4}
+                    value={vars[inp.key] ?? ""}
+                    onChange={(e) =>
+                      setVars((prev) => ({ ...prev, [inp.key]: e.target.value }))
+                    }
+                    placeholder={
+                      inp.type === "list"
+                        ? '["item1", "item2"]'
+                        : '{"key": "value"}'
+                    }
+                    autoComplete="off"
+                  />
                 ) : (
                   <Input
                     id={inp.key}
