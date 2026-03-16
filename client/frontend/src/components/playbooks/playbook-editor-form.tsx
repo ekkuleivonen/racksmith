@@ -297,6 +297,14 @@ function TokenInput({
     onChange(next);
   };
 
+  const resolveSource = (key: string): string => {
+    const match = vars.find((v) => v.key === key);
+    if (!match) return "variable";
+    if (match.kind === "output") return `Output from ${match.group}`;
+    if (match.kind === "host_var") return "Host variable";
+    return match.group;
+  };
+
   const replaceToken = (tokenIndex: number, newKey: string) => {
     const segs = tokenize(value);
     const rebuilt = segs
@@ -345,7 +353,7 @@ function TokenInput({
   return (
     <div className="flex gap-1">
       <div
-        className="flex min-h-9 min-w-0 flex-1 cursor-text flex-wrap items-center gap-1 rounded-md border border-zinc-800 bg-transparent px-3 py-1.5 text-sm"
+        className="flex min-h-9 min-w-0 flex-1 cursor-text flex-wrap items-center gap-1 border border-zinc-800 bg-transparent px-3 py-1.5 text-sm"
         onClick={() => {
           if (!disabled) startEditing();
         }}
@@ -359,30 +367,36 @@ function TokenInput({
                 {seg.value}
               </span>
             ) : (
-              <VarPickerPopover
-                key={i}
-                vars={vars}
-                onSelect={(key) => replaceToken(i, key)}
-              >
-                <span
-                  role="button"
-                  onClick={(e) => e.stopPropagation()}
-                  className="inline-flex items-center gap-0.5 rounded bg-violet-500/15 px-1.5 py-0.5 font-mono text-[11px] text-violet-300 hover:bg-violet-500/25 transition-colors"
+              <Tooltip key={i}>
+                <VarPickerPopover
+                  vars={vars}
+                  onSelect={(key) => replaceToken(i, key)}
                 >
-                  <Link2 className="size-2.5 shrink-0 opacity-60" />
-                  {seg.key}
-                  <button
-                    type="button"
-                    className="ml-0.5 opacity-50 hover:opacity-100"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      removeToken(i);
-                    }}
-                  >
-                    <X className="size-2.5" />
-                  </button>
-                </span>
-              </VarPickerPopover>
+                  <TooltipTrigger asChild>
+                    <span
+                      role="button"
+                      onClick={(e) => e.stopPropagation()}
+                      className="inline-flex items-center gap-0.5 bg-violet-500/15 px-1.5 py-0.5 font-mono text-[11px] text-violet-300 hover:bg-violet-500/25 transition-colors"
+                    >
+                      <Link2 className="size-2.5 shrink-0 opacity-60" />
+                      {seg.key}
+                      <button
+                        type="button"
+                        className="ml-0.5 opacity-50 hover:opacity-100"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          removeToken(i);
+                        }}
+                      >
+                        <X className="size-2.5" />
+                      </button>
+                    </span>
+                  </TooltipTrigger>
+                </VarPickerPopover>
+                <TooltipContent side="top" className="text-xs">
+                  {resolveSource(seg.key)}
+                </TooltipContent>
+              </Tooltip>
             ),
           )
         ) : (
