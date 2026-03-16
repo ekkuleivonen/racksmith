@@ -82,6 +82,23 @@ class TestRoleManagerCreateRole:
         assert role2.id.startswith("role_")
 
 
+class TestRoleManagerCreateWithListDictInputs:
+    def test_create_role_with_list_dict_inputs(self, with_repo_mock):
+        body = RoleCreate(
+            name="Storage Dirs",
+            description="Create directories",
+            inputs=[
+                {"key": "directories", "type": "list", "label": "Directories", "default": ["/mnt/data"]},
+                {"key": "mount_options", "type": "dict", "label": "Mount options", "default": {"fstype": "ext4"}},
+            ],
+            tasks=[{"name": "noop", "debug": {"msg": "ok"}}],
+        )
+        role = role_manager.create_role(with_repo_mock, body)
+        by_key = {i.key: i for i in role.inputs}
+        assert by_key["directories"].type == "list"
+        assert by_key["mount_options"].type == "dict"
+
+
 class TestRoleLabelDerivation:
     def test_label_derived_from_description(self, with_repo_mock, layout):
         layout.roles_path.mkdir(parents=True, exist_ok=True)
@@ -116,6 +133,47 @@ argument_specs:
 """)
         role = role_manager.get_role(with_repo_mock, "role_xyz")
         assert role.inputs[0].label == "Allow Root Login"
+
+
+class TestRoleOutputsInManager:
+    def test_role_summary_includes_outputs(self, with_repo_mock, layout):
+        import yaml as _yaml
+        layout.roles_path.mkdir(parents=True, exist_ok=True)
+        (layout.roles_path / "storage_discover").mkdir()
+        (layout.roles_path / "storage_discover" / "meta").mkdir()
+        (layout.roles_path / "storage_discover" / "meta" / "main.yml").write_text(
+            _yaml.safe_dump({
+                "galaxy_info": {"role_name": "Storage Discover", "description": "Discover disk"},
+                "argument_specs": {"main": {"options": {}}},
+                "racksmith_outputs": [
+                    {"key": "discovered_uuid", "description": "Filesystem UUID"},
+                ],
+            })
+        )
+        role = role_manager.get_role(with_repo_mock, "storage_discover")
+        assert len(role.outputs) == 1
+        assert role.outputs[0].key == "discovered_uuid"
+
+    def test_roles_catalog_includes_outputs(self, with_repo_mock, layout):
+        import yaml as _yaml  # noqa: I001
+        from playbooks.managers import playbook_manager
+
+        layout.roles_path.mkdir(parents=True, exist_ok=True)
+        (layout.roles_path / "discover_role").mkdir()
+        (layout.roles_path / "discover_role" / "meta").mkdir()
+        (layout.roles_path / "discover_role" / "meta" / "main.yml").write_text(
+            _yaml.safe_dump({
+                "galaxy_info": {"role_name": "Discover", "description": "Discover"},
+                "argument_specs": {"main": {"options": {}}},
+                "racksmith_outputs": [
+                    {"key": "disk_uuid", "description": "UUID"},
+                ],
+            })
+        )
+        catalog = playbook_manager.roles_catalog(with_repo_mock)
+        entry = next(e for e in catalog if e.id == "discover_role")
+        assert len(entry.outputs) == 1
+        assert entry.outputs[0].key == "disk_uuid"
 
 
 class TestRoleManagerUpdateRole:

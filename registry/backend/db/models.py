@@ -69,6 +69,7 @@ class RoleVersion(Base):
     platforms: Mapped[list] = mapped_column(JSONB, default=list)
     tags: Mapped[list[str]] = mapped_column(ARRAY(Text), default=list)
     inputs: Mapped[list] = mapped_column(JSONB, default=list)
+    outputs: Mapped[list] = mapped_column(JSONB, default=list)
     tasks_yaml: Mapped[str] = mapped_column(Text, default="")
     defaults_yaml: Mapped[str] = mapped_column(Text, default="")
     meta_yaml: Mapped[str] = mapped_column(Text, default="")

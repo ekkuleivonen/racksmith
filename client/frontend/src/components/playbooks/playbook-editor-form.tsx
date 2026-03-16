@@ -36,6 +36,7 @@ import {
   useComboboxAnchor,
 } from "@/components/ui/combobox";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -73,6 +74,26 @@ function parseRoleIdFromPickerValue(value: string) {
   return value.split("|||")[0] ?? "";
 }
 
+function isStructuredType(type: string | undefined) {
+  return type === "list" || type === "dict";
+}
+
+function structuredToString(value: unknown): string {
+  if (value === undefined || value === null) return "";
+  if (typeof value === "string") return value;
+  return JSON.stringify(value, null, 2);
+}
+
+function parseStructuredValue(text: string): unknown {
+  const trimmed = text.trim();
+  if (!trimmed) return undefined;
+  try {
+    return JSON.parse(trimmed);
+  } catch {
+    return trimmed;
+  }
+}
+
 function defaultVarsForRole(role: RoleCatalogEntry): Record<string, unknown> {
   return Object.fromEntries(
     role.inputs
@@ -82,7 +103,7 @@ function defaultVarsForRole(role: RoleCatalogEntry): Record<string, unknown> {
 }
 
 type SortableRoleCardProps = {
-  roleId: string;
+  instanceKey: string;
   role: PlaybookRoleEntry;
   index: number;
   roleEntry: RoleCatalogEntry;
@@ -91,7 +112,7 @@ type SortableRoleCardProps = {
 };
 
 function SortableRoleCard({
-  roleId,
+  instanceKey,
   role,
   index,
   roleEntry,
@@ -100,12 +121,12 @@ function SortableRoleCard({
 }: SortableRoleCardProps) {
   const { attributes, listeners, setNodeRef, transform, transition } =
     useSortable({
-      id: roleId,
+      id: instanceKey,
     });
 
   return (
     <AccordionItem
-      value={roleId}
+      value={instanceKey}
       ref={setNodeRef}
       style={{
         transform: CSS.Transform.toString(transform),
@@ -212,6 +233,33 @@ function SortableRoleCard({
                         <SelectItem value="false">false</SelectItem>
                       </SelectContent>
                     </Select>
+                  ) : isStructuredType(field.type) ? (
+                    <Textarea
+                      className="font-mono text-xs"
+                      rows={4}
+                      defaultValue={structuredToString(
+                        role.vars[field.key] ?? field.default,
+                      )}
+                      onBlur={(event) => {
+                        const parsed = parseStructuredValue(
+                          event.target.value,
+                        );
+                        updateRole(index, {
+                          ...role,
+                          vars: {
+                            ...role.vars,
+                            [field.key]: parsed,
+                          },
+                        });
+                      }}
+                      placeholder={
+                        field.placeholder ||
+                        (field.type === "list"
+                          ? '["item1", "item2"]'
+                          : '{"key": "value"}')
+                      }
+                      disabled={isSecret}
+                    />
                   ) : (
                     <Input
                       value={String(
@@ -251,6 +299,28 @@ function SortableRoleCard({
             No additional variables for this role.
           </p>
         )}
+        {(roleEntry.outputs?.length ?? 0) > 0 ? (
+          <div className="mt-3 border-t border-zinc-800 pt-3">
+            <p className="mb-1.5 text-[10px] font-semibold tracking-wide text-zinc-500 uppercase">
+              Outputs
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              {roleEntry.outputs!.map((out) => (
+                <Tooltip key={out.key}>
+                  <TooltipTrigger asChild>
+                    <Badge variant="secondary" className="text-[10px] font-mono">
+                      {out.key}
+                    </Badge>
+                  </TooltipTrigger>
+                  <TooltipContent side="top">
+                    {out.description || out.key}
+                    {out.type ? ` (${out.type})` : ""}
+                  </TooltipContent>
+                </Tooltip>
+              ))}
+            </div>
+          </div>
+        ) : null}
       </AccordionContent>
     </AccordionItem>
   );
@@ -269,9 +339,15 @@ export function PlaybookEditorForm({
   const rolePickerAnchor = useComboboxAnchor();
   const [rolePickerValue, setRolePickerValue] = useState<string | null>(null);
   const [roleQuery, setRoleQuery] = useState("");
-  const [activeRoleId, setActiveRoleId] = useState<string | undefined>(
-    undefined,
-  );
+  const [activeKey, setActiveKey] = useState<string | undefined>(undefined);
+
+  const [instanceKeys, setInstanceKeys] = useState<string[]>([]);
+  if (instanceKeys.length !== draft.roles.length) {
+    const next = [...instanceKeys];
+    while (next.length < draft.roles.length) next.push(crypto.randomUUID());
+    next.length = draft.roles.length;
+    setInstanceKeys(next);
+  }
 
   const rolePickerValueById = useMemo(
     () =>
@@ -306,20 +382,9 @@ export function PlaybookEditorForm({
 
   const filteredRolesByLabel = useMemo(() => {
     const normalized = roleQuery.trim().toLowerCase();
-    const addedRoleIds = new Set(draft.roles.map((r: PlaybookRoleEntry) => r.role_id));
+    if (!normalized) return rolesByLabel;
 
-    const withoutAlreadyAdded = rolesByLabel
-      .map((group) => ({
-        ...group,
-        roles: group.roles.filter(
-          (role) => !addedRoleIds.has(role.id),
-        ),
-      }))
-      .filter((group) => group.roles.length > 0);
-
-    if (!normalized) return withoutAlreadyAdded;
-
-    return withoutAlreadyAdded
+    return rolesByLabel
       .map((group) => ({
         ...group,
         roles: group.roles.filter((role) =>
@@ -329,15 +394,10 @@ export function PlaybookEditorForm({
         ),
       }))
       .filter((group) => group.roles.length > 0);
-  }, [rolesByLabel, roleQuery, draft.roles]);
+  }, [rolesByLabel, roleQuery]);
 
-  const safeActiveRoleId =
-    activeRoleId &&
-    draft.roles.some(
-      (role: PlaybookRoleEntry) => role.role_id === activeRoleId,
-    )
-      ? activeRoleId
-      : undefined;
+  const safeActiveKey =
+    activeKey && instanceKeys.includes(activeKey) ? activeKey : undefined;
 
   const updateRole = (index: number, nextRole: PlaybookRoleEntry) => {
     onChange({
@@ -349,41 +409,40 @@ export function PlaybookEditorForm({
   };
 
   const removeRole = (index: number) => {
-    const removedRole = draft.roles[index];
+    const removedKey = instanceKeys[index];
+    const nextKeys = instanceKeys.filter((_, i) => i !== index);
+    setInstanceKeys(nextKeys);
     onChange({
       ...draft,
       roles: draft.roles.filter((_: PlaybookRoleEntry, roleIndex: number) => roleIndex !== index),
     });
-    if (removedRole?.role_id === activeRoleId) {
-      const fallback = draft.roles.find((_: PlaybookRoleEntry, roleIndex: number) => roleIndex !== index);
-      setActiveRoleId(fallback?.role_id);
+    if (removedKey === activeKey) {
+      setActiveKey(nextKeys[0]);
     }
   };
 
   const addRole = (roleId: string) => {
-    if (draft.roles.some((role: PlaybookRoleEntry) => role.role_id === roleId)) return;
     const roleEntry = rolesById[roleId];
     const initialVars = roleEntry ? defaultVarsForRole(roleEntry) : {};
+    const newKey = crypto.randomUUID();
+    setInstanceKeys([...instanceKeys, newKey]);
 
     onChange({
       ...draft,
       roles: [...draft.roles, { role_id: roleId, vars: initialVars }],
     });
-    setActiveRoleId(roleId);
+    setActiveKey(newKey);
   };
 
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
     if (!over || active.id === over.id) return;
 
-    const oldIndex = draft.roles.findIndex(
-      (role: PlaybookRoleEntry) => role.role_id === String(active.id),
-    );
-    const newIndex = draft.roles.findIndex(
-      (role: PlaybookRoleEntry) => role.role_id === String(over.id),
-    );
+    const oldIndex = instanceKeys.indexOf(String(active.id));
+    const newIndex = instanceKeys.indexOf(String(over.id));
     if (oldIndex < 0 || newIndex < 0) return;
 
+    setInstanceKeys(arrayMove(instanceKeys, oldIndex, newIndex));
     onChange({
       ...draft,
       roles: arrayMove(draft.roles, oldIndex, newIndex),
@@ -509,14 +568,14 @@ export function PlaybookEditorForm({
             onDragEnd={handleDragEnd}
           >
             <SortableContext
-              items={draft.roles.map((role: PlaybookRoleEntry) => role.role_id)}
+              items={instanceKeys}
               strategy={verticalListSortingStrategy}
             >
               <Accordion
                 type="single"
                 collapsible
-                value={safeActiveRoleId}
-                onValueChange={(next) => setActiveRoleId(next || undefined)}
+                value={safeActiveKey}
+                onValueChange={(next) => setActiveKey(next || undefined)}
                 className="space-y-3"
               >
                 {draft.roles.map((role: PlaybookRoleEntry, index: number) => {
@@ -524,8 +583,8 @@ export function PlaybookEditorForm({
                   if (!roleEntry) return null;
                   return (
                     <SortableRoleCard
-                      key={role.role_id}
-                      roleId={role.role_id}
+                      key={instanceKeys[index]}
+                      instanceKey={instanceKeys[index]}
                       role={role}
                       index={index}
                       roleEntry={roleEntry}

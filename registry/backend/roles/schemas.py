@@ -13,9 +13,9 @@ class RoleInputSpec(BaseModel):
     key: str = Field(min_length=1, max_length=80)
     label: str = ""
     description: str = ""
-    type: Literal["string", "boolean", "secret", "str", "bool"] = "string"
+    type: Literal["string", "boolean", "secret", "str", "bool", "list", "dict"] = "string"
     placeholder: str = ""
-    default: str | bool | int | None = None
+    default: str | bool | int | list | dict | None = None
     required: bool = False
     options: list[str] = Field(default_factory=list)
     choices: list[str] = Field(default_factory=list)
@@ -49,6 +49,16 @@ class RoleInputSpec(BaseModel):
                     for v in d[field]
                 ]
         return d
+
+
+class RoleOutputSpec(BaseModel):
+    """Declares a fact that a role produces via set_fact."""
+
+    key: str = Field(min_length=1, max_length=80)
+    description: str = ""
+    type: Literal["string", "boolean", "list", "dict"] = "string"
+
+    model_config = {"extra": "ignore"}
 
 
 class PlatformSpec(BaseModel):
@@ -112,6 +122,7 @@ class VersionOut(BaseModel):
     platforms: list[PlatformSpec]
     tags: list[str]
     inputs: list[RoleInputSpec]
+    outputs: list[RoleOutputSpec] = Field(default_factory=list)
     tasks_yaml: str
     defaults_yaml: str
     meta_yaml: str

@@ -2,6 +2,7 @@
 
 import yaml
 
+from _utils.schemas import RoleOutputSpec
 from core.racksmith_meta import RacksmithMeta, write_meta
 from core.roles import (
     RoleData,
@@ -98,6 +99,104 @@ class TestReadRoleMetaMain:
         inp = roles[0].inputs[0]
         assert inp.racksmith_placeholder == "hint"
         assert inp.racksmith_secret is True
+
+
+    def test_parses_list_input_type(self, layout) -> None:
+        role_dir = layout.roles_path / "dirs"
+        role_dir.mkdir(parents=True, exist_ok=True)
+        (role_dir / "meta").mkdir()
+        (role_dir / "meta" / "main.yml").write_text(
+            yaml.safe_dump(
+                {
+                    "galaxy_info": {"role_name": "Dirs"},
+                    "argument_specs": {
+                        "main": {
+                            "options": {
+                                "directories": {
+                                    "type": "list",
+                                    "default": ["/mnt/data", "/mnt/backups"],
+                                    "description": "Directories to create",
+                                }
+                            }
+                        }
+                    },
+                }
+            )
+        )
+        role = read_role(role_dir)
+        assert role is not None
+        inp = role.inputs[0]
+        assert inp.key == "directories"
+        assert inp.type == "list"
+        assert inp.default == ["/mnt/data", "/mnt/backups"]
+
+    def test_parses_outputs_from_meta(self, layout) -> None:
+        role_dir = layout.roles_path / "discover"
+        role_dir.mkdir(parents=True, exist_ok=True)
+        (role_dir / "meta").mkdir()
+        (role_dir / "meta" / "main.yml").write_text(
+            yaml.safe_dump(
+                {
+                    "galaxy_info": {"role_name": "Discover"},
+                    "argument_specs": {"main": {"options": {}}},
+                    "racksmith_outputs": [
+                        {"key": "discovered_uuid", "description": "Filesystem UUID", "type": "string"},
+                        {"key": "discovered_device", "description": "Device path"},
+                    ],
+                }
+            )
+        )
+        role = read_role(role_dir)
+        assert role is not None
+        assert len(role.outputs) == 2
+        assert role.outputs[0].key == "discovered_uuid"
+        assert role.outputs[0].type == "string"
+        assert role.outputs[1].key == "discovered_device"
+
+    def test_role_without_outputs_defaults_empty(self, layout) -> None:
+        role_dir = layout.roles_path / "basic"
+        role_dir.mkdir(parents=True, exist_ok=True)
+        (role_dir / "meta").mkdir()
+        (role_dir / "meta" / "main.yml").write_text(
+            yaml.safe_dump(
+                {
+                    "galaxy_info": {"role_name": "Basic"},
+                    "argument_specs": {"main": {"options": {}}},
+                }
+            )
+        )
+        role = read_role(role_dir)
+        assert role is not None
+        assert role.outputs == []
+
+    def test_parses_dict_input_type(self, layout) -> None:
+        role_dir = layout.roles_path / "opts"
+        role_dir.mkdir(parents=True, exist_ok=True)
+        (role_dir / "meta").mkdir()
+        (role_dir / "meta" / "main.yml").write_text(
+            yaml.safe_dump(
+                {
+                    "galaxy_info": {"role_name": "Opts"},
+                    "argument_specs": {
+                        "main": {
+                            "options": {
+                                "mount_options": {
+                                    "type": "dict",
+                                    "default": {"fstype": "ext4", "opts": "defaults"},
+                                    "description": "Mount options",
+                                }
+                            }
+                        }
+                    },
+                }
+            )
+        )
+        role = read_role(role_dir)
+        assert role is not None
+        inp = role.inputs[0]
+        assert inp.key == "mount_options"
+        assert inp.type == "dict"
+        assert inp.default == {"fstype": "ext4", "opts": "defaults"}
 
 
 class TestReadRoleActionYaml:
@@ -282,6 +381,25 @@ class TestWriteRole:
         assert len(read_back.inputs) == 1
         assert read_back.inputs[0].description == "X Label"
         assert read_back.has_tasks is True
+
+    def test_write_role_with_outputs_roundtrip(self, layout) -> None:
+        role = RoleData(
+            name="Discover",
+            description="Discover disk",
+            id="discover",
+            outputs=[
+                RoleOutputSpec(key="discovered_uuid", description="Filesystem UUID", type="string"),
+                RoleOutputSpec(key="discovered_device", description="Device path"),
+            ],
+        )
+        write_role(layout, role, tasks_yaml="- debug: msg=hi\n")
+        meta_content = (layout.roles_path / "discover" / "meta" / "main.yml").read_text()
+        assert "racksmith_outputs" in meta_content
+        read_back = read_role(layout.roles_path / "discover")
+        assert read_back is not None
+        assert len(read_back.outputs) == 2
+        assert read_back.outputs[0].key == "discovered_uuid"
+        assert read_back.outputs[1].key == "discovered_device"
 
     def test_uses_id_for_directory_name(self, layout) -> None:
         """write_role uses role.id for the directory name."""

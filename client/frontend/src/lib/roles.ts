@@ -17,11 +17,18 @@ export type RoleInput = {
   required?: boolean;
 };
 
+export type RoleOutput = {
+  key: string;
+  description: string;
+  type?: string;
+};
+
 export type RoleSummary = {
   id: string;
   name: string;
   description: string;
   inputs: RoleInput[];
+  outputs?: RoleOutput[];
   labels: string[];
   compatibility: { os_family: string[] };
   has_tasks: boolean;

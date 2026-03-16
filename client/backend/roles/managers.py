@@ -58,7 +58,7 @@ def _request_input_to_role_input(inp: RoleInputSpec | dict) -> RoleInput:
     return RoleInput(
         key=inp.get("key", ""),
         description=inp.get("label", "") or inp.get("description", ""),
-        type={"string": "str", "bool": "bool", "boolean": "bool", "secret": "str"}.get(t, "str"),
+        type={"string": "str", "bool": "bool", "boolean": "bool", "secret": "str", "list": "list", "dict": "dict"}.get(t, "str"),
         default=inp.get("default"),
         required=inp.get("required", False),
         choices=options,
@@ -86,6 +86,7 @@ def _role_data_to_summary(r: RoleData) -> RoleSummary:
             })
             for inp in r.inputs
         ],
+        outputs=list(r.outputs),
         labels=r.tags,
         compatibility={"os_family": [p.get("name", "") for p in r.platforms]},
         has_tasks=r.has_tasks,
@@ -144,6 +145,8 @@ class RoleManager(RunManagerMixin):
                 for inp in role.inputs
             ],
         }
+        if role.outputs:
+            combined["outputs"] = [o.model_dump(exclude_defaults=True) | {"key": o.key} for o in role.outputs]
         if tasks_content.strip():
             try:
                 combined["tasks"] = yaml.safe_load(tasks_content)

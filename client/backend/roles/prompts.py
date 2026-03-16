@@ -9,18 +9,26 @@ Optional top-level keys:
   labels        – list of tags (e.g. ["web", "nginx"])
   compatibility – object with os_family list (e.g. {"os_family": ["debian", "redhat"]})
   inputs        – list of variable definitions (see below)
+  outputs       – list of facts this role produces via set_fact (see below)
   tasks         – list of Ansible tasks (written to tasks/main.yml)
 
 Each input item has these fields:
   key         – variable name (snake_case)
   label       – human-readable label
-  type        – MUST be exactly one of: "string", "bool", "secret"
+  type        – MUST be exactly one of: "string", "bool", "secret", "list", "dict"
                 (never use "str", "boolean", "int", "select", or any other type name)
+                Use "list" for ordered collections (e.g. list of directories, list of packages).
+                Use "dict" for key-value mappings (e.g. mount options, directory attributes).
   placeholder – hint text (string, use "" if not applicable)
   default     – default value (string for string/secret, true/false for bool)
   required    – true or false
   options     – list of allowed choices (renders as a dropdown); use [] when any value is accepted
   secret      – true if the value should be prompted at runtime (never stored), false otherwise
+
+Each output item declares a fact the role produces via set_fact:
+  key         – fact variable name (snake_case)
+  description – what the fact contains
+  type        – one of: "string", "boolean", "list", "dict" (default "string")
 
 Validation rules:
   If an input has a default value, required MUST be false.
