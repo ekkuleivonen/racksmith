@@ -15,10 +15,9 @@ Optional top-level keys:
 Each input item has these fields:
   key         – variable name (snake_case)
   label       – human-readable label
-  type        – MUST be exactly one of: "string", "bool", "secret", "list", "dict"
-                (never use "str", "boolean", "int", "select", or any other type name)
-                Use "list" for ordered collections (e.g. list of directories, list of packages).
-                Use "dict" for key-value mappings (e.g. mount options, directory attributes).
+  type        – MUST be exactly one of: "string", "bool", "secret"
+                (never use "str", "boolean", "int", "select", "list", "dict",
+                 or any other type name)
   placeholder – hint text (string, use "" if not applicable)
   default     – default value (string for string/secret, true/false for bool)
   required    – true or false
@@ -29,6 +28,16 @@ Each output item declares a fact the role produces via set_fact:
   key         – fact variable name (snake_case)
   description – what the fact contains
   type        – one of: "string", "boolean", "list", "dict" (default "string")
+
+Design for simplicity:
+  - Keep required inputs to the absolute minimum (1-3).
+  - Prefer sensible defaults and convention over configuration.
+  - Omit niche inputs entirely (e.g. fstab dump/passno, mkfs extra opts) —
+    hardcode sensible values in the tasks instead.
+  - NEVER use "list" or "dict" input types. All inputs must be scalar.
+    Design roles that accept one item at a time and can be added to a
+    playbook multiple times instead.
+  - When in doubt, leave it out. The user can always edit the role later.
 
 Validation rules:
   If an input has a default value, required MUST be false.

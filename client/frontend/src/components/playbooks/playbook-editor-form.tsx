@@ -14,7 +14,7 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { GripVertical, Trash2 } from "lucide-react";
+import { GripVertical, Link2, Trash2, X } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   Accordion,
@@ -36,7 +36,11 @@ import {
   useComboboxAnchor,
 } from "@/components/ui/combobox";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import {
   Select,
   SelectContent,
@@ -54,6 +58,11 @@ import type {
   PlaybookRoleEntry,
   PlaybookUpsert,
 } from "@/lib/playbooks";
+import type { RoleOutput } from "@/lib/roles";
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
 
 interface PlaybookEditorFormProps {
   draft: PlaybookUpsert;
@@ -74,26 +83,6 @@ function parseRoleIdFromPickerValue(value: string) {
   return value.split("|||")[0] ?? "";
 }
 
-function isStructuredType(type: string | undefined) {
-  return type === "list" || type === "dict";
-}
-
-function structuredToString(value: unknown): string {
-  if (value === undefined || value === null) return "";
-  if (typeof value === "string") return value;
-  return JSON.stringify(value, null, 2);
-}
-
-function parseStructuredValue(text: string): unknown {
-  const trimmed = text.trim();
-  if (!trimmed) return undefined;
-  try {
-    return JSON.parse(trimmed);
-  } catch {
-    return trimmed;
-  }
-}
-
 function defaultVarsForRole(role: RoleCatalogEntry): Record<string, unknown> {
   return Object.fromEntries(
     role.inputs
@@ -102,11 +91,150 @@ function defaultVarsForRole(role: RoleCatalogEntry): Record<string, unknown> {
   );
 }
 
+// ---------------------------------------------------------------------------
+// Wiring: upstream output references
+// ---------------------------------------------------------------------------
+
+type UpstreamOutput = {
+  roleName: string;
+  output: RoleOutput;
+};
+
+const WIRE_RE = /^\{\{\s*(\S+)\s*\}\}$/;
+
+function parseWire(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const m = WIRE_RE.exec(value);
+  return m?.[1] ?? null;
+}
+
+function getUpstreamOutputs(
+  draftRoles: PlaybookRoleEntry[],
+  rolesById: Record<string, RoleCatalogEntry>,
+  currentIndex: number,
+): UpstreamOutput[] {
+  const result: UpstreamOutput[] = [];
+  for (let i = 0; i < currentIndex; i++) {
+    const entry = rolesById[draftRoles[i].role_id];
+    if (!entry?.outputs) continue;
+    for (const out of entry.outputs) {
+      result.push({ roleName: entry.name, output: out });
+    }
+  }
+  return result;
+}
+
+function resolveWireSource(
+  factKey: string,
+  upstreamOutputs: UpstreamOutput[],
+): string {
+  const match = upstreamOutputs.find((u) => u.output.key === factKey);
+  return match?.roleName ?? "upstream";
+}
+
+// ---------------------------------------------------------------------------
+// WiredPill: read-only display of a {{ fact_key }} reference
+// ---------------------------------------------------------------------------
+
+function WiredPill({
+  factKey,
+  sourceName,
+  onClear,
+}: {
+  factKey: string;
+  sourceName: string;
+  onClear: () => void;
+}) {
+  return (
+    <div className="flex items-center gap-1.5 rounded border border-zinc-700 bg-zinc-800/60 px-2 py-1.5 text-xs">
+      <Link2 className="size-3 shrink-0 text-zinc-500" />
+      <span className="truncate text-zinc-400">{sourceName}</span>
+      <span className="text-zinc-600">&rarr;</span>
+      <span className="truncate font-mono text-zinc-300">{factKey}</span>
+      <button
+        type="button"
+        onClick={onClear}
+        className="ml-auto shrink-0 text-zinc-500 hover:text-zinc-300"
+      >
+        <X className="size-3" />
+      </button>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// WirePopover: dropdown to pick an upstream output
+// ---------------------------------------------------------------------------
+
+function WirePopover({
+  upstreamOutputs,
+  onSelect,
+  children,
+}: {
+  upstreamOutputs: UpstreamOutput[];
+  onSelect: (factKey: string) => void;
+  children: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
+
+  if (upstreamOutputs.length === 0) return null;
+
+  const grouped = new Map<string, UpstreamOutput[]>();
+  for (const u of upstreamOutputs) {
+    const list = grouped.get(u.roleName) ?? [];
+    list.push(u);
+    grouped.set(u.roleName, list);
+  }
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>{children}</PopoverTrigger>
+      <PopoverContent
+        align="start"
+        className="w-64 p-1"
+      >
+        {Array.from(grouped.entries()).map(([roleName, outputs]) => (
+          <div key={roleName}>
+            <p className="px-2 pt-1.5 pb-0.5 text-[10px] font-semibold tracking-wide text-zinc-500 uppercase">
+              {roleName}
+            </p>
+            {outputs.map((u) => (
+              <button
+                key={u.output.key}
+                type="button"
+                className="flex w-full items-start gap-2 rounded px-2 py-1.5 text-left text-xs hover:bg-zinc-800"
+                onClick={() => {
+                  onSelect(u.output.key);
+                  setOpen(false);
+                }}
+              >
+                <code className="shrink-0 font-mono text-zinc-300">
+                  {u.output.key}
+                </code>
+                {u.output.description ? (
+                  <span className="truncate text-zinc-500">
+                    {u.output.description}
+                  </span>
+                ) : null}
+              </button>
+            ))}
+          </div>
+        ))}
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// SortableRoleCard
+// ---------------------------------------------------------------------------
+
 type SortableRoleCardProps = {
   instanceKey: string;
   role: PlaybookRoleEntry;
   index: number;
   roleEntry: RoleCatalogEntry;
+  upstreamOutputs: UpstreamOutput[];
   updateRole: (index: number, nextRole: PlaybookRoleEntry) => void;
   removeRole: (index: number) => void;
 };
@@ -116,6 +244,7 @@ function SortableRoleCard({
   role,
   index,
   roleEntry,
+  upstreamOutputs,
   updateRole,
   removeRole,
 }: SortableRoleCardProps) {
@@ -123,6 +252,18 @@ function SortableRoleCard({
     useSortable({
       id: instanceKey,
     });
+
+  const setVar = (key: string, value: unknown) =>
+    updateRole(index, {
+      ...role,
+      vars: { ...role.vars, [key]: value },
+    });
+
+  const clearVar = (key: string) => {
+    const next = { ...role.vars };
+    delete next[key];
+    updateRole(index, { ...role, vars: next });
+  };
 
   return (
     <AccordionItem
@@ -170,6 +311,9 @@ function SortableRoleCard({
           <div className="grid gap-2 md:grid-cols-2">
             {roleEntry.inputs.map((field) => {
               const isSecret = !!field.secret;
+              const rawValue = role.vars[field.key] ?? field.default ?? "";
+              const wiredFact = parseWire(rawValue);
+
               const fieldNode = (
                 <div
                   key={field.key}
@@ -181,17 +325,17 @@ function SortableRoleCard({
                       <span className="ml-1 text-red-400">*</span>
                     ) : null}
                   </p>
-                  {(field.options?.length ?? 0) > 0 ? (
+
+                  {wiredFact ? (
+                    <WiredPill
+                      factKey={wiredFact}
+                      sourceName={resolveWireSource(wiredFact, upstreamOutputs)}
+                      onClear={() => clearVar(field.key)}
+                    />
+                  ) : (field.options?.length ?? 0) > 0 ? (
                     <Select
-                      value={String(
-                        role.vars[field.key] ?? field.default ?? "",
-                      )}
-                      onValueChange={(value) =>
-                        updateRole(index, {
-                          ...role,
-                          vars: { ...role.vars, [field.key]: value },
-                        })
-                      }
+                      value={String(rawValue)}
+                      onValueChange={(value) => setVar(field.key, value)}
                       disabled={isSecret}
                     >
                       <SelectTrigger className="w-full">
@@ -215,68 +359,49 @@ function SortableRoleCard({
                         )
                       }
                       onValueChange={(value) =>
-                        updateRole(index, {
-                          ...role,
-                          vars: {
-                            ...role.vars,
-                            [field.key]: value === "true",
-                          },
-                        })
+                        setVar(field.key, value === "true")
                       }
                       disabled={isSecret}
                     >
                       <SelectTrigger className="w-full">
-                        <SelectValue placeholder={field.placeholder || "Select..."} />
+                        <SelectValue
+                          placeholder={field.placeholder || "Select..."}
+                        />
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="true">true</SelectItem>
                         <SelectItem value="false">false</SelectItem>
                       </SelectContent>
                     </Select>
-                  ) : isStructuredType(field.type) ? (
-                    <Textarea
-                      className="font-mono text-xs"
-                      rows={4}
-                      defaultValue={structuredToString(
-                        role.vars[field.key] ?? field.default,
-                      )}
-                      onBlur={(event) => {
-                        const parsed = parseStructuredValue(
-                          event.target.value,
-                        );
-                        updateRole(index, {
-                          ...role,
-                          vars: {
-                            ...role.vars,
-                            [field.key]: parsed,
-                          },
-                        });
-                      }}
-                      placeholder={
-                        field.placeholder ||
-                        (field.type === "list"
-                          ? '["item1", "item2"]'
-                          : '{"key": "value"}')
-                      }
-                      disabled={isSecret}
-                    />
                   ) : (
-                    <Input
-                      value={String(
-                        role.vars[field.key] ?? field.default ?? "",
-                      )}
-                      onChange={(event) =>
-                        updateRole(index, {
-                          ...role,
-                          vars: {
-                            ...role.vars,
-                            [field.key]: event.target.value,
-                          },
-                        })
-                      }
-                      placeholder={field.placeholder}
-                      disabled={isSecret}
-                    />
+                    <div className="flex gap-1">
+                      <Input
+                        className="min-w-0 flex-1"
+                        value={String(rawValue)}
+                        onChange={(event) =>
+                          setVar(field.key, event.target.value)
+                        }
+                        placeholder={field.placeholder}
+                        disabled={isSecret}
+                      />
+                      {upstreamOutputs.length > 0 && !isSecret ? (
+                        <WirePopover
+                          upstreamOutputs={upstreamOutputs}
+                          onSelect={(factKey) =>
+                            setVar(field.key, `{{ ${factKey} }}`)
+                          }
+                        >
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="h-9 w-9 shrink-0"
+                          >
+                            <Link2 className="size-3.5" />
+                          </Button>
+                        </WirePopover>
+                      ) : null}
+                    </div>
                   )}
                 </div>
               );
@@ -325,6 +450,10 @@ function SortableRoleCard({
     </AccordionItem>
   );
 }
+
+// ---------------------------------------------------------------------------
+// PlaybookEditorForm
+// ---------------------------------------------------------------------------
 
 export function PlaybookEditorForm({
   draft,
@@ -588,6 +717,11 @@ export function PlaybookEditorForm({
                       role={role}
                       index={index}
                       roleEntry={roleEntry}
+                      upstreamOutputs={getUpstreamOutputs(
+                        draft.roles,
+                        rolesById,
+                        index,
+                      )}
                       updateRole={updateRole}
                       removeRole={removeRole}
                     />

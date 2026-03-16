@@ -132,4 +132,3 @@ class PlaybookPlan(BaseModel):
 
 class GeneratePlaybookRequest(BaseModel):
     prompt: str = Field(min_length=1)
-    generation_session_id: str | None = None

@@ -43,7 +43,8 @@ Rules:
     Only create new roles when no existing role fits.
   - Order roles logically — dependencies MUST come before dependents.
   - The SAME role can appear multiple times in the roles list
-    (e.g. a discovery role before and after a formatting role).
+    (e.g. a discovery role before and after a formatting role,
+     or a directory-creation role repeated once per directory).
   - Set become: true if any role requires privilege escalation (most system-level ops do).
   - For secret inputs (secret: true), do NOT set values in vars — they are prompted at runtime.
   - For "create" roles, write a DETAILED generation_prompt that specifies:
@@ -52,72 +53,86 @@ Rules:
       * How the role should use its inputs and produce its outputs via set_fact
   - expected_inputs and expected_outputs on "create" roles define the role's interface.
     Downstream roles can reference outputs from earlier roles using {{ fact_name }} in their vars.
-  - Input type must be one of: "string", "bool", "secret", "list", "dict".
-  - Output type must be one of: "string", "boolean", "list", "dict"."""
+  - Input type must be one of: "string", "bool", "secret".
+    NEVER use "list" or "dict" as an input type. Design roles with scalar inputs
+    that can be added multiple times in the playbook instead.
+  - Output type must be one of: "string", "boolean", "list", "dict".
+  - Prefer SIMPLICITY. Roles should have minimal inputs (1-3 required) with sensible defaults.
+    Do not expose low-level knobs (e.g. fstab dump/passno, mkfs extra opts) as inputs
+    unless the user explicitly asks for them. Hardcode sensible values in tasks."""
 
 _EXAMPLE = """\
-Example — a playbook for formatting a disk, creating directories, and mounting reliably:
+Example — a playbook for formatting a disk, creating a directory, and mounting reliably:
 
 {
   "name": "Storage Setup",
-  "description": "Format SSD, create mount directories, and configure persistent mounts",
+  "description": "Format SSD, create mount directory, and configure persistent mount",
   "become": true,
   "roles": [
     {
       "action": "create",
       "name": "Storage Discover",
-      "description": "Discover attached block devices and their properties",
-      "generation_prompt": "Create an Ansible role that discovers block devices using ansible.builtin.command with lsblk --json. Parse the output with ansible.builtin.set_fact to expose discovered_devices (list) and primary_device (string). Handle the case where no suitable device is found by failing with a clear message.",
+      "description": "Discover the target block device and expose facts for downstream roles",
+      "generation_prompt": "Create an Ansible role that resolves a device selector to a canonical path using readlink -f, validates it is a block device, collects lsblk and blkid metadata, and exposes discovered_device_path (string) and discovered_uuid (string) via set_fact.",
       "expected_inputs": [
-        {"key": "target_device_hint", "type": "string", "label": "Device hint", "description": "Optional device path hint (e.g. /dev/sdb)", "default": ""}
+        {"key": "target_disk", "type": "string", "label": "Target disk", "required": true, "placeholder": "/dev/disk/by-id/..."}
       ],
       "expected_outputs": [
-        {"key": "discovered_device", "description": "Primary block device path", "type": "string"},
+        {"key": "discovered_device_path", "description": "Canonical block device path", "type": "string"},
         {"key": "discovered_uuid", "description": "Filesystem UUID (empty if unformatted)", "type": "string"}
       ],
       "vars": {}
     },
     {
       "action": "create",
-      "name": "Storage Partition Format",
-      "description": "Partition and format a block device with ext4",
-      "generation_prompt": "Create an Ansible role that partitions a block device using community.general.parted and formats it with ansible.builtin.command running mkfs.ext4. Only format if the device has no existing filesystem (check with ansible.builtin.command blkid). Use the inputs device_path and fstype. After formatting, use set_fact to expose the new filesystem UUID.",
+      "name": "Storage Format",
+      "description": "Partition and format the target disk with ext4",
+      "generation_prompt": "Create an Ansible role that partitions a block device using community.general.parted with a single GPT partition, then formats it with mkfs.ext4. Skip formatting if the device already has the requested filesystem. Expose the new UUID via set_fact.",
       "expected_inputs": [
-        {"key": "device_path", "type": "string", "label": "Device path", "required": true},
-        {"key": "fstype", "type": "string", "label": "Filesystem type", "default": "ext4"}
+        {"key": "device_path", "type": "string", "label": "Device path", "required": true}
       ],
       "expected_outputs": [
-        {"key": "formatted_uuid", "description": "UUID of the newly formatted filesystem", "type": "string"}
+        {"key": "formatted_uuid", "description": "UUID of the formatted filesystem", "type": "string"}
       ],
-      "vars": {"device_path": "{{ discovered_device }}"}
-    },
-    {
-      "action": "create",
-      "name": "Storage Directories",
-      "description": "Create mount point directories with proper ownership",
-      "generation_prompt": "Create an Ansible role that takes a list of directory specs and creates each directory using ansible.builtin.file with the specified path, owner, group, and mode. Loop over the directories input list.",
-      "expected_inputs": [
-        {"key": "directories", "type": "list", "label": "Directories", "default": [{"path": "/mnt/data", "owner": "root", "group": "root", "mode": "0755"}]}
-      ],
-      "expected_outputs": [],
-      "vars": {}
+      "vars": {"device_path": "{{ discovered_device_path }}"}
     },
     {
       "action": "create",
       "name": "Storage Mount",
-      "description": "Configure persistent mounts via fstab",
-      "generation_prompt": "Create an Ansible role that mounts a filesystem using ansible.posix.mount with state=mounted. Configure it with the UUID, mount point, filesystem type, and mount options. This ensures the mount persists in /etc/fstab across reboots.",
+      "description": "Mount the filesystem persistently via fstab",
+      "generation_prompt": "Create an Ansible role that uses ansible.posix.mount with state=mounted to mount a filesystem by UUID. Ensure the mount point directory exists first. Hardcode sensible fstab defaults (dump=0, passno=2, opts=defaults,noatime).",
       "expected_inputs": [
         {"key": "mount_uuid", "type": "string", "label": "Filesystem UUID", "required": true},
-        {"key": "mount_point", "type": "string", "label": "Mount point", "required": true},
-        {"key": "fstype", "type": "string", "label": "Filesystem type", "default": "ext4"},
-        {"key": "mount_opts", "type": "string", "label": "Mount options", "default": "defaults,noatime"}
+        {"key": "mount_point", "type": "string", "label": "Mount point", "required": true}
       ],
       "expected_outputs": [],
       "vars": {"mount_uuid": "{{ formatted_uuid }}", "mount_point": "/mnt/data"}
+    },
+    {
+      "action": "create",
+      "name": "Ensure Directory",
+      "description": "Create a directory with specified ownership and permissions",
+      "generation_prompt": "Create an Ansible role that ensures a single directory exists using ansible.builtin.file with state=directory. Accept path, owner, group, and mode as inputs.",
+      "expected_inputs": [
+        {"key": "directory_path", "type": "string", "label": "Directory path", "required": true},
+        {"key": "owner", "type": "string", "label": "Owner", "default": "root"},
+        {"key": "group", "type": "string", "label": "Group", "default": "root"},
+        {"key": "mode", "type": "string", "label": "Mode", "default": "0755"}
+      ],
+      "expected_outputs": [],
+      "vars": {"directory_path": "/mnt/data/app"}
+    },
+    {
+      "action": "reuse",
+      "role_id": "ensure-directory",
+      "vars": {"directory_path": "/mnt/data/logs", "owner": "app", "group": "app"}
     }
   ]
-}"""
+}
+
+Note how "Ensure Directory" is created once then REUSED for the second directory
+with different vars. This is the pattern for handling multiple items — repeat the
+role, never use list inputs."""
 
 
 def build_planner_system_prompt(catalog: list[RoleCatalogEntry]) -> str:

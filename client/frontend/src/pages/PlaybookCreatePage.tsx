@@ -76,6 +76,13 @@ function StepIndicator({ step }: { step: GenerationStep }) {
           Playbook ready!
         </div>
       );
+    case "error":
+      return (
+        <div className="flex items-center gap-2 text-xs text-red-400">
+          <CircleAlert className="size-3" />
+          {step.message}
+        </div>
+      );
   }
 }
 
@@ -91,7 +98,6 @@ export function PlaybookCreatePage() {
   const {
     generating,
     steps,
-    sessionId,
     error: genError,
     generate,
     cancel,
@@ -157,7 +163,7 @@ export function PlaybookCreatePage() {
                 if (e.key === "Enter" && !e.shiftKey && !generating) {
                   e.preventDefault();
                   if (prompt.trim()) {
-                    void generate(prompt.trim(), sessionId);
+                    void generate(prompt.trim());
                   }
                 }
               }}
@@ -172,11 +178,11 @@ export function PlaybookCreatePage() {
               ) : (
                 <Button
                   size="sm"
-                  onClick={() => void generate(prompt.trim(), sessionId)}
+                  onClick={() => void generate(prompt.trim())}
                   disabled={!prompt.trim()}
                 >
                   <Wand2 className="size-3.5" />
-                  {sessionId ? "Follow up" : "Generate"}
+                  Generate
                 </Button>
               )}
             </div>

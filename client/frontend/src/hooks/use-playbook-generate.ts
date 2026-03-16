@@ -26,7 +26,8 @@ export type GenerationStep =
       error: string;
     }
   | { step: "assembling" }
-  | { step: "done"; playbook_id: string };
+  | { step: "done"; playbook_id: string }
+  | { step: "error"; message: string };
 
 type UsePlaybookGenerateOptions = {
   onComplete?: (playbookId: string) => void;
@@ -35,12 +36,11 @@ type UsePlaybookGenerateOptions = {
 export function usePlaybookGenerate(options: UsePlaybookGenerateOptions = {}) {
   const [generating, setGenerating] = useState(false);
   const [steps, setSteps] = useState<GenerationStep[]>([]);
-  const [sessionId, setSessionId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
   const generate = useCallback(
-    async (prompt: string, existingSessionId?: string | null) => {
+    async (prompt: string) => {
       setGenerating(true);
       setError(null);
       setSteps([]);
@@ -49,14 +49,9 @@ export function usePlaybookGenerate(options: UsePlaybookGenerateOptions = {}) {
       abortRef.current = controller;
 
       try {
-        const body: Record<string, string> = { prompt };
-        if (existingSessionId) {
-          body.generation_session_id = existingSessionId;
-        }
-
         const res = await apiStreamPost(
           "/playbooks/generate",
-          body,
+          { prompt },
           controller.signal,
         );
         const reader = res.body!.getReader();
@@ -79,9 +74,6 @@ export function usePlaybookGenerate(options: UsePlaybookGenerateOptions = {}) {
               const event = JSON.parse(payload) as GenerationStep;
               setSteps((prev) => [...prev, event]);
 
-              if ("session_id" in event && event.session_id) {
-                setSessionId(event.session_id);
-              }
               if (event.step === "done") {
                 options.onComplete?.(event.playbook_id);
               }
@@ -94,7 +86,10 @@ export function usePlaybookGenerate(options: UsePlaybookGenerateOptions = {}) {
         if (err instanceof DOMException && err.name === "AbortError") {
           return;
         }
-        setError(err instanceof Error ? err.message : "Generation failed");
+        const message =
+          err instanceof Error ? err.message : "Generation failed";
+        setError(message);
+        setSteps((prev) => [...prev, { step: "error", message }]);
       } finally {
         setGenerating(false);
         abortRef.current = null;
@@ -107,5 +102,5 @@ export function usePlaybookGenerate(options: UsePlaybookGenerateOptions = {}) {
     abortRef.current?.abort();
   }, []);
 
-  return { generating, steps, sessionId, error, generate, cancel };
+  return { generating, steps, error, generate, cancel };
 }

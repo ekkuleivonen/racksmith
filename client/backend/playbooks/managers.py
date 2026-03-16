@@ -222,14 +222,9 @@ class PlaybookManager(RunManagerMixin):
         self,
         session: SessionData,
         prompt: str,
-        generation_session_id: str | None = None,
     ) -> AsyncGenerator[str]:
         """Plan a playbook via LLM, create missing roles in parallel, assemble and save."""
         from _utils.ai import get_model, planner_agent, role_agent
-        from _utils.generation_session import (
-            load_generation_session,
-            save_generation_session,
-        )
         from playbooks.prompts import build_planner_system_prompt
         from roles.managers import role_manager
         from roles.prompts import ROLE_SYSTEM_PROMPT
@@ -237,51 +232,17 @@ class PlaybookManager(RunManagerMixin):
         def _sse(payload: dict) -> str:
             return f"data: {json.dumps(payload)}\n\n"
 
+        generation_id = uuid.uuid4().hex
+
         catalog = self.roles_catalog(session)
         catalog_by_id = {r.id: r for r in catalog}
         system_prompt = build_planner_system_prompt(catalog)
 
-        # -- Load or create generation session --
-        prior_messages = None
-        created_roles: dict[str, str] = {}
-        existing_playbook_id: str | None = None
-
-        if generation_session_id:
-            state = await load_generation_session(generation_session_id)
-            if state:
-                prior_messages = state.get("messages")
-                created_roles = state.get("created_roles", {})
-                existing_playbook_id = state.get("playbook_id")
-        else:
-            generation_session_id = uuid.uuid4().hex
-
-        # -- Run planner agent --
-        yield _sse({"step": "planning", "session_id": generation_session_id})
-
-        from pydantic import TypeAdapter
-        from pydantic_ai.messages import ModelMessage
-
-        _msg_ta = TypeAdapter(list[ModelMessage])
-
-        planner_kwargs: dict = {"instructions": system_prompt}
-        if prior_messages:
-            planner_kwargs["message_history"] = _msg_ta.validate_python(prior_messages)
+        yield _sse({"step": "planning", "session_id": generation_id})
 
         model = get_model()
-        result = await planner_agent.run(prompt, model=model, **planner_kwargs)
+        result = await planner_agent.run(prompt, model=model, instructions=system_prompt)
         plan: PlaybookPlan = result.output
-
-        # Persist planner messages as JSON-serializable dicts
-        messages_serialized = _msg_ta.dump_python(
-            list(result.all_messages()), mode="json"
-        )
-        session_state: dict = {
-            "messages": messages_serialized,
-            "plan": plan.model_dump(),
-            "created_roles": created_roles,
-            "playbook_id": existing_playbook_id,
-        }
-        await save_generation_session(generation_session_id, session_state)
 
         roles_to_create = [
             (i, r) for i, r in enumerate(plan.roles) if isinstance(r, PlaybookPlanRoleCreate)
@@ -290,7 +251,7 @@ class PlaybookManager(RunManagerMixin):
 
         yield _sse({
             "step": "planned",
-            "session_id": generation_session_id,
+            "session_id": generation_id,
             "plan_name": plan.name,
             "plan_description": plan.description,
             "total_new": len(roles_to_create),
@@ -298,6 +259,8 @@ class PlaybookManager(RunManagerMixin):
         })
 
         # -- Create new roles in parallel --
+        created_roles: dict[str, str] = {}
+
         async def _create_role(entry: PlaybookPlanRoleCreate) -> tuple[str, str]:
             """Generate a role via sub-agent and persist it. Returns (entry.name, role_id)."""
             inputs_json = json.dumps(
@@ -320,18 +283,11 @@ class PlaybookManager(RunManagerMixin):
             summary = role_manager.create_role(session, role_data)
             return entry.name, summary.id
 
-        # Filter out roles already created in a prior run
-        pending = [
-            (i, entry)
-            for i, entry in roles_to_create
-            if entry.name not in created_roles
-        ]
-
-        if pending:
-            tasks = [_create_role(pe) for _, pe in pending]
+        if roles_to_create:
+            tasks = [_create_role(entry) for _, entry in roles_to_create]
             gather_results = await asyncio.gather(*tasks, return_exceptions=True)
 
-            for idx, (plan_idx, pending_entry) in enumerate(pending):
+            for idx, (plan_idx, pending_entry) in enumerate(roles_to_create):
                 res = gather_results[idx]
                 if isinstance(res, BaseException):
                     logger.error("role_subagent_failed", role_name=pending_entry.name, error=str(res))
@@ -353,9 +309,6 @@ class PlaybookManager(RunManagerMixin):
                     "name": role_name,
                     "role_id": role_id,
                 })
-
-            session_state["created_roles"] = created_roles
-            await save_generation_session(generation_session_id, session_state)
 
         # -- Assemble PlaybookUpsert --
         playbook_roles: list[PlaybookRoleEntry] = []
@@ -381,21 +334,8 @@ class PlaybookManager(RunManagerMixin):
 
         yield _sse({"step": "assembling"})
 
-        if existing_playbook_id:
-            try:
-                detail = self.update_playbook(session, existing_playbook_id, upsert)
-                playbook_id = existing_playbook_id
-            except FileNotFoundError:
-                detail = self.create_playbook(session, upsert)
-                playbook_id = detail.id
-        else:
-            detail = self.create_playbook(session, upsert)
-            playbook_id = detail.id
-
-        session_state["playbook_id"] = playbook_id
-        await save_generation_session(generation_session_id, session_state)
-
-        yield _sse({"step": "done", "playbook_id": playbook_id})
+        detail = self.create_playbook(session, upsert)
+        yield _sse({"step": "done", "playbook_id": detail.id})
         yield "data: [DONE]\n\n"
 
     def delete_playbook(self, session: SessionData, playbook_id: str) -> None:

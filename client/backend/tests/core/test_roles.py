@@ -101,7 +101,9 @@ class TestReadRoleMetaMain:
         assert inp.racksmith_secret is True
 
 
-    def test_parses_list_input_type(self, layout) -> None:
+    def test_parses_list_input_type_as_raw(self, layout) -> None:
+        """list type is no longer a supported RoleInputSpec type, but the
+        raw RoleInput dataclass still stores whatever Ansible declares."""
         role_dir = layout.roles_path / "dirs"
         role_dir.mkdir(parents=True, exist_ok=True)
         (role_dir / "meta").mkdir()
@@ -128,7 +130,6 @@ class TestReadRoleMetaMain:
         inp = role.inputs[0]
         assert inp.key == "directories"
         assert inp.type == "list"
-        assert inp.default == ["/mnt/data", "/mnt/backups"]
 
     def test_parses_outputs_from_meta(self, layout) -> None:
         role_dir = layout.roles_path / "discover"
@@ -169,7 +170,9 @@ class TestReadRoleMetaMain:
         assert role is not None
         assert role.outputs == []
 
-    def test_parses_dict_input_type(self, layout) -> None:
+    def test_parses_dict_input_type_as_raw(self, layout) -> None:
+        """dict type is no longer a supported RoleInputSpec type, but the
+        raw RoleInput dataclass still stores whatever Ansible declares."""
         role_dir = layout.roles_path / "opts"
         role_dir.mkdir(parents=True, exist_ok=True)
         (role_dir / "meta").mkdir()
@@ -196,7 +199,6 @@ class TestReadRoleMetaMain:
         inp = role.inputs[0]
         assert inp.key == "mount_options"
         assert inp.type == "dict"
-        assert inp.default == {"fstype": "ext4", "opts": "defaults"}
 
 
 class TestReadRoleActionYaml:

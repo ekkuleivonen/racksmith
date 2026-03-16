@@ -35,7 +35,7 @@ class TestPlaybookPlanSchemas:
             name="My Role",
             description="Installs stuff",
             generation_prompt="Create a role that installs packages.",
-            expected_inputs=[RoleInputSpec(key="packages", type="list")],
+            expected_inputs=[RoleInputSpec(key="packages", type="string")],
             expected_outputs=[RoleOutputSpec(key="installed_versions", type="list")],
         )
         assert entry.action == "create"
@@ -73,12 +73,9 @@ class TestPlaybookPlanSchemas:
         with pytest.raises(ValidationError):
             PlaybookPlan(name="Empty", description="Nothing", roles=[])
 
-    def test_generate_request_accepts_optional_session_id(self) -> None:
+    def test_generate_request_valid(self) -> None:
         req = GeneratePlaybookRequest(prompt="build a web server")
-        assert req.generation_session_id is None
-
-        req2 = GeneratePlaybookRequest(prompt="add monitoring", generation_session_id="abc123")
-        assert req2.generation_session_id == "abc123"
+        assert req.prompt == "build a web server"
 
     def test_generate_request_rejects_empty_prompt(self) -> None:
         with pytest.raises(ValidationError):
@@ -115,59 +112,6 @@ class TestPlannerPrompt:
         prompt = build_planner_system_prompt([])
         assert "REUSE existing roles" in prompt
         assert "Storage Setup" in prompt
-
-
-# ---------------------------------------------------------------------------
-# Generation session persistence
-# ---------------------------------------------------------------------------
-
-
-class TestGenerationSession:
-    @pytest.fixture(autouse=True)
-    def _mock_redis(self):
-        self.store: dict[str, str] = {}
-
-        async def fake_setex(key: str, ttl: int, value: str) -> None:
-            self.store[key] = value
-
-        async def fake_get(key: str) -> str | None:
-            return self.store.get(key)
-
-        async def fake_expire(key: str, ttl: int) -> bool:
-            return key in self.store
-
-        with (
-            patch("_utils.generation_session.AsyncRedis.setex", side_effect=fake_setex),
-            patch("_utils.generation_session.AsyncRedis.get", side_effect=fake_get),
-            patch("_utils.generation_session.AsyncRedis.expire", side_effect=fake_expire),
-        ):
-            yield
-
-    @pytest.mark.anyio
-    async def test_save_and_load(self) -> None:
-        from _utils.generation_session import load_generation_session, save_generation_session
-
-        state = {"messages": [{"role": "user", "content": "hi"}], "plan": {}}
-        await save_generation_session("sess1", state)
-        loaded = await load_generation_session("sess1")
-        assert loaded is not None
-        assert loaded["messages"][0]["content"] == "hi"
-
-    @pytest.mark.anyio
-    async def test_missing_session_returns_none(self) -> None:
-        from _utils.generation_session import load_generation_session
-
-        assert await load_generation_session("nonexistent") is None
-
-    @pytest.mark.anyio
-    async def test_refresh_on_existing(self) -> None:
-        from _utils.generation_session import (
-            refresh_generation_session,
-            save_generation_session,
-        )
-
-        await save_generation_session("sess2", {"x": 1})
-        await refresh_generation_session("sess2")
 
 
 # ---------------------------------------------------------------------------
@@ -220,7 +164,6 @@ class TestGeneratePlaybookOrchestrator:
 
         mock_planner_result = MagicMock()
         mock_planner_result.output = mock_plan
-        mock_planner_result.all_messages.return_value = []
 
         mock_role_create = RoleCreate(
             name="New Role",
@@ -233,8 +176,6 @@ class TestGeneratePlaybookOrchestrator:
         with (
             patch("_utils.ai.planner_agent") as planner_mock,
             patch("_utils.ai.role_agent") as role_mock,
-            patch("_utils.generation_session.AsyncRedis.setex", new_callable=AsyncMock),
-            patch("_utils.generation_session.AsyncRedis.get", new_callable=AsyncMock, return_value=None),
         ):
             planner_mock.run = AsyncMock(return_value=mock_planner_result)
             role_mock.run = AsyncMock(return_value=mock_role_result)

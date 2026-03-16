@@ -53,9 +53,7 @@ async def generate_playbook(
             detail="AI generation is not configured (OPENAI_API_KEY missing)",
         )
     return StreamingResponse(
-        playbook_manager.generate_playbook(
-            session, body.prompt, body.generation_session_id
-        ),
+        playbook_manager.generate_playbook(session, body.prompt),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
