@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -94,3 +94,42 @@ class PlaybookResponse(BaseModel):
 
 class PlaybookRunResponse(BaseModel):
     run: PlaybookRun
+
+
+# ---------------------------------------------------------------------------
+# AI playbook generation
+# ---------------------------------------------------------------------------
+
+
+class PlaybookPlanRoleReuse(BaseModel):
+    """Reuse an existing role from the catalog."""
+
+    action: Literal["reuse"]
+    role_id: str
+    vars: dict[str, Any] = Field(default_factory=dict)
+
+
+class PlaybookPlanRoleCreate(BaseModel):
+    """Create a brand-new role via an LLM sub-agent."""
+
+    action: Literal["create"]
+    name: str = Field(min_length=1, max_length=120)
+    description: str = Field(default="", max_length=500)
+    generation_prompt: str = Field(min_length=1)
+    expected_inputs: list[RoleInputSpec] = Field(default_factory=list)
+    expected_outputs: list[RoleOutputSpec] = Field(default_factory=list)
+    vars: dict[str, Any] = Field(default_factory=dict)
+
+
+class PlaybookPlan(BaseModel):
+    """LLM-generated playbook plan before role sub-agents run."""
+
+    name: str = Field(min_length=1, max_length=160)
+    description: str = Field(default="", max_length=500)
+    become: bool = False
+    roles: list[PlaybookPlanRoleReuse | PlaybookPlanRoleCreate] = Field(min_length=1)
+
+
+class GeneratePlaybookRequest(BaseModel):
+    prompt: str = Field(min_length=1)
+    generation_session_id: str | None = None
