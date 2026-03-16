@@ -6,7 +6,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { apiGet, apiPost } from "@/lib/api";
+import { apiPost } from "@/lib/api";
 
 export type User = {
   id: number;
@@ -33,7 +33,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const refresh = useCallback(async () => {
     try {
-      const data = await apiGet<{ user: User }>("/auth/me");
+      const res = await fetch("/api/auth/me", { credentials: "include" });
+      if (!res.ok) {
+        setUser(null);
+        return;
+      }
+      const data: { user: User } = await res.json();
       setUser(data.user);
     } catch {
       setUser(null);

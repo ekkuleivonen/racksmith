@@ -31,10 +31,23 @@ class User(Base):
     created_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), server_default=func.now())
     last_seen: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     github_access_token_enc: Mapped[str] = mapped_column(Text, default="")
-    refresh_token_hash: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     roles: Mapped[list["RegistryRole"]] = relationship(back_populates="owner")
     playbooks: Mapped[list["RegistryPlaybook"]] = relationship(back_populates="owner")
+    refresh_tokens: Mapped[list["RefreshToken"]] = relationship(
+        back_populates="user", cascade="all, delete-orphan",
+    )
+
+
+class RefreshToken(Base):
+    __tablename__ = "refresh_tokens"
+
+    id: Mapped[str] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid4)
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    token_hash: Mapped[str] = mapped_column(Text, unique=True, nullable=False, index=True)
+    created_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    user: Mapped["User"] = relationship(back_populates="refresh_tokens")
 
 
 class RegistryRole(Base):

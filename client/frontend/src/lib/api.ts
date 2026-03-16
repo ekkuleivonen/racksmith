@@ -1,5 +1,9 @@
 export async function handleResponse<T>(res: Response): Promise<T> {
   if (!res.ok) {
+    if (res.status === 401) {
+      window.location.href = "/api/auth/login";
+      return new Promise<T>(() => {});
+    }
     const body = await res.json().catch(() => ({}));
     const detail = body.detail ?? body.error ?? `HTTP ${res.status}`;
     throw new Error(Array.isArray(detail) ? detail[0]?.msg ?? String(detail) : String(detail));

@@ -276,12 +276,11 @@ function LinkButton({
     <WirePopover upstreamOutputs={outputs} onSelect={onSelect}>
       <Button
         type="button"
-        variant="outline"
-        size="sm"
-        className="h-9 shrink-0 gap-1 text-xs text-zinc-400"
+        variant="ghost"
+        size="icon"
+        className="h-9 w-9 shrink-0"
       >
-        <Link2 className="size-3" />
-        Link
+        <Link2 className="size-3.5" />
       </Button>
     </WirePopover>
   );

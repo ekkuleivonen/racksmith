@@ -29,7 +29,7 @@ from sqlalchemy.sql import func
 import settings
 from auth.crypto import decrypt_token, encrypt_token
 from db.engine import get_db
-from db.models import User
+from db.models import RefreshToken, User
 
 logger = structlog.get_logger(__name__)
 
@@ -160,7 +160,7 @@ async def auth_exchange(
     result = await session.execute(select(User).where(User.github_id == github_id))
     user = result.scalar_one_or_none()
     if user:
-        user.refresh_token_hash = _hash_token(refresh_token)
+        session.add(RefreshToken(user_id=user.id, token_hash=_hash_token(refresh_token)))
         await session.commit()
 
     return {
@@ -182,9 +182,14 @@ async def auth_refresh(
     """
     token_hash = _hash_token(body.refresh_token)
     result = await session.execute(
-        select(User).where(User.refresh_token_hash == token_hash)
+        select(RefreshToken).where(RefreshToken.token_hash == token_hash)
     )
-    user = result.scalar_one_or_none()
+    rt = result.scalar_one_or_none()
+    if not rt:
+        raise HTTPException(status_code=401, detail="Invalid or expired refresh token")
+
+    user_result = await session.execute(select(User).where(User.id == rt.user_id))
+    user = user_result.scalar_one_or_none()
     if not user or not user.github_access_token_enc:
         raise HTTPException(status_code=401, detail="Invalid or expired refresh token")
 
@@ -193,7 +198,8 @@ async def auth_refresh(
         raise HTTPException(status_code=404, detail="Stored token is invalid or corrupted")
 
     new_refresh_token = secrets.token_urlsafe(48)
-    user.refresh_token_hash = _hash_token(new_refresh_token)
+    await session.delete(rt)
+    session.add(RefreshToken(user_id=user.id, token_hash=_hash_token(new_refresh_token)))
     user.last_seen = func.now()
     await session.commit()
 
