@@ -65,7 +65,7 @@ export type PlaybookRun = {
 };
 
 function invalidateAfterPlaybookMutation() {
-  invalidateResource("playbooks", "filesStatuses", "filesTree");
+  invalidateResource("playbooks", "roles", "filesStatuses", "filesTree");
 }
 
 export type PlaybookListResult = {
