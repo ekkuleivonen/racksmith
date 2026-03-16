@@ -20,6 +20,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import type { RoleCatalogEntry, PlaybookUpsert } from "@/lib/playbooks";
 import { createPlaybook, listPlaybooks } from "@/lib/playbooks";
+import { useHosts, useGroups } from "@/hooks/queries";
 import {
   usePlaybookGenerate,
   type GenerationStep,
@@ -162,6 +163,8 @@ export function PlaybookCreatePage() {
   const navigate = useNavigate();
   const [draft, setDraft] = useState<PlaybookUpsert>(EMPTY_DRAFT);
   const [roles_catalog, setRolesCatalog] = useState<RoleCatalogEntry[]>([]);
+  const { data: hosts } = useHosts();
+  const { data: groups } = useGroups();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [showPrompt, setShowPrompt] = useState(false);
@@ -362,6 +365,8 @@ export function PlaybookCreatePage() {
           <PlaybookEditorForm
             draft={draft}
             roles={roles_catalog}
+            hosts={hosts}
+            groups={groups}
             onChange={setDraft}
           />
 

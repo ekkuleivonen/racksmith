@@ -23,7 +23,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { usePlaybook } from "@/hooks/queries";
+import { usePlaybook, useHosts, useGroups } from "@/hooks/queries";
 import {
   deletePlaybook,
   updatePlaybook,
@@ -128,6 +128,8 @@ export function PlaybookDetailPage() {
 
   const pushMutation = usePushPlaybookToRegistry();
   const { data: playbook, isLoading: loading } = usePlaybook(playbookId || undefined);
+  const { data: hosts } = useHosts();
+  const { data: groups } = useGroups();
 
   useEffect(() => {
     if (!playbook) return;
@@ -233,6 +235,8 @@ export function PlaybookDetailPage() {
         <PlaybookEditorForm
           draft={draft}
           roles={roles_catalog}
+          hosts={hosts}
+          groups={groups}
           compact
           onChange={setDraft}
         />

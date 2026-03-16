@@ -58,7 +58,8 @@ import type {
   PlaybookRoleEntry,
   PlaybookUpsert,
 } from "@/lib/playbooks";
-import type { RoleOutput } from "@/lib/roles";
+import type { Host } from "@/lib/hosts";
+import type { Group } from "@/lib/groups";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -67,6 +68,8 @@ import type { RoleOutput } from "@/lib/roles";
 interface PlaybookEditorFormProps {
   draft: PlaybookUpsert;
   roles: RoleCatalogEntry[];
+  hosts?: Host[];
+  groups?: Group[];
   onChange: (next: PlaybookUpsert) => void;
   compact?: boolean;
 }
@@ -92,13 +95,13 @@ function defaultVarsForRole(role: RoleCatalogEntry): Record<string, unknown> {
 }
 
 // ---------------------------------------------------------------------------
-// Wiring: upstream output references
+// Unified variable sources
 // ---------------------------------------------------------------------------
 
-type UpstreamOutput = {
-  roleName: string;
-  output: RoleOutput;
-};
+type VarSource =
+  | { kind: "output"; group: string; key: string; description: string; type: string }
+  | { kind: "host_var"; group: "Host variables"; key: string }
+  | { kind: "group_var"; group: string; key: string };
 
 const WIRE_RE = /^\{\{\s*(\S+)\s*\}\}$/;
 
@@ -116,38 +119,66 @@ function normalizeType(t?: string): string {
   return t;
 }
 
-function getUpstreamOutputs(
+function getAvailableVars(
   draftRoles: PlaybookRoleEntry[],
   rolesById: Record<string, RoleCatalogEntry>,
   currentIndex: number,
-): UpstreamOutput[] {
-  const result: UpstreamOutput[] = [];
+  hosts: Host[],
+  groups: Group[],
+): VarSource[] {
+  const result: VarSource[] = [];
+
   for (let i = 0; i < currentIndex; i++) {
     const entry = rolesById[draftRoles[i].role_id];
     if (!entry?.outputs) continue;
     for (const out of entry.outputs) {
-      result.push({ roleName: entry.name, output: out });
+      result.push({
+        kind: "output",
+        group: entry.name,
+        key: out.key,
+        description: out.description,
+        type: out.type ?? "string",
+      });
     }
   }
+
+  const hostKeys = new Set<string>();
+  for (const h of hosts) {
+    for (const k of Object.keys(h.vars ?? {})) hostKeys.add(k);
+  }
+  for (const k of Array.from(hostKeys).sort()) {
+    result.push({ kind: "host_var", group: "Host variables", key: k });
+  }
+
+  for (const g of groups) {
+    const keys = Object.keys(g.vars ?? {});
+    if (keys.length === 0) continue;
+    const label = `Group: ${g.name ?? g.id}`;
+    for (const k of keys.sort()) {
+      result.push({ kind: "group_var", group: label, key: k });
+    }
+  }
+
   return result;
 }
 
-function compatibleOutputs(
-  upstreamOutputs: UpstreamOutput[],
+function compatibleVars(
+  allVars: VarSource[],
   inputType?: string,
-): UpstreamOutput[] {
+): VarSource[] {
   const norm = normalizeType(inputType);
-  return upstreamOutputs.filter(
-    (u) => normalizeType(u.output.type) === norm,
-  );
+  return allVars.filter((v) => {
+    if (v.kind === "output") return normalizeType(v.type) === norm;
+    return true;
+  });
 }
 
-function resolveWireSource(
-  factKey: string,
-  upstreamOutputs: UpstreamOutput[],
-): string {
-  const match = upstreamOutputs.find((u) => u.output.key === factKey);
-  return match?.roleName ?? "upstream";
+function resolveWireSource(factKey: string, allVars: VarSource[]): string {
+  const match = allVars.find((v) => v.key === factKey);
+  if (!match) return "variable";
+  if (match.kind === "output") return match.group;
+  if (match.kind === "host_var") return "host var";
+  return match.group.toLowerCase();
 }
 
 // ---------------------------------------------------------------------------
@@ -163,7 +194,7 @@ function WiredPill({
 }: {
   factKey: string;
   sourceName: string;
-  compatible: UpstreamOutput[];
+  compatible: VarSource[];
   onRewire: (factKey: string) => void;
   onClear: () => void;
 }) {
@@ -175,7 +206,7 @@ function WiredPill({
       <span className="truncate font-mono text-zinc-300">{factKey}</span>
       <div className="ml-auto flex shrink-0 items-center gap-0.5">
         {compatible.length > 0 && (
-          <WirePopover upstreamOutputs={compatible} onSelect={onRewire}>
+          <VarPickerPopover vars={compatible} onSelect={onRewire}>
             <button
               type="button"
               className="text-zinc-500 hover:text-zinc-300"
@@ -183,7 +214,7 @@ function WiredPill({
             >
               <Link2 className="size-3" />
             </button>
-          </WirePopover>
+          </VarPickerPopover>
         )}
         <button
           type="button"
@@ -199,27 +230,27 @@ function WiredPill({
 }
 
 // ---------------------------------------------------------------------------
-// WirePopover: dropdown to pick an upstream output
+// VarPickerPopover: unified dropdown for outputs, host vars, group vars
 // ---------------------------------------------------------------------------
 
-function WirePopover({
-  upstreamOutputs,
+function VarPickerPopover({
+  vars,
   onSelect,
   children,
 }: {
-  upstreamOutputs: UpstreamOutput[];
-  onSelect: (factKey: string) => void;
+  vars: VarSource[];
+  onSelect: (key: string) => void;
   children: React.ReactNode;
 }) {
   const [open, setOpen] = useState(false);
 
-  if (upstreamOutputs.length === 0) return null;
+  if (vars.length === 0) return null;
 
-  const grouped = new Map<string, UpstreamOutput[]>();
-  for (const u of upstreamOutputs) {
-    const list = grouped.get(u.roleName) ?? [];
-    list.push(u);
-    grouped.set(u.roleName, list);
+  const grouped = new Map<string, VarSource[]>();
+  for (const v of vars) {
+    const list = grouped.get(v.group) ?? [];
+    list.push(v);
+    grouped.set(v.group, list);
   }
 
   return (
@@ -227,29 +258,29 @@ function WirePopover({
       <PopoverTrigger asChild>{children}</PopoverTrigger>
       <PopoverContent
         align="start"
-        className="w-64 p-1"
+        className="max-h-72 w-72 overflow-y-auto p-1"
       >
-        {Array.from(grouped.entries()).map(([roleName, outputs]) => (
-          <div key={roleName}>
+        {Array.from(grouped.entries()).map(([groupName, items]) => (
+          <div key={groupName}>
             <p className="px-2 pt-1.5 pb-0.5 text-[10px] font-semibold tracking-wide text-zinc-500 uppercase">
-              {roleName}
+              {groupName}
             </p>
-            {outputs.map((u) => (
+            {items.map((v) => (
               <button
-                key={u.output.key}
+                key={`${v.kind}-${v.key}`}
                 type="button"
                 className="flex w-full items-start gap-2 rounded px-2 py-1.5 text-left text-xs hover:bg-zinc-800"
                 onClick={() => {
-                  onSelect(u.output.key);
+                  onSelect(v.key);
                   setOpen(false);
                 }}
               >
                 <code className="shrink-0 font-mono text-zinc-300">
-                  {u.output.key}
+                  {v.key}
                 </code>
-                {u.output.description ? (
+                {v.kind === "output" && v.description ? (
                   <span className="truncate text-zinc-500">
-                    {u.output.description}
+                    {v.description}
                   </span>
                 ) : null}
               </button>
@@ -262,18 +293,18 @@ function WirePopover({
 }
 
 // ---------------------------------------------------------------------------
-// LinkButton: visible button that opens WirePopover
+// LinkButton: visible button that opens VarPickerPopover
 // ---------------------------------------------------------------------------
 
 function LinkButton({
-  outputs,
+  vars,
   onSelect,
 }: {
-  outputs: UpstreamOutput[];
-  onSelect: (factKey: string) => void;
+  vars: VarSource[];
+  onSelect: (key: string) => void;
 }) {
   return (
-    <WirePopover upstreamOutputs={outputs} onSelect={onSelect}>
+    <VarPickerPopover vars={vars} onSelect={onSelect}>
       <Button
         type="button"
         variant="ghost"
@@ -282,7 +313,7 @@ function LinkButton({
       >
         <Link2 className="size-3.5" />
       </Button>
-    </WirePopover>
+    </VarPickerPopover>
   );
 }
 
@@ -295,7 +326,7 @@ type SortableRoleCardProps = {
   role: PlaybookRoleEntry;
   index: number;
   roleEntry: RoleCatalogEntry;
-  upstreamOutputs: UpstreamOutput[];
+  allVars: VarSource[];
   updateRole: (index: number, nextRole: PlaybookRoleEntry) => void;
   removeRole: (index: number) => void;
 };
@@ -305,7 +336,7 @@ function SortableRoleCard({
   role,
   index,
   roleEntry,
-  upstreamOutputs,
+  allVars,
   updateRole,
   removeRole,
 }: SortableRoleCardProps) {
@@ -374,7 +405,7 @@ function SortableRoleCard({
               const isSecret = !!field.secret;
               const rawValue = role.vars[field.key] ?? field.default ?? "";
               const wiredFact = parseWire(rawValue);
-              const matched = compatibleOutputs(upstreamOutputs, field.type);
+              const matched = compatibleVars(allVars, field.type);
 
               const fieldNode = (
                 <div
@@ -401,7 +432,7 @@ function SortableRoleCard({
                   {wiredFact ? (
                     <WiredPill
                       factKey={wiredFact}
-                      sourceName={resolveWireSource(wiredFact, upstreamOutputs)}
+                      sourceName={resolveWireSource(wiredFact, allVars)}
                       compatible={matched}
                       onRewire={(fk) =>
                         setVar(field.key, `{{ ${fk} }}`)
@@ -427,7 +458,7 @@ function SortableRoleCard({
                         </SelectContent>
                       </Select>
                       {matched.length > 0 && !isSecret ? (
-                        <LinkButton outputs={matched} onSelect={(fk) => setVar(field.key, `{{ ${fk} }}`)} />
+                        <LinkButton vars={matched} onSelect={(fk) => setVar(field.key, `{{ ${fk} }}`)} />
                       ) : null}
                     </div>
                   ) : field.type === "bool" || field.type === "boolean" ? (
@@ -456,7 +487,7 @@ function SortableRoleCard({
                         </SelectContent>
                       </Select>
                       {matched.length > 0 && !isSecret ? (
-                        <LinkButton outputs={matched} onSelect={(fk) => setVar(field.key, `{{ ${fk} }}`)} />
+                        <LinkButton vars={matched} onSelect={(fk) => setVar(field.key, `{{ ${fk} }}`)} />
                       ) : null}
                     </div>
                   ) : (
@@ -471,7 +502,7 @@ function SortableRoleCard({
                         disabled={isSecret}
                       />
                       {matched.length > 0 && !isSecret ? (
-                        <LinkButton outputs={matched} onSelect={(fk) => setVar(field.key, `{{ ${fk} }}`)} />
+                        <LinkButton vars={matched} onSelect={(fk) => setVar(field.key, `{{ ${fk} }}`)} />
                       ) : null}
                     </div>
                   )}
@@ -530,6 +561,8 @@ function SortableRoleCard({
 export function PlaybookEditorForm({
   draft,
   roles,
+  hosts = [],
+  groups = [],
   onChange,
   compact = false,
 }: PlaybookEditorFormProps) {
@@ -789,10 +822,12 @@ export function PlaybookEditorForm({
                       role={role}
                       index={index}
                       roleEntry={roleEntry}
-                      upstreamOutputs={getUpstreamOutputs(
+                      allVars={getAvailableVars(
                         draft.roles,
                         rolesById,
                         index,
+                        hosts,
+                        groups,
                       )}
                       updateRole={updateRole}
                       removeRole={removeRole}
