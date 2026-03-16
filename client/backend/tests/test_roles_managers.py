@@ -107,7 +107,7 @@ class TestRoleManagerRejectsListDictInputs:
 
 
 class TestRoleLabelDerivation:
-    def test_label_derived_from_description(self, with_repo_mock, layout):
+    def test_label_from_humanized_key_description_in_tooltip(self, with_repo_mock, layout):
         layout.roles_path.mkdir(parents=True, exist_ok=True)
         (layout.roles_path / "role_abc").mkdir()
         (layout.roles_path / "role_abc" / "meta").mkdir()
@@ -123,7 +123,8 @@ argument_specs:
 """)
         role = role_manager.get_role(with_repo_mock, "role_abc")
         assert len(role.inputs) == 1
-        assert role.inputs[0].label == "Enable Public Key Authentication"
+        assert role.inputs[0].label == "Enable Pubkey"
+        assert role.inputs[0].description == "Enable Public Key Authentication"
 
     def test_label_falls_back_to_humanized_key(self, with_repo_mock, layout):
         layout.roles_path.mkdir(parents=True, exist_ok=True)
