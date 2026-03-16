@@ -60,6 +60,7 @@ def _role_data_to_catalog(r: RoleData) -> RoleCatalogEntry:
         name=r.name,
         description=r.description,
         inputs=inputs_list,
+        outputs=list(r.outputs),
         labels=r.tags,
     )
 

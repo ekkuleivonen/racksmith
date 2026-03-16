@@ -51,6 +51,16 @@ class RoleInputSpec(BaseModel):
         return d
 
 
+class RoleOutputSpec(BaseModel):
+    """Declares a fact that a role produces via set_fact."""
+
+    key: str = Field(min_length=1, max_length=80)
+    description: str = ""
+    type: Literal["string", "boolean", "list", "dict"] = "string"
+
+    model_config = {"extra": "ignore"}
+
+
 class PlatformSpec(BaseModel):
     """Typed spec for role platform compatibility."""
 
@@ -112,6 +122,7 @@ class VersionOut(BaseModel):
     platforms: list[PlatformSpec]
     tags: list[str]
     inputs: list[RoleInputSpec]
+    outputs: list[RoleOutputSpec] = Field(default_factory=list)
     tasks_yaml: str
     defaults_yaml: str
     meta_yaml: str

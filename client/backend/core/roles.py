@@ -13,6 +13,7 @@ from typing import Any
 import yaml
 
 from _utils.logging import get_logger
+from _utils.schemas import RoleOutputSpec
 
 from . import atomic_yaml_dump, validate_safe_id
 from .config import AnsibleLayout
@@ -53,6 +54,7 @@ class RoleData:
     platforms: list[dict] = field(default_factory=list)
     tags: list[str] = field(default_factory=list)
     inputs: list[RoleInput] = field(default_factory=list)
+    outputs: list[RoleOutputSpec] = field(default_factory=list)
     has_tasks: bool = False
     id: str = ""
     registry_id: str = ""
@@ -114,6 +116,16 @@ def _role_from_meta_main(role_dir: Path, data: dict) -> RoleData:
             if isinstance(v, dict):
                 inputs.append(_parse_argument_specs_option(k, v))
 
+    outputs: list[RoleOutputSpec] = []
+    raw_outputs = data.get("racksmith_outputs")
+    if isinstance(raw_outputs, list):
+        for entry in raw_outputs:
+            if isinstance(entry, dict) and entry.get("key"):
+                try:
+                    outputs.append(RoleOutputSpec.model_validate(entry))
+                except Exception:
+                    logger.debug("role_output_parse_skip", entry=entry)
+
     tasks_file = role_dir / TASKS_MAIN
     return RoleData(
         name=name,
@@ -121,6 +133,7 @@ def _role_from_meta_main(role_dir: Path, data: dict) -> RoleData:
         platforms=platforms,
         tags=tags,
         inputs=inputs,
+        outputs=outputs,
         has_tasks=tasks_file.is_file(),
         id=role_dir.name,
     )
@@ -276,7 +289,6 @@ def write_role(
     (role_dir / "meta").mkdir(exist_ok=True)
     (role_dir / "tasks").mkdir(exist_ok=True)
 
-    # Pure Ansible meta/main.yml — no x_racksmith keys
     meta_data: dict[str, Any] = {
         "galaxy_info": {
             "role_name": role.name,
@@ -293,6 +305,11 @@ def write_role(
             }
         },
     }
+    if role.outputs:
+        meta_data["racksmith_outputs"] = [
+            o.model_dump(exclude_defaults=True) | {"key": o.key}
+            for o in role.outputs
+        ]
     meta_path = role_dir / META_MAIN
     atomic_yaml_dump(meta_data, meta_path)
 

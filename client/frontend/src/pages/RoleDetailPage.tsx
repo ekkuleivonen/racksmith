@@ -17,7 +17,7 @@ import {
 } from "@/components/ui/table";
 import { useRoleDetail } from "@/hooks/queries";
 import { useDeleteRole, usePushToRegistry, useUpdateRole } from "@/hooks/mutations";
-import type { RoleDetail, RoleInput } from "@/lib/roles";
+import type { RoleDetail, RoleInput, RoleOutput } from "@/lib/roles";
 
 export function RoleDetailPage() {
   const { roleId } = useParams<{ roleId: string }>();
@@ -150,6 +150,36 @@ export function RoleDetailPage() {
                     </TableCell>
                     <TableCell className="text-xs text-zinc-500">
                       {inp.required ? "Yes" : "No"}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </section>
+        )}
+
+        {(role.outputs?.length ?? 0) > 0 && (
+          <section className="border border-zinc-800 bg-zinc-900/30 p-4 space-y-2">
+            <h2 className="text-sm font-medium text-zinc-100">Outputs</h2>
+            <Table>
+              <TableHeader>
+                <TableRow className="border-zinc-800">
+                  <TableHead className="text-zinc-500">Fact</TableHead>
+                  <TableHead className="text-zinc-500">Type</TableHead>
+                  <TableHead className="text-zinc-500">Description</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {role.outputs!.map((out: RoleOutput) => (
+                  <TableRow key={out.key} className="border-zinc-800">
+                    <TableCell className="font-mono text-xs">
+                      {out.key}
+                    </TableCell>
+                    <TableCell className="text-xs text-zinc-500">
+                      {out.type ?? "string"}
+                    </TableCell>
+                    <TableCell className="text-xs text-zinc-500">
+                      {out.description || "—"}
                     </TableCell>
                   </TableRow>
                 ))}

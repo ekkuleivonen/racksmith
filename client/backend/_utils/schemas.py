@@ -60,6 +60,16 @@ class PlatformSpec(BaseModel):
     model_config = {"extra": "ignore"}
 
 
+class RoleOutputSpec(BaseModel):
+    """Declares a fact that a role produces via set_fact."""
+
+    key: str = Field(min_length=1, max_length=80)
+    description: str = ""
+    type: Literal["string", "boolean", "list", "dict"] = "string"
+
+    model_config = {"extra": "ignore"}
+
+
 RunStatus = Literal["queued", "running", "completed", "failed"]
 
 class StatusMessageResponse(BaseModel):
@@ -67,4 +77,4 @@ class StatusMessageResponse(BaseModel):
     message: str = ""
 
 
-__all__ = ["PlatformSpec", "RoleInputSpec", "RunStatus", "StatusMessageResponse"]
+__all__ = ["PlatformSpec", "RoleInputSpec", "RoleOutputSpec", "RunStatus", "StatusMessageResponse"]

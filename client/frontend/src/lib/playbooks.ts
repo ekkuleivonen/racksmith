@@ -1,6 +1,6 @@
 import { apiDelete, apiGet, apiPost, apiPut, wsUrl } from "@/lib/api";
 import { invalidateResource } from "@/lib/queryClient";
-import type { RoleInput } from "@/lib/roles";
+import type { RoleInput, RoleOutput } from "@/lib/roles";
 
 export type { RoleInput };
 
@@ -9,6 +9,7 @@ export type RoleCatalogEntry = {
   name: string;
   description: string;
   inputs: RoleInput[];
+  outputs?: RoleOutput[];
   labels: string[];
 };
 

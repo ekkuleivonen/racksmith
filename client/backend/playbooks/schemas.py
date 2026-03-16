@@ -6,7 +6,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-from _utils.schemas import RoleInputSpec, RunStatus
+from _utils.schemas import RoleInputSpec, RoleOutputSpec, RunStatus
 
 
 class RoleCatalogEntry(BaseModel):
@@ -14,6 +14,7 @@ class RoleCatalogEntry(BaseModel):
     name: str
     description: str
     inputs: list[RoleInputSpec] = Field(default_factory=list)
+    outputs: list[RoleOutputSpec] = Field(default_factory=list)
     labels: list[str] = Field(default_factory=list)
 
 

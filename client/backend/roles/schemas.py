@@ -6,7 +6,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-from _utils.schemas import RoleInputSpec, RunStatus
+from _utils.schemas import RoleInputSpec, RoleOutputSpec, RunStatus
 from playbooks.schemas import TargetSelection
 
 
@@ -47,6 +47,7 @@ class RoleSummary(BaseModel):
     name: str
     description: str
     inputs: list[RoleInputSpec]
+    outputs: list[RoleOutputSpec] = Field(default_factory=list)
     labels: list[str] = Field(default_factory=list)
     compatibility: dict[str, Any]
     has_tasks: bool
