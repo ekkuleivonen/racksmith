@@ -65,7 +65,7 @@ class RoleOutputSpec(BaseModel):
 
     key: str = Field(min_length=1, max_length=80)
     description: str = ""
-    type: Literal["string", "boolean", "list", "dict"] = "string"
+    type: Literal["string", "boolean"] = "string"
 
     model_config = {"extra": "ignore"}
 

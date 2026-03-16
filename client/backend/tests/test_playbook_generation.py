@@ -37,7 +37,7 @@ class TestPlaybookPlanSchemas:
             description="Installs stuff",
             generation_prompt="Create a role that installs packages.",
             expected_inputs=[RoleInputSpec(key="packages", type="string")],
-            expected_outputs=[RoleOutputSpec(key="installed_versions", type="list")],
+            expected_outputs=[RoleOutputSpec(key="installed_versions", type="string")],
         )
         assert entry.action == "create"
         assert entry.name == "My Role"

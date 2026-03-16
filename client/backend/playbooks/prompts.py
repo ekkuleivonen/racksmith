@@ -59,7 +59,9 @@ Rules:
   - Input type must be one of: "string", "bool", "secret".
     NEVER use "list" or "dict" as an input type. Design roles with scalar inputs
     that can be added multiple times in the playbook instead.
-  - Output type must be one of: "string", "boolean", "list", "dict".
+  - Output type must be one of: "string", "boolean".
+  - IMPORTANT: Every role that uses set_fact MUST declare those facts as expected_outputs.
+    Downstream roles can only link to outputs that are explicitly declared.
   - Prefer SIMPLICITY. Roles should have minimal inputs (1-3 required) with sensible defaults.
     Do not expose low-level knobs (e.g. fstab dump/passno, mkfs extra opts) as inputs
     unless the user explicitly asks for them. Hardcode sensible values in tasks."""

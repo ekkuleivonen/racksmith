@@ -181,6 +181,7 @@ class RoleManager(RunManagerMixin):
             platforms=platforms,
             tags=body.labels,
             inputs=[_request_input_to_role_input(i) for i in body.inputs],
+            outputs=list(body.outputs),
             has_tasks=bool(body.tasks),
             id=role_id,
         )

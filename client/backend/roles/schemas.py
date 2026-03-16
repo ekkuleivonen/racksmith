@@ -20,6 +20,7 @@ class RoleCreate(BaseModel):
     name: str = Field(min_length=1, max_length=120)
     description: str = Field(default="", max_length=500)
     inputs: list[RoleInputSpec] = Field(default_factory=list)
+    outputs: list[RoleOutputSpec] = Field(default_factory=list)
     labels: list[str] = Field(default_factory=list)
     compatibility: dict[str, Any] = Field(default_factory=lambda: {"os_family": []})
     tasks: list[Any] = Field(

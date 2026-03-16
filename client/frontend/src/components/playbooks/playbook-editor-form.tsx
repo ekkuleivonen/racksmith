@@ -101,18 +101,19 @@ type UpstreamOutput = {
 };
 
 const WIRE_RE = /^\{\{\s*(\S+)\s*\}\}$/;
-const WIRE_LOOSE_RE = /\{\{/;
 
 function parseWire(value: unknown): string | null {
   if (typeof value !== "string") return null;
   const m = WIRE_RE.exec(value);
-  if (m) return m[1];
-  if (WIRE_LOOSE_RE.test(value)) return value.replace(/[{}]/g, "").trim() || "?";
-  return null;
+  return m ? m[1] : null;
 }
 
-function sanitizeInput(value: string): string {
-  return value.replace(/[{}]/g, "");
+function normalizeType(t?: string): string {
+  if (!t) return "string";
+  if (t === "str") return "string";
+  if (t === "bool" || t === "boolean") return "boolean";
+  if (t === "secret") return "string";
+  return t;
 }
 
 function getUpstreamOutputs(
@@ -131,6 +132,16 @@ function getUpstreamOutputs(
   return result;
 }
 
+function compatibleOutputs(
+  upstreamOutputs: UpstreamOutput[],
+  inputType?: string,
+): UpstreamOutput[] {
+  const norm = normalizeType(inputType);
+  return upstreamOutputs.filter(
+    (u) => normalizeType(u.output.type) === norm,
+  );
+}
+
 function resolveWireSource(
   factKey: string,
   upstreamOutputs: UpstreamOutput[],
@@ -146,13 +157,13 @@ function resolveWireSource(
 function WiredPill({
   factKey,
   sourceName,
-  upstreamOutputs,
+  compatible,
   onRewire,
   onClear,
 }: {
   factKey: string;
   sourceName: string;
-  upstreamOutputs: UpstreamOutput[];
+  compatible: UpstreamOutput[];
   onRewire: (factKey: string) => void;
   onClear: () => void;
 }) {
@@ -163,8 +174,8 @@ function WiredPill({
       <span className="text-zinc-600">&rarr;</span>
       <span className="truncate font-mono text-zinc-300">{factKey}</span>
       <div className="ml-auto flex shrink-0 items-center gap-0.5">
-        {upstreamOutputs.length > 0 && (
-          <WirePopover upstreamOutputs={upstreamOutputs} onSelect={onRewire}>
+        {compatible.length > 0 && (
+          <WirePopover upstreamOutputs={compatible} onSelect={onRewire}>
             <button
               type="button"
               className="text-zinc-500 hover:text-zinc-300"
@@ -247,6 +258,32 @@ function WirePopover({
         ))}
       </PopoverContent>
     </Popover>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// LinkButton: visible button that opens WirePopover
+// ---------------------------------------------------------------------------
+
+function LinkButton({
+  outputs,
+  onSelect,
+}: {
+  outputs: UpstreamOutput[];
+  onSelect: (factKey: string) => void;
+}) {
+  return (
+    <WirePopover upstreamOutputs={outputs} onSelect={onSelect}>
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        className="h-9 shrink-0 gap-1 text-xs text-zinc-400"
+      >
+        <Link2 className="size-3" />
+        Link
+      </Button>
+    </WirePopover>
   );
 }
 
@@ -338,6 +375,7 @@ function SortableRoleCard({
               const isSecret = !!field.secret;
               const rawValue = role.vars[field.key] ?? field.default ?? "";
               const wiredFact = parseWire(rawValue);
+              const matched = compatibleOutputs(upstreamOutputs, field.type);
 
               const fieldNode = (
                 <div
@@ -365,84 +403,77 @@ function SortableRoleCard({
                     <WiredPill
                       factKey={wiredFact}
                       sourceName={resolveWireSource(wiredFact, upstreamOutputs)}
-                      upstreamOutputs={upstreamOutputs}
+                      compatible={matched}
                       onRewire={(fk) =>
                         setVar(field.key, `{{ ${fk} }}`)
                       }
                       onClear={() => clearVar(field.key)}
                     />
                   ) : (field.options?.length ?? 0) > 0 ? (
-                    <Select
-                      value={String(rawValue)}
-                      onValueChange={(value) => setVar(field.key, value)}
-                      disabled={isSecret}
-                    >
-                      <SelectTrigger className="w-full">
-                        <SelectValue placeholder={field.placeholder} />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {field.options!.map((opt) => (
-                          <SelectItem key={opt} value={opt}>
-                            {opt}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <div className="flex gap-1">
+                      <Select
+                        value={String(rawValue)}
+                        onValueChange={(value) => setVar(field.key, value)}
+                        disabled={isSecret}
+                      >
+                        <SelectTrigger className="w-full">
+                          <SelectValue placeholder={field.placeholder} />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {field.options!.map((opt) => (
+                            <SelectItem key={opt} value={opt}>
+                              {opt}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      {matched.length > 0 && !isSecret ? (
+                        <LinkButton outputs={matched} onSelect={(fk) => setVar(field.key, `{{ ${fk} }}`)} />
+                      ) : null}
+                    </div>
                   ) : field.type === "bool" || field.type === "boolean" ? (
-                    <Select
-                      value={
-                        String(
-                          role.vars[field.key] !== undefined
-                            ? role.vars[field.key] === true
-                            : field.default === true,
-                        )
-                      }
-                      onValueChange={(value) =>
-                        setVar(field.key, value === "true")
-                      }
-                      disabled={isSecret}
-                    >
-                      <SelectTrigger className="w-full">
-                        <SelectValue
-                          placeholder={field.placeholder || "Select..."}
-                        />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="true">true</SelectItem>
-                        <SelectItem value="false">false</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    <div className="flex gap-1">
+                      <Select
+                        value={
+                          String(
+                            role.vars[field.key] !== undefined
+                              ? role.vars[field.key] === true
+                              : field.default === true,
+                          )
+                        }
+                        onValueChange={(value) =>
+                          setVar(field.key, value === "true")
+                        }
+                        disabled={isSecret}
+                      >
+                        <SelectTrigger className="w-full">
+                          <SelectValue
+                            placeholder={field.placeholder || "Select..."}
+                          />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="true">true</SelectItem>
+                          <SelectItem value="false">false</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      {matched.length > 0 && !isSecret ? (
+                        <LinkButton outputs={matched} onSelect={(fk) => setVar(field.key, `{{ ${fk} }}`)} />
+                      ) : null}
+                    </div>
                   ) : (
-                    <div className="space-y-1">
-                      <div className="flex gap-1">
-                        <Input
-                          className="min-w-0 flex-1"
-                          value={String(rawValue)}
-                          onChange={(event) =>
-                            setVar(field.key, sanitizeInput(event.target.value))
-                          }
-                          placeholder={field.placeholder}
-                          disabled={isSecret}
-                        />
-                        {upstreamOutputs.length > 0 && !isSecret ? (
-                          <WirePopover
-                            upstreamOutputs={upstreamOutputs}
-                            onSelect={(factKey) =>
-                              setVar(field.key, `{{ ${factKey} }}`)
-                            }
-                          >
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              className="h-9 shrink-0 gap-1 text-xs text-zinc-400"
-                            >
-                              <Link2 className="size-3" />
-                              Link
-                            </Button>
-                          </WirePopover>
-                        ) : null}
-                      </div>
+                    <div className="flex gap-1">
+                      <Input
+                        className="min-w-0 flex-1"
+                        value={String(rawValue)}
+                        onChange={(event) =>
+                          setVar(field.key, event.target.value)
+                        }
+                        placeholder={field.placeholder}
+                        disabled={isSecret}
+                      />
+                      {matched.length > 0 && !isSecret ? (
+                        <LinkButton outputs={matched} onSelect={(fk) => setVar(field.key, `{{ ${fk} }}`)} />
+                      ) : null}
                     </div>
                   )}
                 </div>

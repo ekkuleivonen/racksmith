@@ -32,7 +32,10 @@ Each input item has these fields:
 Each output item declares a fact the role produces via set_fact:
   key         – fact variable name (snake_case)
   description – what the fact contains
-  type        – one of: "string", "boolean", "list", "dict" (default "string")
+  type        – one of: "string", "boolean" (default "string")
+
+IMPORTANT: Every set_fact in the tasks MUST have a matching entry in outputs.
+If a role uses set_fact, those facts MUST be declared as outputs.
 
 Design for simplicity:
   - Keep required inputs to the absolute minimum (1-3).
@@ -82,6 +85,9 @@ _JSON_EXAMPLE = """\
       "default": true,
       "required": false
     }
+  ],
+  "outputs": [
+    {"key": "nginx_config_path", "description": "Path to the generated Nginx config file", "type": "string"}
   ],
   "tasks": [
     {"name": "Install nginx", "ansible.builtin.package": {"name": "nginx", "state": "present"}},
