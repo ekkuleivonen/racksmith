@@ -76,8 +76,9 @@ class SSHManager:
         user_id = user_storage_id(session.user)
         return list(reversed(await self._load_history(user_id, host_id)))
 
-    async def record_command(self, session: SessionData, host_id: str, command: str) -> None:
-        host = self._find_host(session, host_id)
+    async def record_command(self, session: SessionData, host_id: str, command: str, *, host=None) -> None:
+        if host is None:
+            host = self._find_host(session, host_id)
         normalized = command.strip()
         if not normalized:
             return
@@ -98,7 +99,7 @@ class SSHManager:
 
     async def reboot_node(self, session: SessionData, host_id: str) -> None:
         host = self._require_ssh_host(session, host_id)
-        await self.record_command(session, host_id, "sudo reboot")
+        await self.record_command(session, host_id, "sudo reboot", host=host)
         conn = await asyncssh.connect(
             **_connect_kwargs(host.ip_address, host.ssh_user, host.ssh_port)
         )
@@ -178,9 +179,11 @@ class SSHManager:
                 event_type = str(message.get("type") or "")
                 if event_type == "input":
                     data = str(message.get("data") or "")
-                    if data.endswith("\n"):
-                        await self.record_command(session, host_id, data.rstrip("\r\n"))
                     process.stdin.write(data)
+                    if data.endswith("\n"):
+                        asyncio.create_task(
+                            self.record_command(session, host_id, data.rstrip("\r\n"), host=host)
+                        )
                 elif event_type == "resize":
                     cols = int(message.get("cols") or 120)
                     rows = int(message.get("rows") or 30)
