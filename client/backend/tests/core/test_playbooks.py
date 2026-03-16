@@ -221,6 +221,28 @@ class TestWritePlaybook:
         pb2 = read_playbook(layout.playbooks_path / "inline.yml", layout.repo_path)
         assert pb2.roles[0].vars == {"domain": "x.com", "email": "a@x.com"}
 
+    def test_duplicate_roles_roundtrip(self, layout) -> None:
+        """Same role can appear twice with different vars."""
+        original = PlaybookData(
+            id="dup",
+            path=Path("playbooks/dup.yml"),
+            name="Duplicate Roles",
+            hosts="all",
+            roles=[
+                PlaybookRoleEntry("storage_discover", vars={"disk": "/dev/sda"}),
+                PlaybookRoleEntry("storage_format", vars={"fstype": "ext4"}),
+                PlaybookRoleEntry("storage_discover", vars={"disk": "/dev/sda", "refresh": True}),
+            ],
+        )
+        write_playbook(layout, original)
+        pb = read_playbook(layout.playbooks_path / "dup.yml", layout.repo_path)
+        assert len(pb.roles) == 3
+        assert pb.roles[0].role == "storage_discover"
+        assert pb.roles[0].vars == {"disk": "/dev/sda"}
+        assert pb.roles[1].role == "storage_format"
+        assert pb.roles[2].role == "storage_discover"
+        assert pb.roles[2].vars == {"disk": "/dev/sda", "refresh": True}
+
 
 class TestRemovePlaybook:
     """remove_playbook(layout, playbook_id)."""

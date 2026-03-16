@@ -105,6 +105,41 @@ class TestPlaybookManagerCreatePlaybook:
         assert pb.role_entries == []
 
 
+class TestPlaybookManagerCreateDuplicateRoles:
+    def test_create_playbook_with_duplicate_roles(self, with_repo_mock, layout):
+        _seed_role(layout, "storage_discover")
+        body = PlaybookUpsert(
+            name="Storage Setup",
+            description="Discover, format, discover again",
+            roles=[
+                PlaybookRoleEntry(role_id="storage_discover"),
+                PlaybookRoleEntry(role_id="storage_discover"),
+            ],
+        )
+        pb = playbook_manager.create_playbook(with_repo_mock, body)
+        assert len(pb.role_entries) == 2
+        assert pb.role_entries[0].role_id == "storage_discover"
+        assert pb.role_entries[1].role_id == "storage_discover"
+
+    def test_update_playbook_with_duplicate_roles(self, with_repo_mock, layout):
+        _seed_role(layout, "storage_discover")
+        _seed_role(layout, "storage_format")
+        _seed_playbook(layout, "pb_dup")
+        body = PlaybookUpsert(
+            name="Updated",
+            roles=[
+                PlaybookRoleEntry(role_id="storage_discover"),
+                PlaybookRoleEntry(role_id="storage_format"),
+                PlaybookRoleEntry(role_id="storage_discover"),
+            ],
+        )
+        pb = playbook_manager.update_playbook(with_repo_mock, "pb_dup", body)
+        assert len(pb.role_entries) == 3
+        assert pb.role_entries[0].role_id == "storage_discover"
+        assert pb.role_entries[1].role_id == "storage_format"
+        assert pb.role_entries[2].role_id == "storage_discover"
+
+
 class TestPlaybookManagerUpdatePlaybook:
     def test_update_playbook(self, with_repo_mock, layout):
         _seed_role(layout, "role_a")
