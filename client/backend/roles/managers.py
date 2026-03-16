@@ -9,7 +9,6 @@ from typing import cast
 import yaml
 from pydantic import ValidationError
 
-import settings
 from _utils.helpers import generate_unique_id, new_id, now_iso
 from _utils.logging import get_logger
 from _utils.repo_helpers import get_layout, get_layout_or_none
@@ -336,82 +335,27 @@ class RoleManager(RunManagerMixin):
             return str(exc)
         return None
 
-    async def _stream_with_retries(
-        self, messages: list[dict[str, str]]
-    ) -> AsyncGenerator[str]:
-        """Generate JSON via OpenAI, validate, convert to YAML, stream lines."""
+    @staticmethod
+    async def _result_to_sse(data: dict) -> AsyncGenerator[str]:
+        """Convert a validated dict to YAML and yield SSE lines."""
         import asyncio
-
-        from openai.types.chat import ChatCompletionMessageParam
-
-        from _utils.openai import get_openai_client
-
-        client = get_openai_client()
-        logger = get_logger(__name__)
-
-        for attempt in range(settings.OPENAI_ROLE_GENERATE_RETRIES + 1):
-            is_last = attempt == settings.OPENAI_ROLE_GENERATE_RETRIES
-
-            typed_messages: list[ChatCompletionMessageParam] = messages  # type: ignore[assignment]
-            stream = await client.chat.completions.create(
-                model=settings.OPENAI_MODEL,
-                messages=typed_messages,
-                stream=True,
-                response_format={"type": "json_object"},
-            )
-
-            accumulated = ""
-            async for chunk in stream:
-                delta = chunk.choices[0].delta.content
-                if delta:
-                    accumulated += delta
-
-            try:
-                data = json.loads(accumulated)
-            except json.JSONDecodeError:
-                logger.warning("ai_json_decode_failed", attempt=attempt)
-                if is_last:
-                    break
-                messages.append({"role": "assistant", "content": accumulated})
-                messages.append({"role": "user", "content": "Output was not valid JSON. Respond with ONLY a valid JSON object."})
-                continue
-
-            try:
-                RoleCreate.model_validate(data)
-            except ValidationError as exc:
-                logger.warning("ai_schema_validation_failed", attempt=attempt, errors=str(exc))
-                if is_last:
-                    break
-                messages.append({"role": "assistant", "content": accumulated})
-                messages.append({"role": "user", "content": (
-                    f"This JSON has schema validation errors:\n{exc}\n\n"
-                    "Fix them and output only the corrected JSON object."
-                )})
-                continue
-
-            yaml_text = yaml.dump(data, default_flow_style=False, sort_keys=False)
-            for line in yaml_text.splitlines(keepends=True):
-                yield f"data: {json.dumps(line)}\n\n"
-                await asyncio.sleep(0.03)
-            yield "data: [DONE]\n\n"
-            return
 
         yaml_text = yaml.dump(data, default_flow_style=False, sort_keys=False)
         for line in yaml_text.splitlines(keepends=True):
             yield f"data: {json.dumps(line)}\n\n"
+            await asyncio.sleep(0.03)
         yield "data: [DONE]\n\n"
 
     async def generate_with_validation(self, prompt: str) -> AsyncGenerator[str]:
+        from _utils.ai import role_agent
         from roles.prompts import ROLE_SYSTEM_PROMPT
 
-        messages: list[dict[str, str]] = [
-            {"role": "system", "content": ROLE_SYSTEM_PROMPT},
-            {"role": "user", "content": prompt},
-        ]
-        async for event in self._stream_with_retries(messages):
+        result = await role_agent.run(prompt, instructions=ROLE_SYSTEM_PROMPT)
+        async for event in self._result_to_sse(result.output.model_dump(exclude_defaults=True)):
             yield event
 
     async def edit_with_validation(self, existing_yaml: str, prompt: str) -> AsyncGenerator[str]:
+        from _utils.ai import role_agent
         from roles.prompts import ROLE_EDIT_SYSTEM_PROMPT
 
         try:
@@ -420,14 +364,12 @@ class RoleManager(RunManagerMixin):
         except Exception:
             existing_json = existing_yaml
 
-        messages: list[dict[str, str]] = [
-            {"role": "system", "content": ROLE_EDIT_SYSTEM_PROMPT},
-            {"role": "user", "content": (
-                f"Here is the current role definition:\n\n{existing_json}\n\n"
-                f"Requested changes:\n{prompt}"
-            )},
-        ]
-        async for event in self._stream_with_retries(messages):
+        user_prompt = (
+            f"Here is the current role definition:\n\n{existing_json}\n\n"
+            f"Requested changes:\n{prompt}"
+        )
+        result = await role_agent.run(user_prompt, instructions=ROLE_EDIT_SYSTEM_PROMPT)
+        async for event in self._result_to_sse(result.output.model_dump(exclude_defaults=True)):
             yield event
 
 role_manager = RoleManager()
