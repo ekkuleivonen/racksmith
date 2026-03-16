@@ -99,8 +99,9 @@ export async function updatePlaybook(
   return result;
 }
 
-export async function deletePlaybook(playbookId: string) {
-  await apiDelete<void>(`/playbooks/${playbookId}`);
+export async function deletePlaybook(playbookId: string, cascadeRoles = false) {
+  const qs = cascadeRoles ? "?cascade_roles=true" : "";
+  await apiDelete<void>(`/playbooks/${playbookId}${qs}`);
   invalidateAfterPlaybookMutation();
 }
 

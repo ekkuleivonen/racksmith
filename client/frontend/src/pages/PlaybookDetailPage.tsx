@@ -7,9 +7,21 @@ import { DetailLoading } from "@/components/shared/detail-states";
 import { PageContainer } from "@/components/shared/page-container";
 import { PlaybookEditorForm } from "@/components/playbooks/playbook-editor-form";
 import { PlaybookRunDialog } from "@/components/playbooks/playbook-run-dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { usePlaybook } from "@/hooks/queries";
 import {
@@ -110,6 +122,8 @@ export function PlaybookDetailPage() {
   const [roles_catalog, setRolesCatalog] = useState<RoleCatalogEntry[]>([]);
   const [saving, setSaving] = useState(false);
   const [runDialogOpen, setRunDialogOpen] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [cascadeRoles, setCascadeRoles] = useState(false);
   const savedDraftRef = useRef<PlaybookUpsert | null>(null);
 
   const pushMutation = usePushPlaybookToRegistry();
@@ -208,19 +222,7 @@ export function PlaybookDetailPage() {
                 variant="outline"
                 disabled={saving}
                 className="text-red-400 hover:text-red-300 hover:bg-red-500/10"
-                onClick={async () => {
-                  if (!window.confirm("Delete this playbook?")) return;
-                  setSaving(true);
-                  try {
-                    await deletePlaybook(playbookId);
-                    toast.success("Playbook deleted");
-                    navigate("/playbooks", { replace: true });
-                  } catch (error) {
-                    toastApiError(error, "Failed to delete playbook");
-                  } finally {
-                    setSaving(false);
-                  }
-                }}
+                onClick={() => setDeleteDialogOpen(true)}
               >
                 Delete playbook
               </Button>
@@ -242,6 +244,64 @@ export function PlaybookDetailPage() {
         hostIds={[]}
         playbookId={playbookId}
       />
+
+      <AlertDialog
+        open={deleteDialogOpen}
+        onOpenChange={(open) => {
+          setDeleteDialogOpen(open);
+          if (!open) setCascadeRoles(false);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete playbook</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete &quot;{draft?.name || playbookId}&quot;.
+              This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+
+          {draft && draft.roles.length > 0 && (
+            <div className="flex items-center gap-2 py-1">
+              <Checkbox
+                id="cascade-roles"
+                checked={cascadeRoles}
+                onCheckedChange={(v) => setCascadeRoles(v === true)}
+              />
+              <Label htmlFor="cascade-roles" className="text-sm text-zinc-400 cursor-pointer">
+                Also delete roles not used by other playbooks
+              </Label>
+            </div>
+          )}
+
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-red-600 hover:bg-red-700"
+              onClick={async () => {
+                setDeleteDialogOpen(false);
+                setSaving(true);
+                try {
+                  await deletePlaybook(playbookId, cascadeRoles);
+                  toast.success(
+                    cascadeRoles
+                      ? "Playbook and orphaned roles deleted"
+                      : "Playbook deleted",
+                  );
+                  navigate("/playbooks", { replace: true });
+                } catch (error) {
+                  toastApiError(error, "Failed to delete playbook");
+                } finally {
+                  setSaving(false);
+                  setCascadeRoles(false);
+                }
+              }}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }

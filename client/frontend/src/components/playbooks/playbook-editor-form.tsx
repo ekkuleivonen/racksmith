@@ -101,11 +101,18 @@ type UpstreamOutput = {
 };
 
 const WIRE_RE = /^\{\{\s*(\S+)\s*\}\}$/;
+const WIRE_LOOSE_RE = /\{\{/;
 
 function parseWire(value: unknown): string | null {
   if (typeof value !== "string") return null;
   const m = WIRE_RE.exec(value);
-  return m?.[1] ?? null;
+  if (m) return m[1];
+  if (WIRE_LOOSE_RE.test(value)) return value.replace(/[{}]/g, "").trim() || "?";
+  return null;
+}
+
+function sanitizeInput(value: string): string {
+  return value.replace(/[{}]/g, "");
 }
 
 function getUpstreamOutputs(
@@ -139,10 +146,14 @@ function resolveWireSource(
 function WiredPill({
   factKey,
   sourceName,
+  upstreamOutputs,
+  onRewire,
   onClear,
 }: {
   factKey: string;
   sourceName: string;
+  upstreamOutputs: UpstreamOutput[];
+  onRewire: (factKey: string) => void;
   onClear: () => void;
 }) {
   return (
@@ -151,13 +162,27 @@ function WiredPill({
       <span className="truncate text-zinc-400">{sourceName}</span>
       <span className="text-zinc-600">&rarr;</span>
       <span className="truncate font-mono text-zinc-300">{factKey}</span>
-      <button
-        type="button"
-        onClick={onClear}
-        className="ml-auto shrink-0 text-zinc-500 hover:text-zinc-300"
-      >
-        <X className="size-3" />
-      </button>
+      <div className="ml-auto flex shrink-0 items-center gap-0.5">
+        {upstreamOutputs.length > 0 && (
+          <WirePopover upstreamOutputs={upstreamOutputs} onSelect={onRewire}>
+            <button
+              type="button"
+              className="text-zinc-500 hover:text-zinc-300"
+              title="Change linked variable"
+            >
+              <Link2 className="size-3" />
+            </button>
+          </WirePopover>
+        )}
+        <button
+          type="button"
+          onClick={onClear}
+          className="text-zinc-500 hover:text-zinc-300"
+          title="Unlink"
+        >
+          <X className="size-3" />
+        </button>
+      </div>
     </div>
   );
 }
@@ -340,6 +365,10 @@ function SortableRoleCard({
                     <WiredPill
                       factKey={wiredFact}
                       sourceName={resolveWireSource(wiredFact, upstreamOutputs)}
+                      upstreamOutputs={upstreamOutputs}
+                      onRewire={(fk) =>
+                        setVar(field.key, `{{ ${fk} }}`)
+                      }
                       onClear={() => clearVar(field.key)}
                     />
                   ) : (field.options?.length ?? 0) > 0 ? (
@@ -389,7 +418,7 @@ function SortableRoleCard({
                         className="min-w-0 flex-1"
                         value={String(rawValue)}
                         onChange={(event) =>
-                          setVar(field.key, event.target.value)
+                          setVar(field.key, sanitizeInput(event.target.value))
                         }
                         placeholder={field.placeholder}
                         disabled={isSecret}

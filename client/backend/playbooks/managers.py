@@ -352,10 +352,40 @@ class PlaybookManager(RunManagerMixin):
         yield _sse({"step": "done", "playbook_id": detail.id})
         yield "data: [DONE]\n\n"
 
-    def delete_playbook(self, session: SessionData, playbook_id: str) -> None:
+    def delete_playbook(
+        self, session: SessionData, playbook_id: str, *, cascade_roles: bool = False
+    ) -> None:
         layout = get_layout(session)
+
+        orphan_role_ids: list[str] = []
+        if cascade_roles:
+            pb = read_playbook_with_meta(
+                layout.playbooks_path / f"{playbook_id}.yml", layout
+            )
+            pb_role_ids = {re.role for re in pb.roles}
+
+            other_playbooks = [
+                p for p in list_playbooks(layout) if p.id != playbook_id
+            ]
+            used_elsewhere = {
+                re.role for p in other_playbooks for re in p.roles
+            }
+            orphan_role_ids = [
+                rid for rid in pb_role_ids if rid not in used_elsewhere
+            ]
+
         remove_playbook(layout, playbook_id)
         logger.info("playbook_removed", playbook_id=playbook_id)
+
+        if orphan_role_ids:
+            from core.roles import remove_role
+
+            for rid in orphan_role_ids:
+                try:
+                    remove_role(layout, rid)
+                    logger.info("cascade_role_removed", role_id=rid)
+                except Exception:
+                    logger.warning("cascade_role_remove_failed", role_id=rid, exc_info=True)
 
     def resolve_targets(
         self, session: SessionData, targets: TargetSelection

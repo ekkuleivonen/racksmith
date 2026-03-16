@@ -90,10 +90,10 @@ async def update_playbook(
 
 @router.delete("/{playbook_id}", status_code=204)
 async def delete_playbook(
-    playbook_id: str, session: CurrentSession
+    playbook_id: str, session: CurrentSession, cascade_roles: bool = False
 ) -> None:
-    """Delete a playbook by ID."""
-    playbook_manager.delete_playbook(session, playbook_id)
+    """Delete a playbook by ID, optionally removing roles not used elsewhere."""
+    playbook_manager.delete_playbook(session, playbook_id, cascade_roles=cascade_roles)
 
 
 @router.post("/{playbook_id}/runs", status_code=201, response_model=PlaybookRunResponse)
