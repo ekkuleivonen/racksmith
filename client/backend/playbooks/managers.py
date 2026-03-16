@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
+import uuid
+from collections.abc import AsyncGenerator
 from datetime import UTC, datetime
 from typing import cast
 
@@ -31,6 +34,9 @@ from core.run import validate_become_password
 from hosts.managers import host_manager
 from playbooks.schemas import (
     PlaybookDetail,
+    PlaybookPlan,
+    PlaybookPlanRoleCreate,
+    PlaybookPlanRoleReuse,
     PlaybookRoleEntry,
     PlaybookRun,
     PlaybookRunRequest,
@@ -211,6 +217,185 @@ class PlaybookManager(RunManagerMixin):
         write_playbook(layout, playbook_data)
         logger.info("playbook_updated", playbook_id=playbook_id)
         return self.get_playbook(session, playbook_id)
+
+    async def generate_playbook(
+        self,
+        session: SessionData,
+        prompt: str,
+        generation_session_id: str | None = None,
+    ) -> AsyncGenerator[str]:
+        """Plan a playbook via LLM, create missing roles in parallel, assemble and save."""
+        from _utils.ai import planner_agent, role_agent
+        from _utils.generation_session import (
+            load_generation_session,
+            save_generation_session,
+        )
+        from playbooks.prompts import build_planner_system_prompt
+        from roles.managers import role_manager
+        from roles.prompts import ROLE_SYSTEM_PROMPT
+
+        def _sse(payload: dict) -> str:
+            return f"data: {json.dumps(payload)}\n\n"
+
+        catalog = self.roles_catalog(session)
+        catalog_by_id = {r.id: r for r in catalog}
+        system_prompt = build_planner_system_prompt(catalog)
+
+        # -- Load or create generation session --
+        prior_messages = None
+        created_roles: dict[str, str] = {}
+        existing_playbook_id: str | None = None
+
+        if generation_session_id:
+            state = await load_generation_session(generation_session_id)
+            if state:
+                prior_messages = state.get("messages")
+                created_roles = state.get("created_roles", {})
+                existing_playbook_id = state.get("playbook_id")
+        else:
+            generation_session_id = uuid.uuid4().hex
+
+        # -- Run planner agent --
+        yield _sse({"step": "planning", "session_id": generation_session_id})
+
+        from pydantic import TypeAdapter
+        from pydantic_ai.messages import ModelMessage
+
+        _msg_ta = TypeAdapter(list[ModelMessage])
+
+        planner_kwargs: dict = {"instructions": system_prompt}
+        if prior_messages:
+            planner_kwargs["message_history"] = _msg_ta.validate_python(prior_messages)
+
+        result = await planner_agent.run(prompt, **planner_kwargs)
+        plan: PlaybookPlan = result.output
+
+        # Persist planner messages as JSON-serializable dicts
+        messages_serialized = _msg_ta.dump_python(
+            list(result.all_messages()), mode="json"
+        )
+        session_state: dict = {
+            "messages": messages_serialized,
+            "plan": plan.model_dump(),
+            "created_roles": created_roles,
+            "playbook_id": existing_playbook_id,
+        }
+        await save_generation_session(generation_session_id, session_state)
+
+        roles_to_create = [
+            (i, r) for i, r in enumerate(plan.roles) if isinstance(r, PlaybookPlanRoleCreate)
+        ]
+        reuse_count = sum(1 for r in plan.roles if isinstance(r, PlaybookPlanRoleReuse))
+
+        yield _sse({
+            "step": "planned",
+            "session_id": generation_session_id,
+            "plan_name": plan.name,
+            "plan_description": plan.description,
+            "total_new": len(roles_to_create),
+            "total_reuse": reuse_count,
+        })
+
+        # -- Create new roles in parallel --
+        async def _create_role(entry: PlaybookPlanRoleCreate) -> tuple[str, str]:
+            """Generate a role via sub-agent and persist it. Returns (entry.name, role_id)."""
+            inputs_json = json.dumps(
+                [inp.model_dump(exclude_defaults=True) | {"key": inp.key} for inp in entry.expected_inputs]
+            ) if entry.expected_inputs else "[]"
+            outputs_json = json.dumps(
+                [out.model_dump(exclude_defaults=True) | {"key": out.key} for out in entry.expected_outputs]
+            ) if entry.expected_outputs else "[]"
+
+            sub_prompt = (
+                f"{entry.generation_prompt}\n\n"
+                f"The role MUST be named: {entry.name}\n"
+                f"Description: {entry.description}\n\n"
+                f"The role MUST declare these inputs:\n{inputs_json}\n\n"
+                f"The role MUST produce these outputs via set_fact:\n{outputs_json}"
+            )
+
+            sub_result = await role_agent.run(sub_prompt, instructions=ROLE_SYSTEM_PROMPT)
+            role_data = sub_result.output
+            summary = role_manager.create_role(session, role_data)
+            return entry.name, summary.id
+
+        # Filter out roles already created in a prior run
+        pending = [
+            (i, entry)
+            for i, entry in roles_to_create
+            if entry.name not in created_roles
+        ]
+
+        if pending:
+            tasks = [_create_role(pe) for _, pe in pending]
+            gather_results = await asyncio.gather(*tasks, return_exceptions=True)
+
+            for idx, (plan_idx, pending_entry) in enumerate(pending):
+                res = gather_results[idx]
+                if isinstance(res, BaseException):
+                    logger.error("role_subagent_failed", role_name=pending_entry.name, error=str(res))
+                    yield _sse({
+                        "step": "role_failed",
+                        "index": plan_idx + 1,
+                        "total": len(plan.roles),
+                        "name": pending_entry.name,
+                        "error": str(res),
+                    })
+                    continue
+
+                role_name, role_id = res
+                created_roles[role_name] = role_id
+                yield _sse({
+                    "step": "role_created",
+                    "index": plan_idx + 1,
+                    "total": len(plan.roles),
+                    "name": role_name,
+                    "role_id": role_id,
+                })
+
+            session_state["created_roles"] = created_roles
+            await save_generation_session(generation_session_id, session_state)
+
+        # -- Assemble PlaybookUpsert --
+        playbook_roles: list[PlaybookRoleEntry] = []
+        for plan_entry in plan.roles:
+            if isinstance(plan_entry, PlaybookPlanRoleReuse):
+                if plan_entry.role_id not in catalog_by_id:
+                    logger.warning("plan_reuse_unknown_role", role_id=plan_entry.role_id)
+                    continue
+                playbook_roles.append(PlaybookRoleEntry(role_id=plan_entry.role_id, vars=plan_entry.vars))
+            elif isinstance(plan_entry, PlaybookPlanRoleCreate):
+                created_id = created_roles.get(plan_entry.name)
+                if not created_id:
+                    logger.warning("plan_create_missing_role", role_name=plan_entry.name)
+                    continue
+                playbook_roles.append(PlaybookRoleEntry(role_id=created_id, vars=plan_entry.vars))
+
+        upsert = PlaybookUpsert(
+            name=plan.name,
+            description=plan.description,
+            become=plan.become,
+            roles=playbook_roles,
+        )
+
+        yield _sse({"step": "assembling"})
+
+        if existing_playbook_id:
+            try:
+                detail = self.update_playbook(session, existing_playbook_id, upsert)
+                playbook_id = existing_playbook_id
+            except FileNotFoundError:
+                detail = self.create_playbook(session, upsert)
+                playbook_id = detail.id
+        else:
+            detail = self.create_playbook(session, upsert)
+            playbook_id = detail.id
+
+        session_state["playbook_id"] = playbook_id
+        await save_generation_session(generation_session_id, session_state)
+
+        yield _sse({"step": "done", "playbook_id": playbook_id})
+        yield "data: [DONE]\n\n"
 
     def delete_playbook(self, session: SessionData, playbook_id: str) -> None:
         layout = get_layout(session)

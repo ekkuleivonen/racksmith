@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Cookie, WebSocket
+from fastapi import APIRouter, Cookie, HTTPException, WebSocket
+from fastapi.responses import StreamingResponse
 
 import settings
 from _utils.websocket import require_ws_session, ws_error_handler
 from auth.dependencies import CurrentSession
 from playbooks.managers import playbook_manager
 from playbooks.schemas import (
+    GeneratePlaybookRequest,
     PlaybookListResponse,
     PlaybookResponse,
     PlaybookRunRequest,
@@ -37,6 +39,26 @@ async def create_playbook(
     """Create a new playbook."""
     playbook = playbook_manager.create_playbook(session, body)
     return PlaybookResponse(playbook=playbook)
+
+
+@router.post("/generate")
+async def generate_playbook(
+    body: GeneratePlaybookRequest,
+    session: CurrentSession,
+) -> StreamingResponse:
+    """Generate a playbook (roles + assembly) from a natural-language prompt via AI."""
+    if not settings.OPENAI_API_KEY:
+        raise HTTPException(
+            status_code=503,
+            detail="AI generation is not configured (OPENAI_API_KEY missing)",
+        )
+    return StreamingResponse(
+        playbook_manager.generate_playbook(
+            session, body.prompt, body.generation_session_id
+        ),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 @router.post("/resolve-targets", response_model=ResolveTargetsResponse)
