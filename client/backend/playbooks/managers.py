@@ -225,7 +225,7 @@ class PlaybookManager(RunManagerMixin):
         generation_session_id: str | None = None,
     ) -> AsyncGenerator[str]:
         """Plan a playbook via LLM, create missing roles in parallel, assemble and save."""
-        from _utils.ai import planner_agent, role_agent
+        from _utils.ai import get_model, planner_agent, role_agent
         from _utils.generation_session import (
             load_generation_session,
             save_generation_session,
@@ -267,7 +267,8 @@ class PlaybookManager(RunManagerMixin):
         if prior_messages:
             planner_kwargs["message_history"] = _msg_ta.validate_python(prior_messages)
 
-        result = await planner_agent.run(prompt, **planner_kwargs)
+        model = get_model()
+        result = await planner_agent.run(prompt, model=model, **planner_kwargs)
         plan: PlaybookPlan = result.output
 
         # Persist planner messages as JSON-serializable dicts
@@ -314,7 +315,7 @@ class PlaybookManager(RunManagerMixin):
                 f"The role MUST produce these outputs via set_fact:\n{outputs_json}"
             )
 
-            sub_result = await role_agent.run(sub_prompt, instructions=ROLE_SYSTEM_PROMPT)
+            sub_result = await role_agent.run(sub_prompt, model=get_model(), instructions=ROLE_SYSTEM_PROMPT)
             role_data = sub_result.output
             summary = role_manager.create_role(session, role_data)
             return entry.name, summary.id

@@ -347,15 +347,15 @@ class RoleManager(RunManagerMixin):
         yield "data: [DONE]\n\n"
 
     async def generate_with_validation(self, prompt: str) -> AsyncGenerator[str]:
-        from _utils.ai import role_agent
+        from _utils.ai import get_model, role_agent
         from roles.prompts import ROLE_SYSTEM_PROMPT
 
-        result = await role_agent.run(prompt, instructions=ROLE_SYSTEM_PROMPT)
+        result = await role_agent.run(prompt, model=get_model(), instructions=ROLE_SYSTEM_PROMPT)
         async for event in self._result_to_sse(result.output.model_dump(exclude_defaults=True)):
             yield event
 
     async def edit_with_validation(self, existing_yaml: str, prompt: str) -> AsyncGenerator[str]:
-        from _utils.ai import role_agent
+        from _utils.ai import get_model, role_agent
         from roles.prompts import ROLE_EDIT_SYSTEM_PROMPT
 
         try:
@@ -368,7 +368,7 @@ class RoleManager(RunManagerMixin):
             f"Here is the current role definition:\n\n{existing_json}\n\n"
             f"Requested changes:\n{prompt}"
         )
-        result = await role_agent.run(user_prompt, instructions=ROLE_EDIT_SYSTEM_PROMPT)
+        result = await role_agent.run(user_prompt, model=get_model(), instructions=ROLE_EDIT_SYSTEM_PROMPT)
         async for event in self._result_to_sse(result.output.model_dump(exclude_defaults=True)):
             yield event
 

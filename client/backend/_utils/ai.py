@@ -20,16 +20,12 @@ def get_model() -> OpenAIModel:
     return OpenAIModel(settings.OPENAI_MODEL, provider=provider)
 
 
-role_agent: Agent[None, RoleCreate] = Agent(  # type: ignore[call-overload]
-    get_model,
+role_agent: Agent[None, RoleCreate] = Agent(
     output_type=RoleCreate,
     retries=2,
-    defer_model_check=True,
 )
 
-planner_agent: Agent[None, PlaybookPlan] = Agent(  # type: ignore[call-overload]
-    get_model,
+planner_agent: Agent[None, PlaybookPlan] = Agent(
     output_type=PlaybookPlan,
     retries=2,
-    defer_model_check=True,
 )
