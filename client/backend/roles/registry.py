@@ -14,7 +14,7 @@ from _utils.logging import get_logger
 from _utils.redis import AsyncRedis
 from _utils.schemas import PlatformSpec, RoleInputSpec
 from auth.git import arun_git
-from auth.session import SessionData
+from auth.session import SessionData, update_session_tokens
 from core import resolve_layout
 from core.config import AnsibleLayout
 from core.playbooks import (
@@ -109,6 +109,72 @@ class RegistryManager:
     def _headers(self, session: SessionData) -> dict[str, str]:
         return {"Authorization": f"Bearer {session.access_token}"}
 
+    async def _refresh_session(self, session: SessionData) -> bool:
+        """Refresh the GitHub token via registry and update the Redis session."""
+        if not session.refresh_token:
+            return False
+        try:
+            async with httpx.AsyncClient() as client:
+                resp = await client.post(
+                    f"{settings.REGISTRY_URL}/auth/refresh",
+                    json={"refresh_token": session.refresh_token},
+                    timeout=10,
+                )
+            if resp.status_code != 200:
+                logger.warning("registry_token_refresh_failed", status_code=resp.status_code)
+                return False
+            data = resp.json()
+        except httpx.HTTPError as exc:
+            logger.error("registry_token_refresh_error", error=str(exc), exc_info=True)
+            return False
+
+        new_token = data.get("github_access_token")
+        new_refresh = data.get("refresh_token", "")
+        if not new_token:
+            return False
+
+        session.access_token = new_token
+        session.refresh_token = new_refresh
+        if session.session_id:
+            await update_session_tokens(session.session_id, new_token, new_refresh)
+
+        logger.info("registry_token_refreshed")
+        return True
+
+    async def _request(
+        self,
+        session: SessionData,
+        method: str,
+        path: str,
+        *,
+        params: dict[str, str | int] | None = None,
+        json_body: dict | list | None = None,
+        timeout: float = 30.0,
+    ) -> httpx.Response:
+        """Authenticated registry request with automatic token refresh on 401."""
+        url = f"{settings.REGISTRY_URL}{path}"
+
+        async with httpx.AsyncClient() as client:
+            resp = await client.request(
+                method, url,
+                params=params,
+                json=json_body,
+                headers=self._headers(session),
+                timeout=timeout,
+            )
+
+        if resp.status_code == 401 and await self._refresh_session(session):
+            async with httpx.AsyncClient() as client:
+                resp = await client.request(
+                    method, url,
+                    params=params,
+                    json=json_body,
+                    headers=self._headers(session),
+                    timeout=timeout,
+                )
+
+        return resp
+
     async def list_roles(
         self,
         session: SessionData,
@@ -140,14 +206,9 @@ class RegistryManager:
         if cached:
             return RegistryRoleList.model_validate_json(cached)
 
+        resp = await self._request(session, "GET", "/roles", params=params)
         try:
-            async with httpx.AsyncClient() as client:
-                resp = await client.get(
-                    f"{settings.REGISTRY_URL}/roles",
-                    params=params,
-                    headers=self._headers(session),
-                )
-                resp.raise_for_status()
+            resp.raise_for_status()
         except httpx.HTTPStatusError as exc:
             logger.warning("registry_request_failed", status_code=exc.response.status_code, error=str(exc), exc_info=True)
             raise
@@ -166,14 +227,9 @@ class RegistryManager:
         if cached:
             return RegistryFacets.model_validate_json(cached)
 
+        resp = await self._request(session, "GET", "/roles/facets", params=params)
         try:
-            async with httpx.AsyncClient() as client:
-                resp = await client.get(
-                    f"{settings.REGISTRY_URL}/roles/facets",
-                    params=params,
-                    headers=self._headers(session),
-                )
-                resp.raise_for_status()
+            resp.raise_for_status()
         except httpx.HTTPStatusError as exc:
             logger.warning("registry_request_failed", status_code=exc.response.status_code, error=str(exc), exc_info=True)
             raise
@@ -192,13 +248,9 @@ class RegistryManager:
         if cached:
             return RegistryRole.model_validate_json(cached)
 
+        resp = await self._request(session, "GET", f"/roles/{slug}")
         try:
-            async with httpx.AsyncClient() as client:
-                resp = await client.get(
-                    f"{settings.REGISTRY_URL}/roles/{slug}",
-                    headers=self._headers(session),
-                )
-                resp.raise_for_status()
+            resp.raise_for_status()
         except httpx.HTTPStatusError as exc:
             logger.warning("registry_request_failed", slug=slug, status_code=exc.response.status_code, error=str(exc), exc_info=True)
             raise
@@ -267,13 +319,7 @@ class RegistryManager:
             meta_yaml=meta_yaml,
         )
 
-        async with httpx.AsyncClient() as client:
-            resp = await client.put(
-                f"{settings.REGISTRY_URL}/roles",
-                json=payload.model_dump(),
-                headers=self._headers(session),
-            )
-
+        resp = await self._request(session, "PUT", "/roles", json_body=payload.model_dump())
         try:
             resp.raise_for_status()
         except httpx.HTTPStatusError as exc:
@@ -296,13 +342,9 @@ class RegistryManager:
 
     async def import_role(self, session: SessionData, slug: str) -> RoleImportResponse:
         """Download from registry, write to local repo using ansible/roles module."""
+        resp = await self._request(session, "POST", f"/roles/{slug}/download")
         try:
-            async with httpx.AsyncClient() as client:
-                resp = await client.post(
-                    f"{settings.REGISTRY_URL}/roles/{slug}/download",
-                    headers=self._headers(session),
-                )
-                resp.raise_for_status()
+            resp.raise_for_status()
         except httpx.HTTPStatusError as exc:
             logger.warning("registry_request_failed", slug=slug, status_code=exc.response.status_code, error=str(exc), exc_info=True)
             raise
@@ -371,15 +413,12 @@ class RegistryManager:
             defaults_dir.mkdir(parents=True, exist_ok=True)
             (defaults_dir / "main.yml").write_text(version.defaults_yaml, encoding="utf-8")
 
-        # Confirm the download event so it counts
         if version.download_event_id:
             try:
-                async with httpx.AsyncClient() as client:
-                    await client.post(
-                        f"{settings.REGISTRY_URL}/roles/{slug}/confirm-download",
-                        json={"download_event_id": version.download_event_id},
-                        headers=self._headers(session),
-                    )
+                await self._request(
+                    session, "POST", f"/roles/{slug}/confirm-download",
+                    json_body={"download_event_id": version.download_event_id},
+                )
             except Exception:
                 logger.warning("confirm_download_failed", slug=slug, exc_info=True)
 
@@ -420,13 +459,9 @@ class RegistryManager:
         )
 
     async def delete_role(self, session: SessionData, slug: str) -> None:
+        resp = await self._request(session, "DELETE", f"/roles/{slug}")
         try:
-            async with httpx.AsyncClient() as client:
-                resp = await client.delete(
-                    f"{settings.REGISTRY_URL}/roles/{slug}",
-                    headers=self._headers(session),
-                )
-                resp.raise_for_status()
+            resp.raise_for_status()
         except httpx.HTTPStatusError as exc:
             logger.warning("registry_request_failed", slug=slug, status_code=exc.response.status_code, error=str(exc), exc_info=True)
             raise
@@ -463,14 +498,9 @@ class RegistryManager:
         if cached:
             return RegistryPlaybookList.model_validate_json(cached)
 
+        resp = await self._request(session, "GET", "/playbooks", params=params)
         try:
-            async with httpx.AsyncClient() as client:
-                resp = await client.get(
-                    f"{settings.REGISTRY_URL}/playbooks",
-                    params=params,
-                    headers=self._headers(session),
-                )
-                resp.raise_for_status()
+            resp.raise_for_status()
         except httpx.HTTPStatusError as exc:
             logger.warning("registry_request_failed", status_code=exc.response.status_code, error=str(exc), exc_info=True)
             raise
@@ -489,14 +519,9 @@ class RegistryManager:
         if cached:
             return PlaybookFacets.model_validate_json(cached)
 
+        resp = await self._request(session, "GET", "/playbooks/facets", params=params)
         try:
-            async with httpx.AsyncClient() as client:
-                resp = await client.get(
-                    f"{settings.REGISTRY_URL}/playbooks/facets",
-                    params=params,
-                    headers=self._headers(session),
-                )
-                resp.raise_for_status()
+            resp.raise_for_status()
         except httpx.HTTPStatusError as exc:
             logger.warning("registry_request_failed", status_code=exc.response.status_code, error=str(exc), exc_info=True)
             raise
@@ -515,13 +540,9 @@ class RegistryManager:
         if cached:
             return RegistryPlaybook.model_validate_json(cached)
 
+        resp = await self._request(session, "GET", f"/playbooks/{slug}")
         try:
-            async with httpx.AsyncClient() as client:
-                resp = await client.get(
-                    f"{settings.REGISTRY_URL}/playbooks/{slug}",
-                    headers=self._headers(session),
-                )
-                resp.raise_for_status()
+            resp.raise_for_status()
         except httpx.HTTPStatusError as exc:
             logger.warning("registry_request_failed", slug=slug, status_code=exc.response.status_code, error=str(exc), exc_info=True)
             raise
@@ -565,13 +586,10 @@ class RegistryManager:
             tags=[],
         )
 
-        async with httpx.AsyncClient() as client:
-            resp = await client.put(
-                f"{settings.REGISTRY_URL}/playbooks",
-                json=payload.model_dump(mode="json"),
-                headers=self._headers(session),
-            )
-
+        resp = await self._request(
+            session, "PUT", "/playbooks",
+            json_body=payload.model_dump(mode="json"),
+        )
         try:
             resp.raise_for_status()
         except httpx.HTTPStatusError as exc:
@@ -593,13 +611,9 @@ class RegistryManager:
 
     async def import_playbook(self, session: SessionData, slug: str) -> PlaybookImportResponse:
         """Download playbook from registry, auto-import missing roles, write locally."""
+        resp = await self._request(session, "POST", f"/playbooks/{slug}/download")
         try:
-            async with httpx.AsyncClient() as client:
-                resp = await client.post(
-                    f"{settings.REGISTRY_URL}/playbooks/{slug}/download",
-                    headers=self._headers(session),
-                )
-                resp.raise_for_status()
+            resp.raise_for_status()
         except httpx.HTTPStatusError as exc:
             logger.warning("registry_request_failed", slug=slug, status_code=exc.response.status_code, error=str(exc), exc_info=True)
             raise
@@ -632,15 +646,10 @@ class RegistryManager:
             rid = role_ref.registry_role_id
             if rid not in registry_to_local:
                 logger.info("auto_importing_role_for_playbook", registry_role_id=rid, playbook_slug=slug)
-                # Look up role by UUID via the dedicated endpoint
-                async with httpx.AsyncClient() as client:
-                    role_resp = await client.get(
-                        f"{settings.REGISTRY_URL}/roles/by-id/{rid}",
-                        headers=self._headers(session),
-                    )
-                    role_resp.raise_for_status()
-                    role_data = RegistryRole.model_validate(role_resp.json())
-                    role_slug = role_data.slug
+                role_resp = await self._request(session, "GET", f"/roles/by-id/{rid}")
+                role_resp.raise_for_status()
+                role_data = RegistryRole.model_validate(role_resp.json())
+                role_slug = role_data.slug
 
                 await self.import_role(session, role_slug)
                 meta = read_meta(layout)
@@ -691,15 +700,12 @@ class RegistryManager:
         set_playbook_meta(meta, playbook_id, pb_meta)
         write_meta(layout, meta)
 
-        # Confirm the download event so it counts
         if version.download_event_id:
             try:
-                async with httpx.AsyncClient() as client:
-                    await client.post(
-                        f"{settings.REGISTRY_URL}/playbooks/{slug}/confirm-download",
-                        json={"download_event_id": version.download_event_id},
-                        headers=self._headers(session),
-                    )
+                await self._request(
+                    session, "POST", f"/playbooks/{slug}/confirm-download",
+                    json_body={"download_event_id": version.download_event_id},
+                )
             except Exception:
                 logger.warning("confirm_download_failed", slug=slug, exc_info=True)
 
@@ -741,13 +747,9 @@ class RegistryManager:
         )
 
     async def delete_playbook(self, session: SessionData, slug: str) -> None:
+        resp = await self._request(session, "DELETE", f"/playbooks/{slug}")
         try:
-            async with httpx.AsyncClient() as client:
-                resp = await client.delete(
-                    f"{settings.REGISTRY_URL}/playbooks/{slug}",
-                    headers=self._headers(session),
-                )
-                resp.raise_for_status()
+            resp.raise_for_status()
         except httpx.HTTPStatusError as exc:
             logger.warning("registry_request_failed", slug=slug, status_code=exc.response.status_code, error=str(exc), exc_info=True)
             raise

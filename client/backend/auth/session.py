@@ -23,6 +23,7 @@ class SessionData:
     user: dict[str, Any]
     created_at: float
     refresh_token: str = ""
+    session_id: str = ""
 
 
 def _session_key(session_id: str) -> str:
@@ -70,7 +71,24 @@ async def get_session(session_id: str | None) -> SessionData | None:
     if time.time() - data.created_at > settings.SESSION_MAX_AGE:
         await delete_session(session_id)
         return None
+    data.session_id = session_id
     return data
+
+
+async def update_session_tokens(
+    session_id: str, access_token: str, refresh_token: str
+) -> None:
+    """Update access_token and refresh_token in an existing Redis session."""
+    raw = await AsyncRedis.get(_session_key(session_id))
+    if not raw:
+        return
+    try:
+        d = json.loads(raw)
+    except (json.JSONDecodeError, TypeError):
+        return
+    d["access_token"] = access_token
+    d["refresh_token"] = refresh_token
+    await AsyncRedis.setex(_session_key(session_id), settings.SESSION_MAX_AGE, json.dumps(d))
 
 
 async def delete_session(session_id: str | None) -> None:

@@ -413,33 +413,36 @@ function SortableRoleCard({
                       </SelectContent>
                     </Select>
                   ) : (
-                    <div className="flex gap-1">
-                      <Input
-                        className="min-w-0 flex-1"
-                        value={String(rawValue)}
-                        onChange={(event) =>
-                          setVar(field.key, sanitizeInput(event.target.value))
-                        }
-                        placeholder={field.placeholder}
-                        disabled={isSecret}
-                      />
-                      {upstreamOutputs.length > 0 && !isSecret ? (
-                        <WirePopover
-                          upstreamOutputs={upstreamOutputs}
-                          onSelect={(factKey) =>
-                            setVar(field.key, `{{ ${factKey} }}`)
+                    <div className="space-y-1">
+                      <div className="flex gap-1">
+                        <Input
+                          className="min-w-0 flex-1"
+                          value={String(rawValue)}
+                          onChange={(event) =>
+                            setVar(field.key, sanitizeInput(event.target.value))
                           }
-                        >
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            className="h-9 w-9 shrink-0"
+                          placeholder={field.placeholder}
+                          disabled={isSecret}
+                        />
+                        {upstreamOutputs.length > 0 && !isSecret ? (
+                          <WirePopover
+                            upstreamOutputs={upstreamOutputs}
+                            onSelect={(factKey) =>
+                              setVar(field.key, `{{ ${factKey} }}`)
+                            }
                           >
-                            <Link2 className="size-3.5" />
-                          </Button>
-                        </WirePopover>
-                      ) : null}
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="h-9 shrink-0 gap-1 text-xs text-zinc-400"
+                            >
+                              <Link2 className="size-3" />
+                              Link
+                            </Button>
+                          </WirePopover>
+                        ) : null}
+                      </div>
                     </div>
                   )}
                 </div>
