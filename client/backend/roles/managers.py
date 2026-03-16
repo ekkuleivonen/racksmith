@@ -78,7 +78,7 @@ def _role_data_to_summary(r: RoleData) -> RoleSummary:
         inputs=[
             RoleInputSpec.model_validate({
                 "key": inp.key,
-                "label": inp.racksmith_label or humanize_key(inp.key),
+                "label": inp.racksmith_label or inp.description or humanize_key(inp.key),
                 "description": inp.description,
                 "type": inp.type,
                 "default": inp.default,
@@ -137,7 +137,7 @@ class RoleManager(RunManagerMixin):
             "inputs": [
                 {
                     "key": inp.key,
-                    "label": inp.racksmith_label or humanize_key(inp.key),
+                    "label": inp.racksmith_label or inp.description or humanize_key(inp.key),
                     "description": inp.description,
                     "type": inp.type,
                     "default": inp.default,
