@@ -69,8 +69,8 @@ def resolve_layout(repo_path: Path) -> AnsibleLayout:
         racksmith_base=base,
         racksmith_prefix=racksmith_prefix,
         inventory_path=base / "inventory",
-        host_vars_path=base / "host_vars",
-        group_vars_path=base / "group_vars",
+        host_vars_path=base / "inventory" / "host_vars",
+        group_vars_path=base / "inventory" / "group_vars",
         roles_path=base / "roles",
         playbooks_path=base / "playbooks",
     )

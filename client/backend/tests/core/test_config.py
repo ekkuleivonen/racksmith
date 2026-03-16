@@ -17,18 +17,18 @@ class TestResolveLayoutDefaults:
         assert layout.racksmith_base == base
         assert layout.racksmith_prefix == ".racksmith"
         assert layout.inventory_path == base / "inventory"
-        assert layout.host_vars_path == base / "host_vars"
-        assert layout.group_vars_path == base / "group_vars"
+        assert layout.host_vars_path == base / "inventory" / "host_vars"
+        assert layout.group_vars_path == base / "inventory" / "group_vars"
         assert layout.roles_path == base / "roles"
         assert layout.playbooks_path == base / "playbooks"
 
     def test_host_vars_file_helper(self, repo_path: Path) -> None:
         layout = resolve_layout(repo_path)
-        assert layout.host_vars_file("web1") == repo_path / ".racksmith" / "host_vars" / "web1.yml"
+        assert layout.host_vars_file("web1") == repo_path / ".racksmith" / "inventory" / "host_vars" / "web1.yml"
 
     def test_group_vars_file_helper(self, repo_path: Path) -> None:
         layout = resolve_layout(repo_path)
-        assert layout.group_vars_file("prod") == repo_path / ".racksmith" / "group_vars" / "prod.yml"
+        assert layout.group_vars_file("prod") == repo_path / ".racksmith" / "inventory" / "group_vars" / "prod.yml"
 
 
 class TestResolveLayoutRacksmithConfig:
@@ -44,7 +44,7 @@ class TestResolveLayoutRacksmithConfig:
         assert layout.racksmith_base == base
         assert layout.racksmith_prefix == "ansible_resources"
         assert layout.inventory_path == base / "inventory"
-        assert layout.host_vars_path == base / "host_vars"
+        assert layout.host_vars_path == base / "inventory" / "host_vars"
         assert layout.roles_path == base / "roles"
         assert layout.playbooks_path == base / "playbooks"
 
