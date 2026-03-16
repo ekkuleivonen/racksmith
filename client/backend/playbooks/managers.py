@@ -58,7 +58,7 @@ def _role_data_to_catalog(r: RoleData) -> RoleCatalogEntry:
     inputs_list = []
     for inp in r.inputs:
         d = dict(inp.__dict__)
-        d["label"] = inp.description or humanize_key(inp.key)
+        d["label"] = inp.racksmith_label or humanize_key(inp.key)
         inputs_list.append(RoleInputSpec.model_validate(d))
     return RoleCatalogEntry(
         id=r.id,
