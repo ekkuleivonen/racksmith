@@ -117,16 +117,6 @@ def _role_from_meta_main(role_dir: Path, data: dict) -> RoleData:
             if isinstance(v, dict):
                 inputs.append(_parse_argument_specs_option(k, v))
 
-    outputs: list[RoleOutputSpec] = []
-    raw_outputs = data.get("racksmith_outputs")
-    if isinstance(raw_outputs, list):
-        for entry in raw_outputs:
-            if isinstance(entry, dict) and entry.get("key"):
-                try:
-                    outputs.append(RoleOutputSpec.model_validate(entry))
-                except Exception:
-                    logger.debug("role_output_parse_skip", entry=entry)
-
     tasks_file = role_dir / TASKS_MAIN
     return RoleData(
         name=name,
@@ -134,7 +124,6 @@ def _role_from_meta_main(role_dir: Path, data: dict) -> RoleData:
         platforms=platforms,
         tags=tags,
         inputs=inputs,
-        outputs=outputs,
         has_tasks=tasks_file.is_file(),
         id=role_dir.name,
     )
@@ -209,6 +198,14 @@ def _overlay_racksmith_meta(role: RoleData, role_meta: dict) -> None:
     """
     role.registry_id = str(role_meta.get("registry_id", ""))
     role.registry_version = int(role_meta.get("registry_version", 0))
+    raw_outputs = role_meta.get("outputs")
+    if isinstance(raw_outputs, list):
+        for entry in raw_outputs:
+            if isinstance(entry, dict) and entry.get("key"):
+                try:
+                    role.outputs.append(RoleOutputSpec.model_validate(entry))
+                except Exception:
+                    logger.debug("role_output_parse_skip", entry=entry)
     inputs_meta = role_meta.get("inputs") or {}
     if isinstance(inputs_meta, dict):
         for inp in role.inputs:
@@ -307,11 +304,6 @@ def write_role(
             }
         },
     }
-    if role.outputs:
-        meta_data["racksmith_outputs"] = [
-            o.model_dump(exclude_defaults=True) | {"key": o.key}
-            for o in role.outputs
-        ]
     meta_path = role_dir / META_MAIN
     atomic_yaml_dump(meta_data, meta_path)
 
@@ -320,8 +312,12 @@ def write_role(
         tasks_content = "---\n# Add your Ansible tasks here\n"
     (role_dir / TASKS_MAIN).write_text(tasks_content, encoding="utf-8")
 
-    # Racksmith-specific metadata: only per-input UI hints (secret + placeholder)
     role_meta: dict[str, Any] = {}
+    if role.outputs:
+        role_meta["outputs"] = [
+            o.model_dump(exclude_defaults=True) | {"key": o.key}
+            for o in role.outputs
+        ]
     inputs_meta: dict[str, dict] = {}
     for inp in role.inputs:
         inp_data: dict[str, Any] = {}

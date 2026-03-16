@@ -131,7 +131,8 @@ class TestReadRoleMetaMain:
         assert inp.key == "directories"
         assert inp.type == "list"
 
-    def test_parses_outputs_from_meta(self, layout) -> None:
+    def test_parses_outputs_from_racksmith_meta(self, layout) -> None:
+        """Outputs come from .racksmith.yml overlay, not meta/main.yml."""
         role_dir = layout.roles_path / "discover"
         role_dir.mkdir(parents=True, exist_ok=True)
         (role_dir / "meta").mkdir()
@@ -140,19 +141,23 @@ class TestReadRoleMetaMain:
                 {
                     "galaxy_info": {"role_name": "Discover"},
                     "argument_specs": {"main": {"options": {}}},
-                    "racksmith_outputs": [
-                        {"key": "discovered_uuid", "description": "Filesystem UUID", "type": "string"},
-                        {"key": "discovered_device", "description": "Device path"},
-                    ],
                 }
             )
         )
-        role = read_role(role_dir)
-        assert role is not None
-        assert len(role.outputs) == 2
-        assert role.outputs[0].key == "discovered_uuid"
-        assert role.outputs[0].type == "string"
-        assert role.outputs[1].key == "discovered_device"
+        meta = RacksmithMeta()
+        meta.roles["discover"] = {
+            "outputs": [
+                {"key": "discovered_uuid", "description": "Filesystem UUID", "type": "string"},
+                {"key": "discovered_device", "description": "Device path"},
+            ],
+        }
+        write_meta(layout, meta)
+        roles = list_roles(layout)
+        assert len(roles) == 1
+        assert len(roles[0].outputs) == 2
+        assert roles[0].outputs[0].key == "discovered_uuid"
+        assert roles[0].outputs[0].type == "string"
+        assert roles[0].outputs[1].key == "discovered_device"
 
     def test_role_without_outputs_defaults_empty(self, layout) -> None:
         role_dir = layout.roles_path / "basic"
@@ -396,9 +401,9 @@ class TestWriteRole:
         )
         write_role(layout, role, tasks_yaml="- debug: msg=hi\n")
         meta_content = (layout.roles_path / "discover" / "meta" / "main.yml").read_text()
-        assert "racksmith_outputs" in meta_content
-        read_back = read_role(layout.roles_path / "discover")
-        assert read_back is not None
+        assert "racksmith_outputs" not in meta_content
+        roles = list_roles(layout)
+        read_back = next(r for r in roles if r.id == "discover")
         assert len(read_back.outputs) == 2
         assert read_back.outputs[0].key == "discovered_uuid"
         assert read_back.outputs[1].key == "discovered_device"

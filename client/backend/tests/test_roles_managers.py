@@ -146,6 +146,9 @@ argument_specs:
 class TestRoleOutputsInManager:
     def test_role_summary_includes_outputs(self, with_repo_mock, layout):
         import yaml as _yaml
+
+        from core.racksmith_meta import RacksmithMeta, write_meta
+
         layout.roles_path.mkdir(parents=True, exist_ok=True)
         (layout.roles_path / "storage_discover").mkdir()
         (layout.roles_path / "storage_discover" / "meta").mkdir()
@@ -153,17 +156,21 @@ class TestRoleOutputsInManager:
             _yaml.safe_dump({
                 "galaxy_info": {"role_name": "Storage Discover", "description": "Discover disk"},
                 "argument_specs": {"main": {"options": {}}},
-                "racksmith_outputs": [
-                    {"key": "discovered_uuid", "description": "Filesystem UUID"},
-                ],
             })
         )
+        meta = RacksmithMeta()
+        meta.roles["storage_discover"] = {
+            "outputs": [{"key": "discovered_uuid", "description": "Filesystem UUID"}],
+        }
+        write_meta(layout, meta)
         role = role_manager.get_role(with_repo_mock, "storage_discover")
         assert len(role.outputs) == 1
         assert role.outputs[0].key == "discovered_uuid"
 
     def test_roles_catalog_includes_outputs(self, with_repo_mock, layout):
-        import yaml as _yaml  # noqa: I001
+        import yaml as _yaml
+
+        from core.racksmith_meta import RacksmithMeta, write_meta
         from playbooks.managers import playbook_manager
 
         layout.roles_path.mkdir(parents=True, exist_ok=True)
@@ -173,11 +180,13 @@ class TestRoleOutputsInManager:
             _yaml.safe_dump({
                 "galaxy_info": {"role_name": "Discover", "description": "Discover"},
                 "argument_specs": {"main": {"options": {}}},
-                "racksmith_outputs": [
-                    {"key": "disk_uuid", "description": "UUID"},
-                ],
             })
         )
+        meta = RacksmithMeta()
+        meta.roles["discover_role"] = {
+            "outputs": [{"key": "disk_uuid", "description": "UUID"}],
+        }
+        write_meta(layout, meta)
         catalog = playbook_manager.roles_catalog(with_repo_mock)
         entry = next(e for e in catalog if e.id == "discover_role")
         assert len(entry.outputs) == 1
