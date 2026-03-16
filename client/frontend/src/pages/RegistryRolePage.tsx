@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { AlertTriangle, ArrowUpCircle, Check, Download, Loader2, RefreshCw, Trash2 } from "lucide-react";
+import { AlertTriangle, ArrowUpCircle, Check, Download, Info, Loader2, RefreshCw, Trash2 } from "lucide-react";
 import { LoadingState } from "@/components/shared/loading-state";
 import {
   AlertDialog,
@@ -23,6 +23,11 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { useRegistryRole, useRoles } from "@/hooks/queries";
 import { useImportFromRegistry, useDeleteRegistryRole } from "@/hooks/mutations";
 import { useSetupStore } from "@/stores/setup";
@@ -99,6 +104,7 @@ export function RegistryRolePage() {
   const inputs = (version?.inputs ?? []) as Array<{
     key?: string;
     label?: string;
+    description?: string;
     type?: string;
     default?: unknown;
   }>;
@@ -242,7 +248,19 @@ export function RegistryRolePage() {
                   {inputs.map((inp) => (
                     <TableRow key={inp.key} className="border-zinc-800">
                       <TableCell className="font-mono text-xs">
-                        {inp.label || inp.key}
+                        <span className="inline-flex items-center gap-1.5">
+                          {inp.label || inp.key}
+                          {inp.description ? (
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Info className="size-3 shrink-0 text-zinc-600 hover:text-zinc-400" />
+                              </TooltipTrigger>
+                              <TooltipContent side="top" className="max-w-64">
+                                {inp.description}
+                              </TooltipContent>
+                            </Tooltip>
+                          ) : null}
+                        </span>
                       </TableCell>
                       <TableCell className="text-xs text-zinc-500">
                         {inp.type ?? "string"}

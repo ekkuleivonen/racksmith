@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import json
 import uuid
 from collections.abc import AsyncGenerator
@@ -223,9 +222,13 @@ class PlaybookManager(RunManagerMixin):
         session: SessionData,
         prompt: str,
     ) -> AsyncGenerator[str]:
-        """Plan a playbook via LLM, create missing roles in parallel, assemble and save."""
-        from _utils.ai import get_model, planner_agent, role_agent
-        from playbooks.prompts import build_planner_system_prompt
+        """Plan a playbook via LLM, create missing roles sequentially, assemble and save."""
+        from _utils.ai import get_model, planner_agent, role_agent, stream_thinking
+        from playbooks.prompts import (
+            PLANNER_THINKING_INSTRUCTIONS,
+            ROLE_THINKING_INSTRUCTIONS,
+            build_planner_system_prompt,
+        )
         from roles.managers import role_manager
         from roles.prompts import ROLE_SYSTEM_PROMPT
 
@@ -239,6 +242,14 @@ class PlaybookManager(RunManagerMixin):
         system_prompt = build_planner_system_prompt(catalog)
 
         yield _sse({"step": "planning", "session_id": generation_id})
+
+        # Stream planner thinking
+        thinking_prompt = (
+            f"The user wants a playbook for:\n{prompt}\n\n"
+            f"There are {len(catalog)} existing roles in the catalog."
+        )
+        async for delta in stream_thinking(thinking_prompt, PLANNER_THINKING_INSTRUCTIONS):
+            yield _sse({"step": "thinking", "text": delta})
 
         model = get_model()
         result = await planner_agent.run(prompt, model=model, instructions=system_prompt)
@@ -258,56 +269,59 @@ class PlaybookManager(RunManagerMixin):
             "total_reuse": reuse_count,
         })
 
-        # -- Create new roles in parallel --
+        # -- Create new roles sequentially (so each gets its own thinking stream) --
         created_roles: dict[str, str] = {}
 
-        async def _create_role(entry: PlaybookPlanRoleCreate) -> tuple[str, str]:
-            """Generate a role via sub-agent and persist it. Returns (entry.name, role_id)."""
-            inputs_json = json.dumps(
-                [inp.model_dump(exclude_defaults=True) | {"key": inp.key} for inp in entry.expected_inputs]
-            ) if entry.expected_inputs else "[]"
-            outputs_json = json.dumps(
-                [out.model_dump(exclude_defaults=True) | {"key": out.key} for out in entry.expected_outputs]
-            ) if entry.expected_outputs else "[]"
-
-            sub_prompt = (
-                f"{entry.generation_prompt}\n\n"
-                f"The role MUST be named: {entry.name}\n"
-                f"Description: {entry.description}\n\n"
-                f"The role MUST declare these inputs:\n{inputs_json}\n\n"
-                f"The role MUST produce these outputs via set_fact:\n{outputs_json}"
-            )
-
-            sub_result = await role_agent.run(sub_prompt, model=get_model(), instructions=ROLE_SYSTEM_PROMPT)
-            role_data = sub_result.output
-            summary = role_manager.create_role(session, role_data)
-            return entry.name, summary.id
-
-        if roles_to_create:
-            tasks = [_create_role(entry) for _, entry in roles_to_create]
-            gather_results = await asyncio.gather(*tasks, return_exceptions=True)
-
-            for idx, (plan_idx, pending_entry) in enumerate(roles_to_create):
-                res = gather_results[idx]
-                if isinstance(res, BaseException):
-                    logger.error("role_subagent_failed", role_name=pending_entry.name, error=str(res))
+        for plan_idx, entry in roles_to_create:
+            try:
+                # Stream role thinking
+                role_thinking_prompt = (
+                    f"Creating role \"{entry.name}\": {entry.description}\n\n"
+                    f"Generation instructions: {entry.generation_prompt}"
+                )
+                async for delta in stream_thinking(role_thinking_prompt, ROLE_THINKING_INSTRUCTIONS):
                     yield _sse({
-                        "step": "role_failed",
+                        "step": "thinking_role",
                         "index": plan_idx + 1,
                         "total": len(plan.roles),
-                        "name": pending_entry.name,
-                        "error": str(res),
+                        "name": entry.name,
+                        "text": delta,
                     })
-                    continue
 
-                role_name, role_id = res
-                created_roles[role_name] = role_id
+                inputs_json = json.dumps(
+                    [inp.model_dump(exclude_defaults=True) | {"key": inp.key} for inp in entry.expected_inputs]
+                ) if entry.expected_inputs else "[]"
+                outputs_json = json.dumps(
+                    [out.model_dump(exclude_defaults=True) | {"key": out.key} for out in entry.expected_outputs]
+                ) if entry.expected_outputs else "[]"
+
+                sub_prompt = (
+                    f"{entry.generation_prompt}\n\n"
+                    f"The role MUST be named: {entry.name}\n"
+                    f"Description: {entry.description}\n\n"
+                    f"The role MUST declare these inputs:\n{inputs_json}\n\n"
+                    f"The role MUST produce these outputs via set_fact:\n{outputs_json}"
+                )
+
+                sub_result = await role_agent.run(sub_prompt, model=get_model(), instructions=ROLE_SYSTEM_PROMPT)
+                role_data = sub_result.output
+                summary = role_manager.create_role(session, role_data)
+                created_roles[entry.name] = summary.id
                 yield _sse({
                     "step": "role_created",
                     "index": plan_idx + 1,
                     "total": len(plan.roles),
-                    "name": role_name,
-                    "role_id": role_id,
+                    "name": entry.name,
+                    "role_id": summary.id,
+                })
+            except Exception as exc:
+                logger.error("role_subagent_failed", role_name=entry.name, error=str(exc))
+                yield _sse({
+                    "step": "role_failed",
+                    "index": plan_idx + 1,
+                    "total": len(plan.roles),
+                    "name": entry.name,
+                    "error": str(exc),
                 })
 
         # -- Assemble PlaybookUpsert --

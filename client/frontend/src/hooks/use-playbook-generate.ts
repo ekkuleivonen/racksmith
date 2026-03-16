@@ -3,6 +3,7 @@ import { apiStreamPost } from "@/lib/api";
 
 export type GenerationStep =
   | { step: "planning"; session_id: string }
+  | { step: "thinking"; text: string }
   | {
       step: "planned";
       session_id: string;
@@ -10,6 +11,13 @@ export type GenerationStep =
       plan_description: string;
       total_new: number;
       total_reuse: number;
+    }
+  | {
+      step: "thinking_role";
+      index: number;
+      total: number;
+      name: string;
+      text: string;
     }
   | {
       step: "role_created";
@@ -72,7 +80,24 @@ export function usePlaybookGenerate(options: UsePlaybookGenerateOptions = {}) {
             if (payload === "[DONE]") break;
             try {
               const event = JSON.parse(payload) as GenerationStep;
-              setSteps((prev) => [...prev, event]);
+
+              if (
+                event.step === "thinking" ||
+                event.step === "thinking_role"
+              ) {
+                setSteps((prev) => {
+                  const last = prev[prev.length - 1];
+                  if (last?.step === event.step) {
+                    return [
+                      ...prev.slice(0, -1),
+                      { ...last, text: last.text + event.text },
+                    ];
+                  }
+                  return [...prev, event];
+                });
+              } else {
+                setSteps((prev) => [...prev, event]);
+              }
 
               if (event.step === "done") {
                 options.onComplete?.(event.playbook_id);

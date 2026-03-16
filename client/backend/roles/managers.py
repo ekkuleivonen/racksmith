@@ -54,9 +54,11 @@ def _request_input_to_role_input(inp: RoleInputSpec | dict) -> RoleInput:
         inp = inp.model_dump()
     t = inp.get("type", "string")
     options = inp.get("options", []) or inp.get("choices", [])
+    label = inp.get("label", "")
+    description = inp.get("description", "") or label
     return RoleInput(
         key=inp.get("key", ""),
-        description=inp.get("label", "") or inp.get("description", ""),
+        description=description,
         type={"string": "str", "bool": "bool", "boolean": "bool", "secret": "str"}.get(t, "str"),
         default=inp.get("default"),
         required=inp.get("required", False),
@@ -64,6 +66,7 @@ def _request_input_to_role_input(inp: RoleInputSpec | dict) -> RoleInput:
         no_log=(t == "secret"),
         racksmith_placeholder=inp.get("placeholder", ""),
         racksmith_secret=inp.get("secret", False),
+        racksmith_label=label,
     )
 
 
@@ -75,7 +78,8 @@ def _role_data_to_summary(r: RoleData) -> RoleSummary:
         inputs=[
             RoleInputSpec.model_validate({
                 "key": inp.key,
-                "label": inp.description or humanize_key(inp.key),
+                "label": inp.racksmith_label or humanize_key(inp.key),
+                "description": inp.description,
                 "type": inp.type,
                 "default": inp.default,
                 "required": inp.required,
@@ -133,7 +137,8 @@ class RoleManager(RunManagerMixin):
             "inputs": [
                 {
                     "key": inp.key,
-                    "label": inp.description or humanize_key(inp.key),
+                    "label": inp.racksmith_label or humanize_key(inp.key),
+                    "description": inp.description,
                     "type": inp.type,
                     "default": inp.default,
                     "required": inp.required,
@@ -347,15 +352,20 @@ class RoleManager(RunManagerMixin):
         yield "data: [DONE]\n\n"
 
     async def generate_with_validation(self, prompt: str) -> AsyncGenerator[str]:
-        from _utils.ai import get_model, role_agent
+        from _utils.ai import get_model, role_agent, stream_thinking
+        from playbooks.prompts import ROLE_THINKING_INSTRUCTIONS
         from roles.prompts import ROLE_SYSTEM_PROMPT
+
+        async for delta in stream_thinking(prompt, ROLE_THINKING_INSTRUCTIONS):
+            yield f"data: {json.dumps({'thinking': delta})}\n\n"
 
         result = await role_agent.run(prompt, model=get_model(), instructions=ROLE_SYSTEM_PROMPT)
         async for event in self._result_to_sse(result.output.model_dump(exclude_defaults=True)):
             yield event
 
     async def edit_with_validation(self, existing_yaml: str, prompt: str) -> AsyncGenerator[str]:
-        from _utils.ai import get_model, role_agent
+        from _utils.ai import get_model, role_agent, stream_thinking
+        from playbooks.prompts import ROLE_THINKING_INSTRUCTIONS
         from roles.prompts import ROLE_EDIT_SYSTEM_PROMPT
 
         try:
@@ -368,6 +378,10 @@ class RoleManager(RunManagerMixin):
             f"Here is the current role definition:\n\n{existing_json}\n\n"
             f"Requested changes:\n{prompt}"
         )
+
+        async for delta in stream_thinking(user_prompt, ROLE_THINKING_INSTRUCTIONS):
+            yield f"data: {json.dumps({'thinking': delta})}\n\n"
+
         result = await role_agent.run(user_prompt, model=get_model(), instructions=ROLE_EDIT_SYSTEM_PROMPT)
         async for event in self._result_to_sse(result.output.model_dump(exclude_defaults=True)):
             yield event

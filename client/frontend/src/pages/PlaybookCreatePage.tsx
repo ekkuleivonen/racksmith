@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Check,
   CircleAlert,
   Loader2,
+  Sparkles,
   Square,
   Wand2,
 } from "lucide-react";
@@ -29,6 +30,31 @@ const EMPTY_DRAFT: PlaybookUpsert = {
   become: false,
 };
 
+function ThinkingBlock({ text, label }: { text: string; label?: string }) {
+  const ref = useRef<HTMLPreElement>(null);
+  useEffect(() => {
+    if (ref.current) {
+      ref.current.scrollTop = ref.current.scrollHeight;
+    }
+  }, [text]);
+  return (
+    <div className="space-y-1">
+      {label && (
+        <div className="flex items-center gap-1.5 text-xs text-violet-400">
+          <Sparkles className="size-3" />
+          {label}
+        </div>
+      )}
+      <pre
+        ref={ref}
+        className="max-h-32 overflow-y-auto rounded bg-zinc-950/80 p-2 text-[11px] leading-relaxed text-zinc-400 whitespace-pre-wrap"
+      >
+        {text}
+      </pre>
+    </div>
+  );
+}
+
 function StepIndicator({ step }: { step: GenerationStep }) {
   switch (step.step) {
     case "planning":
@@ -38,6 +64,8 @@ function StepIndicator({ step }: { step: GenerationStep }) {
           Planning playbook...
         </div>
       );
+    case "thinking":
+      return <ThinkingBlock text={step.text} />;
     case "planned":
       return (
         <div className="flex items-center gap-2 text-xs text-emerald-400">
@@ -47,6 +75,13 @@ function StepIndicator({ step }: { step: GenerationStep }) {
           {step.total_reuse > 0 &&
             `, ${step.total_reuse} reused`}
         </div>
+      );
+    case "thinking_role":
+      return (
+        <ThinkingBlock
+          text={step.text}
+          label={`Thinking: ${step.name} (${step.index}/${step.total})`}
+        />
       );
     case "role_created":
       return (

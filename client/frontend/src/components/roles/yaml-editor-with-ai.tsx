@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { Loader2, Square, Wand2 } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Loader2, Sparkles, Square, Wand2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { YamlFileView } from "@/components/files/yaml-file-view";
@@ -41,9 +41,17 @@ export function YamlEditorWithAi({
   const [showPrompt, setShowPrompt] = useState(false);
   const [prompt, setPrompt] = useState("");
 
-  const { yaml, generating, error, generate, cancel } = useStreamingYaml({
-    onComplete: (formatted) => onChange(formatted),
-  });
+  const { yaml, thinking, generating, error, generate, cancel } =
+    useStreamingYaml({
+      onComplete: (formatted) => onChange(formatted),
+    });
+
+  const thinkingRef = useRef<HTMLPreElement>(null);
+  useEffect(() => {
+    if (thinkingRef.current) {
+      thinkingRef.current.scrollTop = thinkingRef.current.scrollHeight;
+    }
+  }, [thinking]);
 
   useEffect(() => {
     onGeneratingChange?.(generating);
@@ -133,10 +141,25 @@ export function YamlEditorWithAi({
         </div>
       )}
 
+      {generating && thinking && (
+        <div className="space-y-1">
+          <div className="flex items-center gap-1.5 text-xs text-violet-400">
+            <Sparkles className="size-3" />
+            Thinking...
+          </div>
+          <pre
+            ref={thinkingRef}
+            className="max-h-32 overflow-y-auto rounded bg-zinc-950/80 p-2 text-[11px] leading-relaxed text-zinc-400 whitespace-pre-wrap"
+          >
+            {thinking}
+          </pre>
+        </div>
+      )}
+
       {generating && (
         <div className="flex items-center gap-2 text-xs text-zinc-500">
           <Loader2 className="size-3.5 animate-spin" />
-          Generating...
+          {thinking && !yaml ? "Thinking..." : "Generating..."}
         </div>
       )}
 

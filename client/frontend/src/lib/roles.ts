@@ -9,6 +9,7 @@ function invalidateAfterRoleMutation() {
 export type RoleInput = {
   key: string;
   label: string;
+  description?: string;
   placeholder: string;
   default: unknown;
   type?: string;

@@ -14,7 +14,12 @@ Optional top-level keys:
 
 Each input item has these fields:
   key         – variable name (snake_case)
-  label       – human-readable label
+  label       – short human-readable label (2-4 words, used as the field name in the UI)
+  description – a helpful sentence explaining what this input controls, any constraints,
+                and examples of valid values. This is shown as a tooltip so the user
+                understands what to enter. Be specific and practical, e.g.
+                "TCP port Nginx will listen on for HTTP traffic (e.g. 80, 8080)"
+                rather than just "Port".
   type        – MUST be exactly one of: "string", "bool", "secret"
                 (never use "str", "boolean", "int", "select", "list", "dict",
                  or any other type name)
@@ -64,6 +69,7 @@ _JSON_EXAMPLE = """\
     {
       "key": "nginx_port",
       "label": "Port",
+      "description": "TCP port Nginx will listen on for HTTP traffic (e.g. 80, 8080)",
       "type": "string",
       "placeholder": "80",
       "required": true
@@ -71,6 +77,7 @@ _JSON_EXAMPLE = """\
     {
       "key": "enable_ssl",
       "label": "Enable SSL",
+      "description": "When true, generates a self-signed certificate and enables HTTPS on port 443",
       "type": "bool",
       "default": true,
       "required": false

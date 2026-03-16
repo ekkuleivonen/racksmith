@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { Loader2, Trash2, Upload } from "lucide-react";
+import { Info, Loader2, Trash2, Upload } from "lucide-react";
 import { DetailLoading, DetailNotFound } from "@/components/shared/detail-states";
 import { PageContainer } from "@/components/shared/page-container";
 import { toast } from "sonner";
@@ -15,6 +15,11 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { useRoleDetail } from "@/hooks/queries";
 import { useDeleteRole, usePushToRegistry, useUpdateRole } from "@/hooks/mutations";
 import type { RoleDetail, RoleInput, RoleOutput } from "@/lib/roles";
@@ -140,7 +145,19 @@ export function RoleDetailPage() {
                 {role.inputs.map((inp: RoleInput) => (
                   <TableRow key={inp.key} className="border-zinc-800">
                     <TableCell className="font-mono text-xs">
-                      {inp.label || inp.key}
+                      <span className="inline-flex items-center gap-1.5">
+                        {inp.label || inp.key}
+                        {inp.description ? (
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Info className="size-3 shrink-0 text-zinc-600 hover:text-zinc-400" />
+                            </TooltipTrigger>
+                            <TooltipContent side="top" className="max-w-64">
+                              {inp.description}
+                            </TooltipContent>
+                          </Tooltip>
+                        ) : null}
+                      </span>
                     </TableCell>
                     <TableCell className="text-xs text-zinc-500">
                       {inp.type ?? "string"}

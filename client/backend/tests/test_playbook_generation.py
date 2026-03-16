@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import AsyncGenerator
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -119,6 +120,11 @@ class TestPlannerPrompt:
 # ---------------------------------------------------------------------------
 
 
+async def _fake_stream_thinking(*_args: object, **_kwargs: object) -> AsyncGenerator[str]:
+    """Mock for stream_thinking that yields a single delta."""
+    yield "I am thinking..."
+
+
 class TestGeneratePlaybookOrchestrator:
     @pytest.fixture
     def mock_plan(self) -> PlaybookPlan:
@@ -150,7 +156,6 @@ class TestGeneratePlaybookOrchestrator:
         layout.roles_path.mkdir(parents=True, exist_ok=True)
         layout.playbooks_path.mkdir(parents=True, exist_ok=True)
 
-        # Write a minimal existing role so the catalog has it
         import yaml as _yaml
 
         (layout.roles_path / "existing_role").mkdir()
@@ -176,6 +181,7 @@ class TestGeneratePlaybookOrchestrator:
         with (
             patch("_utils.ai.planner_agent") as planner_mock,
             patch("_utils.ai.role_agent") as role_mock,
+            patch("_utils.ai.stream_thinking", new=_fake_stream_thinking),
         ):
             planner_mock.run = AsyncMock(return_value=mock_planner_result)
             role_mock.run = AsyncMock(return_value=mock_role_result)
@@ -193,7 +199,9 @@ class TestGeneratePlaybookOrchestrator:
 
             steps = [e.get("step") for e in events]
             assert "planning" in steps
+            assert "thinking" in steps
             assert "planned" in steps
+            assert "thinking_role" in steps
             assert "role_created" in steps
             assert "done" in steps
 
@@ -202,3 +210,10 @@ class TestGeneratePlaybookOrchestrator:
 
             done_event = next(e for e in events if e.get("step") == "done")
             assert "playbook_id" in done_event
+
+            thinking_event = next(e for e in events if e.get("step") == "thinking")
+            assert thinking_event["text"] == "I am thinking..."
+
+            role_thinking = next(e for e in events if e.get("step") == "thinking_role")
+            assert role_thinking["name"] == "New Role"
+            assert role_thinking["text"] == "I am thinking..."

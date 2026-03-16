@@ -14,7 +14,7 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { GripVertical, Link2, Trash2, X } from "lucide-react";
+import { GripVertical, Info, Link2, Trash2, X } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   Accordion,
@@ -319,10 +319,20 @@ function SortableRoleCard({
                   key={field.key}
                   className={`space-y-1${isSecret ? " cursor-default opacity-50" : ""}`}
                 >
-                  <p className="text-xs text-zinc-400">
+                  <p className="flex items-center gap-1 text-xs text-zinc-400">
                     {field.label}
                     {field.required ? (
-                      <span className="ml-1 text-red-400">*</span>
+                      <span className="text-red-400">*</span>
+                    ) : null}
+                    {field.description ? (
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Info className="size-3 shrink-0 text-zinc-600 hover:text-zinc-400" />
+                        </TooltipTrigger>
+                        <TooltipContent side="top" className="max-w-64">
+                          {field.description}
+                        </TooltipContent>
+                      </Tooltip>
                     ) : null}
                   </p>
 

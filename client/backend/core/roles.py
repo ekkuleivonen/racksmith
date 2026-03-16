@@ -45,6 +45,7 @@ class RoleInput:
     no_log: bool = False
     racksmith_placeholder: str = ""
     racksmith_secret: bool = False
+    racksmith_label: str = ""
 
 
 @dataclass
@@ -215,6 +216,7 @@ def _overlay_racksmith_meta(role: RoleData, role_meta: dict) -> None:
             if isinstance(inp_meta, dict):
                 inp.racksmith_placeholder = str(inp_meta.get("placeholder", inp.racksmith_placeholder))
                 inp.racksmith_secret = bool(inp_meta.get("secret", inp.racksmith_secret))
+                inp.racksmith_label = str(inp_meta.get("label", inp.racksmith_label))
 
 
 def list_roles(layout: AnsibleLayout) -> list[RoleData]:
@@ -323,6 +325,8 @@ def write_role(
     inputs_meta: dict[str, dict] = {}
     for inp in role.inputs:
         inp_data: dict[str, Any] = {}
+        if inp.racksmith_label:
+            inp_data["label"] = inp.racksmith_label
         if inp.racksmith_placeholder:
             inp_data["placeholder"] = inp.racksmith_placeholder
         if inp.racksmith_secret:
