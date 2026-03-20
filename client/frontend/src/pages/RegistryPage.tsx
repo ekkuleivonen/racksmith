@@ -149,13 +149,13 @@ function RoleCard({
   const platforms = v?.platforms ? platformNames(v.platforms) : [];
 
   return (
-    <Link to={`/registry/${role.slug}`} className="group block">
+    <Link to={`/registry/${role.id}`} className="group block">
       <Card className="h-full border-zinc-800 bg-zinc-950/40 transition-all duration-200 group-hover:border-zinc-600 group-hover:bg-zinc-900/50">
         <CardContent className="flex h-full flex-col p-4">
           <div className="flex-1 space-y-1.5">
             <div className="flex items-center gap-2">
               <p className="flex-1 font-medium leading-tight text-zinc-100">
-                {v?.name ?? role.slug}
+                {v?.name ?? role.id}
               </p>
               {upgradeAvailable && (
                 <Badge
@@ -248,7 +248,7 @@ function PlaybookCard({
 
   return (
     <Link
-      to={`/registry/playbooks/${playbook.slug}`}
+      to={`/registry/playbooks/${playbook.id}`}
       className="group block"
     >
       <Card className="h-full border-zinc-800 bg-zinc-950/40 transition-all duration-200 group-hover:border-zinc-600 group-hover:bg-zinc-900/50">
@@ -256,7 +256,7 @@ function PlaybookCard({
           <div className="flex-1 space-y-1.5">
             <div className="flex items-center gap-2">
               <p className="flex-1 font-medium leading-tight text-zinc-100">
-                {v?.name ?? playbook.slug}
+                {v?.name ?? playbook.id}
               </p>
               {upgradeAvailable && (
                 <Badge
@@ -352,7 +352,7 @@ function RecommendedCard({
 
   return (
     <Link
-      to={`/registry/${role.slug}`}
+      to={`/registry/${role.id}`}
       className="group block w-[280px] shrink-0"
     >
       <Card className="h-full border-zinc-800 bg-zinc-950/40 transition-all duration-200 group-hover:border-amber-700/50 group-hover:bg-zinc-900/50">
@@ -360,7 +360,7 @@ function RecommendedCard({
           <div className="flex-1 space-y-1">
             <div className="flex items-center gap-1.5">
               <p className="flex-1 truncate text-sm font-medium text-zinc-100">
-                {v?.name ?? role.slug}
+                {v?.name ?? role.id}
               </p>
               {upgradeAvailable && (
                 <Badge
@@ -570,7 +570,7 @@ function RolesTabContent() {
     [localRoles],
   );
 
-  const localVersionBySlug = useMemo(() => {
+  const localVersionById = useMemo(() => {
     const m = new Map<string, number>();
     for (const r of localRoles ?? []) {
       if (r.registry_id && r.registry_version)
@@ -621,13 +621,13 @@ function RolesTabContent() {
           <ScrollArea className="w-full">
             <div className="flex gap-3 pb-2">
               {recommended.items.map((role) => {
-                const localVer = localVersionBySlug.get(role.slug);
+                const localVer = localVersionById.get(role.id);
                 const regVer = role.latest_version?.version_number;
                 return (
                   <RecommendedCard
                     key={role.id}
                     role={role}
-                    imported={importedIds.has(role.slug)}
+                    imported={importedIds.has(role.id)}
                     upgradeAvailable={
                       localVer != null &&
                       regVer != null &&
@@ -759,13 +759,13 @@ function RolesTabContent() {
         ) : (
           <div className="grid gap-3 sm:grid-cols-2">
             {data?.items.map((role) => {
-              const localVer = localVersionBySlug.get(role.slug);
+              const localVer = localVersionById.get(role.id);
               const regVer = role.latest_version?.version_number;
               return (
                 <RoleCard
                   key={role.id}
                   role={role}
-                  imported={importedIds.has(role.slug)}
+                  imported={importedIds.has(role.id)}
                   upgradeAvailable={
                     localVer != null &&
                     regVer != null &&
@@ -845,7 +845,7 @@ function PlaybooksTabContent() {
   const { data: facets } = useRegistryPlaybookFacets();
   const { data: localPlaybooks } = usePlaybooks();
 
-  const importedSlugs = useMemo(
+  const importedPbIds = useMemo(
     () =>
       new Set(
         (localPlaybooks ?? []).map((p) => p.registry_id).filter(Boolean),
@@ -853,7 +853,7 @@ function PlaybooksTabContent() {
     [localPlaybooks],
   );
 
-  const localPbVersionBySlug = useMemo(() => {
+  const localPbVersionById = useMemo(() => {
     const m = new Map<string, number>();
     for (const p of localPlaybooks ?? []) {
       if (p.registry_id && p.registry_version)
@@ -969,13 +969,13 @@ function PlaybooksTabContent() {
       ) : (
         <div className="grid gap-3 sm:grid-cols-2">
           {data?.items.map((pb) => {
-            const localVer = localPbVersionBySlug.get(pb.slug);
+            const localVer = localPbVersionById.get(pb.id);
             const regVer = pb.latest_version?.version_number;
             return (
               <PlaybookCard
                 key={pb.id}
                 playbook={pb}
-                imported={importedSlugs.has(pb.slug)}
+                imported={importedPbIds.has(pb.id)}
                 upgradeAvailable={
                   localVer != null &&
                   regVer != null &&
@@ -1043,12 +1043,12 @@ function MyPackagesTabContent() {
         : { per_page: 0 },
     );
 
-  const importedRoleSlugs = useMemo(
+  const importedRoleIds = useMemo(
     () =>
       new Set((localRoles ?? []).map((r) => r.registry_id).filter(Boolean)),
     [localRoles],
   );
-  const roleVersionBySlug = useMemo(() => {
+  const roleVersionById = useMemo(() => {
     const m = new Map<string, number>();
     for (const r of localRoles ?? []) {
       if (r.registry_id && r.registry_version)
@@ -1057,14 +1057,14 @@ function MyPackagesTabContent() {
     return m;
   }, [localRoles]);
 
-  const importedPbSlugs = useMemo(
+  const importedPbSetIds = useMemo(
     () =>
       new Set(
         (localPlaybooks ?? []).map((p) => p.registry_id).filter(Boolean),
       ),
     [localPlaybooks],
   );
-  const pbVersionBySlug = useMemo(() => {
+  const pbVersionById = useMemo(() => {
     const m = new Map<string, number>();
     for (const p of localPlaybooks ?? []) {
       if (p.registry_id && p.registry_version)
@@ -1110,13 +1110,13 @@ function MyPackagesTabContent() {
           </h2>
           <div className="grid gap-3 sm:grid-cols-2">
             {roles.map((role) => {
-              const localVer = roleVersionBySlug.get(role.slug);
+              const localVer = roleVersionById.get(role.id);
               const regVer = role.latest_version?.version_number;
               return (
                 <RoleCard
                   key={role.id}
                   role={role}
-                  imported={importedRoleSlugs.has(role.slug)}
+                  imported={importedRoleIds.has(role.id)}
                   upgradeAvailable={
                     localVer != null && regVer != null && regVer > localVer
                   }
@@ -1134,13 +1134,13 @@ function MyPackagesTabContent() {
           </h2>
           <div className="grid gap-3 sm:grid-cols-2">
             {playbooks.map((pb) => {
-              const localVer = pbVersionBySlug.get(pb.slug);
+              const localVer = pbVersionById.get(pb.id);
               const regVer = pb.latest_version?.version_number;
               return (
                 <PlaybookCard
                   key={pb.id}
                   playbook={pb}
-                  imported={importedPbSlugs.has(pb.slug)}
+                  imported={importedPbSetIds.has(pb.id)}
                   upgradeAvailable={
                     localVer != null && regVer != null && regVer > localVer
                   }

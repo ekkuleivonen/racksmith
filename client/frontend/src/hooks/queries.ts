@@ -157,11 +157,11 @@ export function useRegistryRoles(params: ListRegistryRolesParams = {}) {
   });
 }
 
-export function useRegistryRole(slug: string | null) {
+export function useRegistryRole(id: string | null) {
   return useQuery({
-    queryKey: [...queryKeys.registry, "role", slug],
-    queryFn: () => getRegistryRole(slug!),
-    enabled: !!slug,
+    queryKey: [...queryKeys.registry, "role", id],
+    queryFn: () => getRegistryRole(id!),
+    enabled: !!id,
   });
 }
 
@@ -182,11 +182,11 @@ export function useRegistryPlaybooks(
   });
 }
 
-export function useRegistryPlaybook(slug: string | null) {
+export function useRegistryPlaybook(id: string | null) {
   return useQuery({
-    queryKey: [...queryKeys.registry, "playbook", slug],
-    queryFn: () => getRegistryPlaybook(slug!),
-    enabled: !!slug,
+    queryKey: [...queryKeys.registry, "playbook", id],
+    queryFn: () => getRegistryPlaybook(id!),
+    enabled: !!id,
   });
 }
 

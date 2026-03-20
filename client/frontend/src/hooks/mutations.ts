@@ -130,12 +130,12 @@ export const usePushToRegistry = () =>
   });
 
 export const useImportFromRegistry = () =>
-  useToastMutation((slug: string) => importFromRegistry(slug), {
+  useToastMutation((id: string) => importFromRegistry(id), {
     success: (result) => result.message,
   });
 
 export const useDeleteRegistryRole = () =>
-  useToastMutation((slug: string) => deleteRegistryRole(slug), {
+  useToastMutation((id: string) => deleteRegistryRole(id), {
     success: "Role deleted from registry",
   });
 
@@ -146,12 +146,12 @@ export const usePushPlaybookToRegistry = () =>
   );
 
 export const useImportPlaybookFromRegistry = () =>
-  useToastMutation((slug: string) => importPlaybookFromRegistry(slug), {
+  useToastMutation((id: string) => importPlaybookFromRegistry(id), {
     success: (result) => result.message,
   });
 
 export const useDeleteRegistryPlaybook = () =>
-  useToastMutation((slug: string) => deleteRegistryPlaybook(slug), {
+  useToastMutation((id: string) => deleteRegistryPlaybook(id), {
     success: "Playbook deleted from registry",
   });
 

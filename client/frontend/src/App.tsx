@@ -143,8 +143,8 @@ function AppRoutes() {
                 <Route path="/roles/create" element={<RoleCreatePage />} />
                 <Route path="/roles/:roleId" element={<RoleDetailPage />} />
                 <Route path="/registry" element={<RegistryPage />} />
-                <Route path="/registry/playbooks/:slug" element={<RegistryPlaybookPage />} />
-                <Route path="/registry/:slug" element={<RegistryRolePage />} />
+                <Route path="/registry/playbooks/:id" element={<RegistryPlaybookPage />} />
+                <Route path="/registry/:id" element={<RegistryRolePage />} />
                 <Route path="/discovery" element={<DiscoveryPage />} />
                 <Route path="/settings" element={<SettingsPage />} />
               </Route>

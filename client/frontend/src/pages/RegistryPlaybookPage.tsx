@@ -21,23 +21,24 @@ import {
   useDeleteRegistryPlaybook,
 } from "@/hooks/mutations";
 import { useSetupStore } from "@/stores/setup";
+import { MarkdownContent } from "@/components/shared/markdown-content";
 import { PageContainer } from "@/components/shared/page-container";
 
 export function RegistryPlaybookPage() {
-  const { slug } = useParams<{ slug: string }>();
+  const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const currentUserLogin = useSetupStore((s) => s.status?.user?.login);
 
-  const { data: playbook, isLoading, isError } = useRegistryPlaybook(slug ?? null);
+  const { data: playbook, isLoading, isError } = useRegistryPlaybook(id ?? null);
   const { data: localPlaybooks } = usePlaybooks();
   const importMutation = useImportPlaybookFromRegistry();
   const deleteMutation = useDeleteRegistryPlaybook();
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
 
   const localMatch = useMemo(() => {
-    if (!slug || !localPlaybooks) return null;
-    return localPlaybooks.find((p) => p.registry_id === slug) ?? null;
-  }, [slug, localPlaybooks]);
+    if (!id || !localPlaybooks) return null;
+    return localPlaybooks.find((p) => p.registry_id === id) ?? null;
+  }, [id, localPlaybooks]);
 
   const isImported = !!localMatch;
   const regVer = playbook?.latest_version?.version_number;
@@ -48,13 +49,13 @@ export function RegistryPlaybookPage() {
   const versionUnknown = isImported && !versionTracked;
 
   const handleImport = () => {
-    if (!slug) return;
-    importMutation.mutate(slug);
+    if (!id) return;
+    importMutation.mutate(id);
   };
 
   const handleDelete = () => {
-    if (!slug) return;
-    deleteMutation.mutate(slug, {
+    if (!id) return;
+    deleteMutation.mutate(id, {
       onSuccess: () => navigate("/registry"),
     });
   };
@@ -62,7 +63,7 @@ export function RegistryPlaybookPage() {
   const isOwner =
     !!currentUserLogin && currentUserLogin === playbook?.owner?.username;
 
-  if (!slug) {
+  if (!id) {
     return (
       <PageContainer>
         <p className="text-zinc-500">Invalid playbook</p>
@@ -103,7 +104,7 @@ export function RegistryPlaybookPage() {
             Registry
           </Link>
           <span>/</span>
-          <span className="text-zinc-400">{playbook.slug}</span>
+          <span className="text-zinc-400">{version?.name ?? playbook.id}</span>
         </div>
 
         <section className="border border-zinc-800 bg-zinc-900/30 p-4">
@@ -111,7 +112,7 @@ export function RegistryPlaybookPage() {
             <div className="min-w-0 space-y-1">
               <div className="flex items-center gap-2">
                 <h1 className="text-xl font-semibold text-zinc-100">
-                  {version?.name ?? playbook.slug}
+                  {version?.name ?? playbook.id}
                 </h1>
                 {version?.become && (
                   <Badge
@@ -123,9 +124,11 @@ export function RegistryPlaybookPage() {
                   </Badge>
                 )}
               </div>
-              <p className="text-sm text-zinc-500">
-                {version?.description || "No description"}
-              </p>
+              {version?.description ? (
+                <MarkdownContent className="text-zinc-500">{version.description}</MarkdownContent>
+              ) : (
+                <p className="text-sm text-zinc-500">No description</p>
+              )}
               <div className="flex items-center gap-2 pt-2">
                 <img
                   src={playbook.owner.avatar_url}
@@ -254,16 +257,14 @@ export function RegistryPlaybookPage() {
                     </div>
                   );
 
-                  return ref.role_slug ? (
+                  return (
                     <Link
                       key={`${ref.registry_role_id}-${idx}`}
-                      to={`/registry/${ref.role_slug}`}
+                      to={`/registry/${ref.registry_role_id}`}
                       className="block"
                     >
                       {inner}
                     </Link>
-                  ) : (
-                    <div key={`${ref.registry_role_id}-${idx}`}>{inner}</div>
                   );
                 })}
               </div>
@@ -309,7 +310,7 @@ export function RegistryPlaybookPage() {
         <AlertDialogHeader>
           <AlertDialogTitle>Delete playbook from registry</AlertDialogTitle>
           <AlertDialogDescription>
-            Delete &quot;{version?.name ?? playbook.slug}&quot; from the
+            Delete &quot;{version?.name ?? playbook.id}&quot; from the
             registry? This cannot be undone.
           </AlertDialogDescription>
         </AlertDialogHeader>
