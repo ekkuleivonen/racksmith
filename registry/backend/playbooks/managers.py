@@ -1,5 +1,3 @@
-import re
-import unicodedata
 from uuid import UUID
 
 import structlog
@@ -20,12 +18,6 @@ from db.models import (
 from playbooks.schemas import PlaybookCreate, PlaybookUpdate
 
 logger = structlog.get_logger()
-
-
-def _slugify(text: str) -> str:
-    text = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode()
-    text = re.sub(r"[^\w\s-]", "", text.lower())
-    return re.sub(r"[-\s]+", "-", text).strip("-")
 
 
 async def _validate_and_create_role_entries(
@@ -119,7 +111,15 @@ async def list_playbooks(
         )
         stmt = stmt.order_by(dl_count.desc())
     elif sort == "name":
-        stmt = stmt.order_by(RegistryPlaybook.slug.asc())
+        latest_name = (
+            select(PlaybookVersion.name)
+            .where(PlaybookVersion.playbook_id == RegistryPlaybook.id)
+            .order_by(PlaybookVersion.version_number.desc())
+            .limit(1)
+            .correlate(RegistryPlaybook)
+            .scalar_subquery()
+        )
+        stmt = stmt.order_by(latest_name.asc())
     else:
         stmt = stmt.order_by(RegistryPlaybook.created_at.desc())
 
@@ -158,10 +158,10 @@ async def get_facets(
     return {"tags": tags_list}
 
 
-async def get_playbook(session: AsyncSession, slug: str) -> RegistryPlaybook:
+async def get_playbook(session: AsyncSession, playbook_id: str | UUID) -> RegistryPlaybook:
     result = await session.execute(
         select(RegistryPlaybook)
-        .where(RegistryPlaybook.slug == slug)
+        .where(RegistryPlaybook.id == playbook_id)
         .options(
             selectinload(RegistryPlaybook.owner),
             selectinload(RegistryPlaybook.versions)
@@ -179,15 +179,7 @@ async def get_playbook(session: AsyncSession, slug: str) -> RegistryPlaybook:
 async def create_playbook(
     session: AsyncSession, data: PlaybookCreate, user: User
 ) -> RegistryPlaybook:
-    slug = _slugify(data.name)
-
-    existing = await session.execute(
-        select(RegistryPlaybook).where(RegistryPlaybook.slug == slug)
-    )
-    if existing.scalar_one_or_none():
-        raise HTTPException(status_code=409, detail="Playbook with this name already exists")
-
-    playbook = RegistryPlaybook(slug=slug, owner_id=user.id)
+    playbook = RegistryPlaybook(owner_id=user.id)
     session.add(playbook)
     await session.flush()
 
@@ -207,13 +199,13 @@ async def create_playbook(
 
     await session.commit()
 
-    return await get_playbook(session, slug)
+    return await get_playbook(session, playbook.id)
 
 
 async def update_playbook(
-    session: AsyncSession, slug: str, data: PlaybookUpdate, user: User
+    session: AsyncSession, playbook_id: str | UUID, data: PlaybookUpdate, user: User
 ) -> RegistryPlaybook:
-    playbook = await get_playbook(session, slug)
+    playbook = await get_playbook(session, playbook_id)
     if playbook.owner_id != user.id:
         raise HTTPException(status_code=403, detail="Only the owner can edit this playbook")
 
@@ -234,7 +226,7 @@ async def update_playbook(
     version = PlaybookVersion(
         playbook_id=playbook.id,
         version_number=next_num,
-        name=data.name or (latest.name if latest else slug),
+        name=data.name or (latest.name if latest else str(playbook_id)),
         description=data.description if data.description is not None else (latest.description if latest else ""),
         become=data.become if data.become is not None else (latest.become if latest else False),
         tags=data.tags if data.tags is not None else (latest.tags if latest else []),
@@ -245,75 +237,19 @@ async def update_playbook(
     await _validate_and_create_role_entries(session, roles_dicts, version.id)
     await session.commit()
 
-    return await get_playbook(session, slug)
+    return await get_playbook(session, playbook_id)
 
 
 async def upsert_playbook(
     session: AsyncSession, data: PlaybookCreate, user: User
 ) -> tuple[RegistryPlaybook, bool]:
-    """Create or update a playbook. Returns (playbook, created)."""
-    slug = _slugify(data.name)
-
-    result = await session.execute(
-        select(RegistryPlaybook)
-        .where(RegistryPlaybook.slug == slug)
-        .options(
-            selectinload(RegistryPlaybook.owner),
-            selectinload(RegistryPlaybook.versions)
-            .selectinload(PlaybookVersion.role_entries)
-            .selectinload(PlaybookVersionRole.role)
-            .selectinload(RegistryRole.versions),
-        )
-    )
-    existing = result.scalar_one_or_none()
-
-    if existing is not None:
-        if existing.owner_id != user.id:
-            raise HTTPException(status_code=403, detail="Only the owner can edit this playbook")
-        latest = existing.versions[0] if existing.versions else None
-        next_num = (latest.version_number + 1) if latest else 1
-
-        version = PlaybookVersion(
-            playbook_id=existing.id,
-            version_number=next_num,
-            name=data.name,
-            description=data.description,
-            become=data.become,
-            tags=data.tags,
-        )
-        session.add(version)
-        await session.flush()
-
-        roles_dicts = [r.model_dump(mode="json") for r in data.roles]
-        await _validate_and_create_role_entries(session, roles_dicts, version.id)
-        await session.commit()
-
-        return await get_playbook(session, slug), False
-
-    playbook = RegistryPlaybook(slug=slug, owner_id=user.id)
-    session.add(playbook)
-    await session.flush()
-
-    version = PlaybookVersion(
-        playbook_id=playbook.id,
-        version_number=1,
-        name=data.name,
-        description=data.description,
-        become=data.become,
-        tags=data.tags,
-    )
-    session.add(version)
-    await session.flush()
-
-    roles_dicts = [r.model_dump(mode="json") for r in data.roles]
-    await _validate_and_create_role_entries(session, roles_dicts, version.id)
-    await session.commit()
-
-    return await get_playbook(session, slug), True
+    """Create a new playbook (always). Returns (playbook, created=True)."""
+    playbook = await create_playbook(session, data, user)
+    return playbook, True
 
 
-async def delete_playbook(session: AsyncSession, slug: str, user: User) -> None:
-    playbook = await get_playbook(session, slug)
+async def delete_playbook(session: AsyncSession, playbook_id: str | UUID, user: User) -> None:
+    playbook = await get_playbook(session, playbook_id)
     is_owner = playbook.owner_id == user.id
     is_admin = user.access_level in ("admin", "system")
     if not (is_owner or is_admin):
@@ -324,9 +260,9 @@ async def delete_playbook(session: AsyncSession, slug: str, user: User) -> None:
 
 
 async def download_playbook(
-    session: AsyncSession, slug: str,
+    session: AsyncSession, playbook_id: str | UUID,
 ) -> tuple[PlaybookVersion, DownloadEvent]:
-    playbook = await get_playbook(session, slug)
+    playbook = await get_playbook(session, playbook_id)
 
     event = DownloadEvent(playbook_id=playbook.id, confirmed=False)
     session.add(event)

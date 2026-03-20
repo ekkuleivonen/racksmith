@@ -58,7 +58,7 @@ class TestRoleDeletionBlocked:
         )
 
         with pytest.raises(HTTPException) as exc_info:
-            await role_managers.delete_role(db, role.slug, seed.user)
+            await role_managers.delete_role(db, role.id, seed.user)
         assert exc_info.value.status_code == 409
         assert "referenced by playbooks" in exc_info.value.detail
 
@@ -72,7 +72,7 @@ class TestRoleDeletionBlocked:
         )
 
         with pytest.raises(HTTPException):
-            await role_managers.delete_role(db, role.slug, seed.user)
+            await role_managers.delete_role(db, role.id, seed.user)
 
         playbooks, total = await pb_managers.list_playbooks(db)
         assert total == 1
@@ -87,19 +87,18 @@ class TestRoleDeletionBlocked:
         )
 
         with pytest.raises(HTTPException):
-            await role_managers.delete_role(db, role.slug, seed.user)
+            await role_managers.delete_role(db, role.id, seed.user)
 
         update = PlaybookUpdate(name="Renamed Playbook")
-        # The key assertion: update_playbook completes without raising
-        await pb_managers.update_playbook(db, playbook.slug, update, seed.user)
+        await pb_managers.update_playbook(db, playbook.id, update, seed.user)
 
     async def test_unreferenced_role_can_be_deleted(self, db, seed: SeedData):
         """A role not referenced by any playbook can be freely deleted."""
         role = await role_managers.create_role(db, _role_create(), seed.user)
-        await role_managers.delete_role(db, role.slug, seed.user)
+        await role_managers.delete_role(db, role.id, seed.user)
 
         with pytest.raises(HTTPException) as exc_info:
-            await role_managers.get_role(db, role.slug)
+            await role_managers.get_role(db, role.id)
         assert exc_info.value.status_code == 404
 
 
@@ -122,7 +121,7 @@ class TestDeleteAndRecreateRole:
         )
 
         with pytest.raises(HTTPException) as exc_info:
-            await role_managers.delete_role(db, role.slug, seed.user)
+            await role_managers.delete_role(db, role.id, seed.user)
         assert exc_info.value.status_code == 409
 
     async def test_unreferenced_role_recreate_gets_new_uuid(self, db, seed: SeedData):
@@ -130,7 +129,7 @@ class TestDeleteAndRecreateRole:
         role_v1 = await role_managers.create_role(db, _role_create("Nginx"), seed.user)
         old_uuid = str(role_v1.id)
 
-        await role_managers.delete_role(db, role_v1.slug, seed.user)
+        await role_managers.delete_role(db, role_v1.id, seed.user)
 
         role_v2 = await role_managers.create_role(db, _role_create("Nginx"), seed.user)
         assert str(role_v2.id) != old_uuid
@@ -149,7 +148,7 @@ class TestDownloadCountAccuracy:
         """
         role = await role_managers.create_role(db, _role_create(), seed.user)
 
-        version, event = await role_managers.download_role(db, role.slug)
+        version, event = await role_managers.download_role(db, role.id)
         assert event.confirmed is False
 
         count = await role_managers._confirmed_download_count(db, role_id=role.id)
@@ -159,7 +158,7 @@ class TestDownloadCountAccuracy:
         """After confirming, the download count goes up."""
         role = await role_managers.create_role(db, _role_create(), seed.user)
 
-        _version, event = await role_managers.download_role(db, role.slug)
+        _version, event = await role_managers.download_role(db, role.id)
         await role_managers.confirm_download(db, event.id)
 
         count = await role_managers._confirmed_download_count(db, role_id=role.id)
@@ -172,7 +171,7 @@ class TestDownloadCountAccuracy:
             db, _playbook_create([str(role.id)]), seed.user,
         )
 
-        _version, event = await pb_managers.download_playbook(db, playbook.slug)
+        _version, event = await pb_managers.download_playbook(db, playbook.id)
         assert event.confirmed is False
 
         count = await role_managers._confirmed_download_count(db, playbook_id=playbook.id)
@@ -195,7 +194,7 @@ class TestRoleRefsSerialization:
             db, _playbook_create([role_id]), seed.user,
         )
 
-        reloaded = await pb_managers.get_playbook(db, playbook.slug)
+        reloaded = await pb_managers.get_playbook(db, playbook.id)
         latest = reloaded.versions[0]
         assert len(latest.role_entries) == 1
         assert str(latest.role_entries[0].role_id) == role_id
@@ -211,7 +210,7 @@ class TestRoleRefsSerialization:
             seed.user,
         )
 
-        reloaded = await pb_managers.get_playbook(db, playbook.slug)
+        reloaded = await pb_managers.get_playbook(db, playbook.id)
         latest = reloaded.versions[0]
         assert len(latest.role_entries) == 2
         assert str(latest.role_entries[0].role_id) == str(role_a.id)
@@ -229,7 +228,7 @@ class TestDownloadReturnsEventId:
 
     async def test_download_role_returns_event(self, db, seed: SeedData):
         role = await role_managers.create_role(db, _role_create(), seed.user)
-        version, event = await role_managers.download_role(db, role.slug)
+        version, event = await role_managers.download_role(db, role.id)
         assert event.id is not None
         assert version.name == "Test Role"
 
@@ -238,7 +237,7 @@ class TestDownloadReturnsEventId:
         playbook = await pb_managers.create_playbook(
             db, _playbook_create([str(role.id)]), seed.user,
         )
-        version, event = await pb_managers.download_playbook(db, playbook.slug)
+        version, event = await pb_managers.download_playbook(db, playbook.id)
         assert event.id is not None
         assert version.name == "Test Playbook"
 
@@ -251,81 +250,67 @@ class TestDownloadReturnsEventId:
 class TestUpsertRole:
 
     async def test_upsert_creates_new_role(self, db, seed: SeedData):
-        """Upsert a role that doesn't exist yet → creates it."""
+        """Upsert always creates a new role."""
         role, created = await role_managers.upsert_role(db, _role_create("Nginx"), seed.user)
         assert created is True
-        assert role.slug == "nginx"
         assert role.versions[0].name == "Nginx"
         assert role.versions[0].version_number == 1
 
-    async def test_upsert_updates_existing_role(self, db, seed: SeedData):
-        """Upsert a role that already exists → adds a new version."""
-        role_v1, created = await role_managers.upsert_role(db, _role_create("Nginx"), seed.user)
-        assert created is True
 
-        updated_data = _role_create("Nginx")
-        updated_data.description = "Updated description"
-        role_v2, created = await role_managers.upsert_role(db, updated_data, seed.user)
-        assert created is False
-        assert role_v2.slug == "nginx"
-        assert str(role_v2.id) == str(role_v1.id)
+class TestUpdateRole:
+
+    async def test_update_adds_new_version(self, db, seed: SeedData):
+        """update_role adds a new version to an existing role."""
+        from roles.schemas import RoleUpdate
+
+        role = await role_managers.create_role(db, _role_create("Nginx"), seed.user)
+        update = RoleUpdate(description="Updated description")
+        role_v2 = await role_managers.update_role(db, role.id, update, seed.user)
+        assert str(role_v2.id) == str(role.id)
         assert role_v2.versions[0].version_number == 2
         assert role_v2.versions[0].description == "Updated description"
 
-    async def test_upsert_rejects_other_user(self, db, seed: SeedData):
-        """Upsert by a different user on an existing role → 403."""
-        await role_managers.upsert_role(db, _role_create("Nginx"), seed.user)
+    async def test_update_rejects_other_user(self, db, seed: SeedData):
+        """Update by a different user → 403."""
+        from roles.schemas import RoleUpdate
 
+        role = await role_managers.create_role(db, _role_create("Nginx"), seed.user)
         with pytest.raises(HTTPException) as exc_info:
-            await role_managers.upsert_role(db, _role_create("Nginx"), seed.other_user)
+            await role_managers.update_role(db, role.id, RoleUpdate(description="x"), seed.other_user)
         assert exc_info.value.status_code == 403
-
-    async def test_upsert_preserves_uuid_across_updates(self, db, seed: SeedData):
-        """The role UUID stays the same across upserts."""
-        role_v1, _ = await role_managers.upsert_role(db, _role_create("Nginx"), seed.user)
-        role_v2, _ = await role_managers.upsert_role(db, _role_create("Nginx"), seed.user)
-        assert str(role_v1.id) == str(role_v2.id)
 
 
 class TestUpsertPlaybook:
 
     async def test_upsert_creates_new_playbook(self, db, seed: SeedData):
-        """Upsert a playbook that doesn't exist yet → creates it."""
+        """Upsert always creates a new playbook."""
         role = await role_managers.create_role(db, _role_create(), seed.user)
         data = _playbook_create([str(role.id)], name="Deploy Web")
         playbook, created = await pb_managers.upsert_playbook(db, data, seed.user)
         assert created is True
-        assert playbook.slug == "deploy-web"
         assert playbook.versions[0].version_number == 1
 
-    async def test_upsert_updates_existing_playbook(self, db, seed: SeedData):
-        """Upsert a playbook that already exists → adds a new version."""
-        role = await role_managers.create_role(db, _role_create(), seed.user)
-        data = _playbook_create([str(role.id)], name="Deploy Web")
-        pb_v1, created = await pb_managers.upsert_playbook(db, data, seed.user)
-        assert created is True
 
-        data.description = "Updated"
-        pb_v2, created = await pb_managers.upsert_playbook(db, data, seed.user)
-        assert created is False
-        assert str(pb_v2.id) == str(pb_v1.id)
+class TestUpdatePlaybook:
+
+    async def test_update_adds_new_version(self, db, seed: SeedData):
+        """update_playbook adds a new version to an existing playbook."""
+        role = await role_managers.create_role(db, _role_create(), seed.user)
+        playbook = await pb_managers.create_playbook(
+            db, _playbook_create([str(role.id)], name="Deploy Web"), seed.user,
+        )
+        update = PlaybookUpdate(description="Updated")
+        pb_v2 = await pb_managers.update_playbook(db, playbook.id, update, seed.user)
+        assert str(pb_v2.id) == str(playbook.id)
         assert pb_v2.versions[0].version_number == 2
         assert pb_v2.versions[0].description == "Updated"
 
-    async def test_upsert_rejects_other_user(self, db, seed: SeedData):
-        """Upsert by a different user on an existing playbook → 403."""
+    async def test_update_rejects_other_user(self, db, seed: SeedData):
+        """Update by a different user → 403."""
         role = await role_managers.create_role(db, _role_create(), seed.user)
-        data = _playbook_create([str(role.id)], name="Deploy Web")
-        await pb_managers.upsert_playbook(db, data, seed.user)
-
+        playbook = await pb_managers.create_playbook(
+            db, _playbook_create([str(role.id)], name="Deploy Web"), seed.user,
+        )
         with pytest.raises(HTTPException) as exc_info:
-            await pb_managers.upsert_playbook(db, data, seed.other_user)
+            await pb_managers.update_playbook(db, playbook.id, PlaybookUpdate(description="x"), seed.other_user)
         assert exc_info.value.status_code == 403
-
-    async def test_upsert_preserves_uuid_across_updates(self, db, seed: SeedData):
-        """The playbook UUID stays the same across upserts."""
-        role = await role_managers.create_role(db, _role_create(), seed.user)
-        data = _playbook_create([str(role.id)], name="Deploy Web")
-        pb_v1, _ = await pb_managers.upsert_playbook(db, data, seed.user)
-        pb_v2, _ = await pb_managers.upsert_playbook(db, data, seed.user)
-        assert str(pb_v1.id) == str(pb_v2.id)

@@ -14,7 +14,6 @@ class PlaybookRoleRef(BaseModel):
     version_number: int | None = None
     vars: dict[str, Any] = Field(default_factory=dict)
     role_name: str | None = None
-    role_slug: str | None = None
 
 
 class ContributorOut(BaseModel):
@@ -78,7 +77,6 @@ class PlaybookVersionOut(BaseModel):
 
 class PlaybookOut(BaseModel):
     id: UUID
-    slug: str
     owner: OwnerOut
     download_count: int
     created_at: datetime

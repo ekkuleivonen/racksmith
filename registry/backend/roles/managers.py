@@ -1,6 +1,4 @@
 import json
-import re
-import unicodedata
 from uuid import UUID
 
 import structlog
@@ -41,12 +39,6 @@ def _expand_platforms(families: list[str]) -> list[str]:
         else:
             names.append(lower)
     return list(set(names))
-
-
-def _slugify(text: str) -> str:
-    text = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode()
-    text = re.sub(r"[^\w\s-]", "", text.lower())
-    return re.sub(r"[-\s]+", "-", text).strip("-")
 
 
 async def _confirmed_download_count(
@@ -141,7 +133,15 @@ async def list_roles(
         )
         stmt = stmt.order_by(dl_count.desc())
     elif sort == "name":
-        stmt = stmt.order_by(RegistryRole.slug.asc())
+        latest_name = (
+            select(RoleVersion.name)
+            .where(RoleVersion.role_id == RegistryRole.id)
+            .order_by(RoleVersion.version_number.desc())
+            .limit(1)
+            .correlate(RegistryRole)
+            .scalar_subquery()
+        )
+        stmt = stmt.order_by(latest_name.asc())
     else:
         stmt = stmt.order_by(RegistryRole.created_at.desc())
 
@@ -201,25 +201,10 @@ async def get_facets(
     return {"tags": tags_list, "platforms": platforms_list}
 
 
-async def get_role(session: AsyncSession, slug: str) -> RegistryRole:
+async def get_role(session: AsyncSession, role_id: str | UUID) -> RegistryRole:
     result = await session.execute(
         select(RegistryRole)
-        .where(RegistryRole.slug == slug)
-        .options(
-            selectinload(RegistryRole.owner),
-            selectinload(RegistryRole.versions),
-        )
-    )
-    role = result.scalar_one_or_none()
-    if role is None:
-        raise HTTPException(status_code=404, detail="Role not found")
-    return role
-
-
-async def get_role_by_uuid(session: AsyncSession, role_uuid: UUID) -> RegistryRole:
-    result = await session.execute(
-        select(RegistryRole)
-        .where(RegistryRole.id == role_uuid)
+        .where(RegistryRole.id == role_id)
         .options(
             selectinload(RegistryRole.owner),
             selectinload(RegistryRole.versions),
@@ -288,15 +273,7 @@ async def get_playbook_download_counts(
 async def create_role(
     session: AsyncSession, data: RoleCreate, user: User
 ) -> RegistryRole:
-    slug = _slugify(data.name)
-
-    existing = await session.execute(
-        select(RegistryRole).where(RegistryRole.slug == slug)
-    )
-    if existing.scalar_one_or_none():
-        raise HTTPException(status_code=409, detail="Role with this name already exists")
-
-    role = RegistryRole(slug=slug, owner_id=user.id)
+    role = RegistryRole(owner_id=user.id)
     session.add(role)
     await session.flush()
 
@@ -315,13 +292,13 @@ async def create_role(
     session.add(version)
     await session.commit()
 
-    return await get_role(session, slug)
+    return await get_role(session, role.id)
 
 
 async def update_role(
-    session: AsyncSession, slug: str, data: RoleUpdate, user: User
+    session: AsyncSession, role_id: str | UUID, data: RoleUpdate, user: User
 ) -> RegistryRole:
-    role = await get_role(session, slug)
+    role = await get_role(session, role_id)
     if role.owner_id != user.id:
         raise HTTPException(status_code=403, detail="Only the owner can edit this role")
 
@@ -333,7 +310,7 @@ async def update_role(
     version = RoleVersion(
         role_id=role.id,
         version_number=next_num,
-        name=data.name or (latest.name if latest else slug),
+        name=data.name or (latest.name if latest else str(role_id)),
         description=data.description if data.description is not None else (latest.description if latest else ""),
         platforms=[p.model_dump() if hasattr(p, "model_dump") else p for p in platforms],
         tags=data.tags if data.tags is not None else (latest.tags if latest else []),
@@ -345,84 +322,36 @@ async def update_role(
     session.add(version)
     await session.commit()
 
-    return await get_role(session, slug)
+    return await get_role(session, role_id)
 
 
 async def upsert_role(
     session: AsyncSession, data: RoleCreate, user: User
 ) -> tuple[RegistryRole, bool]:
-    """Create or update a role. Returns (role, created) where created is True for new roles."""
-    slug = _slugify(data.name)
-
-    result = await session.execute(
-        select(RegistryRole)
-        .where(RegistryRole.slug == slug)
-        .options(selectinload(RegistryRole.owner), selectinload(RegistryRole.versions))
-    )
-    existing = result.scalar_one_or_none()
-
-    if existing is not None:
-        if existing.owner_id != user.id:
-            raise HTTPException(status_code=403, detail="Only the owner can edit this role")
-        latest = existing.versions[0] if existing.versions else None
-        next_num = (latest.version_number + 1) if latest else 1
-        version = RoleVersion(
-            role_id=existing.id,
-            version_number=next_num,
-            name=data.name,
-            description=data.description,
-            platforms=[p.model_dump() for p in data.platforms],
-            tags=data.tags,
-            inputs=[i.model_dump() for i in data.inputs],
-            tasks_yaml=data.tasks_yaml,
-            defaults_yaml=data.defaults_yaml,
-            meta_yaml=data.meta_yaml,
-        )
-        session.add(version)
-        await session.commit()
-        return await get_role(session, slug), False
-
-    role = RegistryRole(slug=slug, owner_id=user.id)
-    session.add(role)
-    await session.flush()
-
-    version = RoleVersion(
-        role_id=role.id,
-        version_number=1,
-        name=data.name,
-        description=data.description,
-        platforms=[p.model_dump() for p in data.platforms],
-        tags=data.tags,
-        inputs=[i.model_dump() for i in data.inputs],
-        tasks_yaml=data.tasks_yaml,
-        defaults_yaml=data.defaults_yaml,
-        meta_yaml=data.meta_yaml,
-    )
-    session.add(version)
-    await session.commit()
-
-    return await get_role(session, slug), True
+    """Create a new role (always). Returns (role, created=True)."""
+    role = await create_role(session, data, user)
+    return role, True
 
 
-async def delete_role(session: AsyncSession, slug: str, user: User) -> None:
-    role = await get_role(session, slug)
+async def delete_role(session: AsyncSession, role_id: str | UUID, user: User) -> None:
+    role = await get_role(session, role_id)
     is_owner = role.owner_id == user.id
     is_admin = user.access_level in ("admin", "system")
     if not (is_owner or is_admin):
         raise HTTPException(status_code=403, detail="Only the owner or an admin can delete this role")
 
     ref_result = await session.execute(
-        select(RegistryPlaybook.slug)
+        select(RegistryPlaybook.id)
         .join(PlaybookVersion, RegistryPlaybook.id == PlaybookVersion.playbook_id)
         .join(PlaybookVersionRole, PlaybookVersion.id == PlaybookVersionRole.playbook_version_id)
         .where(PlaybookVersionRole.role_id == role.id)
         .distinct()
     )
-    playbook_slugs = list(ref_result.scalars().all())
-    if playbook_slugs:
+    playbook_ids = list(ref_result.scalars().all())
+    if playbook_ids:
         raise HTTPException(
             status_code=409,
-            detail=f"Cannot delete role '{slug}': referenced by playbooks: {', '.join(playbook_slugs)}",
+            detail=f"Cannot delete role: referenced by {len(playbook_ids)} playbook(s)",
         )
 
     await session.delete(role)
@@ -430,9 +359,9 @@ async def delete_role(session: AsyncSession, slug: str, user: User) -> None:
 
 
 async def download_role(
-    session: AsyncSession, slug: str,
+    session: AsyncSession, role_id: str | UUID,
 ) -> tuple[RoleVersion, DownloadEvent]:
-    role = await get_role(session, slug)
+    role = await get_role(session, role_id)
 
     event = DownloadEvent(role_id=role.id, confirmed=False)
     session.add(event)
