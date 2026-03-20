@@ -11,6 +11,7 @@ export function SidebarRolesSection() {
       basePath="/roles"
       createPath="/roles/create"
       createLabel="Create role"
+      collapsed
       items={roles}
       itemKey={(r) => r.id}
       itemPath={(r) => `/roles/${r.id}`}

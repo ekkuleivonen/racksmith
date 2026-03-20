@@ -13,6 +13,7 @@ export interface SidebarEntitySectionProps<T> {
   itemPath: (item: T) => string;
   itemLabel: (item: T) => string;
   emptyMessage: string;
+  collapsed?: boolean;
 }
 
 export function SidebarEntitySection<T>({
@@ -26,6 +27,7 @@ export function SidebarEntitySection<T>({
   itemPath,
   itemLabel,
   emptyMessage,
+  collapsed,
 }: SidebarEntitySectionProps<T>) {
   const { pathname } = useLocation();
 
@@ -66,28 +68,30 @@ export function SidebarEntitySection<T>({
           <Plus className="size-3" />
         </NavLink>
       </div>
-      <div className="space-y-0.5 pl-2">
-        {items.length === 0 ? (
-          <p className="px-2 py-0.5 text-[10px] text-zinc-500">{emptyMessage}</p>
-        ) : (
-          items.map((item) => (
-            <NavLink
-              key={itemKey(item)}
-              to={itemPath(item)}
-              className={({ isActive }) =>
-                cn(
-                  "flex items-center gap-1.5 rounded py-0.5 px-1.5 text-[11px] no-underline",
-                  isActive
-                    ? "bg-zinc-700 text-zinc-100"
-                    : "text-zinc-400 hover:bg-zinc-800/50 hover:text-zinc-300",
-                )
-              }
-            >
-              <span className="truncate">{itemLabel(item)}</span>
-            </NavLink>
-          ))
-        )}
-      </div>
+      {!collapsed && (
+        <div className="space-y-0.5 pl-2">
+          {items.length === 0 ? (
+            <p className="px-2 py-0.5 text-[10px] text-zinc-500">{emptyMessage}</p>
+          ) : (
+            items.map((item) => (
+              <NavLink
+                key={itemKey(item)}
+                to={itemPath(item)}
+                className={({ isActive }) =>
+                  cn(
+                    "flex items-center gap-1.5 rounded py-0.5 px-1.5 text-[11px] no-underline",
+                    isActive
+                      ? "bg-zinc-700 text-zinc-100"
+                      : "text-zinc-400 hover:bg-zinc-800/50 hover:text-zinc-300",
+                  )
+                }
+              >
+                <span className="truncate">{itemLabel(item)}</span>
+              </NavLink>
+            ))
+          )}
+        </div>
+      )}
     </div>
   );
 }

@@ -98,7 +98,7 @@ export function RegistryPlaybookPage() {
 
   return (
     <>
-    <PageContainer>
+    <PageContainer wide>
         <div className="flex items-center gap-2 text-xs text-zinc-500">
           <Link to="/registry" className="hover:text-zinc-300">
             Registry
@@ -124,12 +124,7 @@ export function RegistryPlaybookPage() {
                   </Badge>
                 )}
               </div>
-              {version?.description ? (
-                <MarkdownContent className="text-zinc-500">{version.description}</MarkdownContent>
-              ) : (
-                <p className="text-sm text-zinc-500">No description</p>
-              )}
-              <div className="flex items-center gap-2 pt-2">
+              <div className="flex items-center gap-2 pt-1">
                 <img
                   src={playbook.owner.avatar_url}
                   alt=""
@@ -212,6 +207,12 @@ export function RegistryPlaybookPage() {
             </div>
           ) : null}
         </section>
+
+        {version?.description ? (
+          <section className="border border-zinc-800 bg-zinc-900/30 p-5">
+            <MarkdownContent className="text-zinc-500" collapsedHeight={200}>{version.description}</MarkdownContent>
+          </section>
+        ) : null}
 
         {/* Role Composition */}
         {roleRefs.length > 0 && (

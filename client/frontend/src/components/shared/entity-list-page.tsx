@@ -1,6 +1,7 @@
 import { NavLink } from "react-router-dom";
-import { Loader2, Plus } from "lucide-react";
+import { Loader2, Plus, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { PageContainer } from "./page-container";
 
 interface EntityListPageProps {
@@ -13,10 +14,14 @@ interface EntityListPageProps {
   emptyTitle: string;
   emptyDescription?: string;
   emptyContent?: React.ReactNode;
-  /** Optional secondary action shown in empty state (e.g. "Import from registry") */
   emptySecondaryAction?: { label: string; path: string };
   children: React.ReactNode;
   headerExtra?: React.ReactNode;
+  searchValue?: string;
+  onSearchChange?: (value: string) => void;
+  searchPlaceholder?: string;
+  filterBar?: React.ReactNode;
+  afterContent?: React.ReactNode;
 }
 
 export function EntityListPage({
@@ -32,6 +37,11 @@ export function EntityListPage({
   emptySecondaryAction,
   children,
   headerExtra,
+  searchValue,
+  onSearchChange,
+  searchPlaceholder = "Search...",
+  filterBar,
+  afterContent,
 }: EntityListPageProps) {
   return (
     <PageContainer>
@@ -50,6 +60,23 @@ export function EntityListPage({
             </NavLink>
           </div>
         </section>
+
+        {(onSearchChange !== undefined || filterBar) && (
+          <section className="border border-zinc-800 bg-zinc-900/30 px-4 py-3 space-y-3">
+            {onSearchChange !== undefined && (
+              <div className="relative">
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-zinc-500 pointer-events-none" />
+                <Input
+                  value={searchValue}
+                  onChange={(e) => onSearchChange(e.target.value)}
+                  placeholder={searchPlaceholder}
+                  className="pl-8 h-8 text-xs bg-zinc-950/40 border-zinc-800"
+                />
+              </div>
+            )}
+            {filterBar}
+          </section>
+        )}
 
         <section className="border border-zinc-800 bg-zinc-900/30 p-4">
           {isLoading ? (
@@ -85,6 +112,8 @@ export function EntityListPage({
             children
           )}
         </section>
+
+        {afterContent}
     </PageContainer>
   );
 }

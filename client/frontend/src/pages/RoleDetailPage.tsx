@@ -68,22 +68,19 @@ export function RoleDetailPage() {
   if (isLoading || !role) return <DetailLoading message="Loading role..." />;
 
   return (
-    <PageContainer>
+    <PageContainer wide>
         <div className="flex items-center gap-2 text-xs text-zinc-500">
           <Link to="/roles" className="hover:text-zinc-300">Roles</Link>
           <span>/</span>
           <span className="text-zinc-400">{role.id}</span>
         </div>
 
-        <section className="border border-zinc-800 bg-zinc-900/30 p-4">
+        <section className="border border-zinc-800 bg-zinc-900/30 p-4 space-y-3">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div className="min-w-0 space-y-1">
               <h1 className="text-xl font-semibold text-zinc-100">
                 {role.name}
               </h1>
-              {role.description && (
-                <MarkdownContent className="text-zinc-500">{role.description}</MarkdownContent>
-              )}
               <p className="text-[11px] font-mono text-zinc-600">
                 {role.id}
               </p>
@@ -120,7 +117,7 @@ export function RoleDetailPage() {
           </div>
 
           {role.labels.length > 0 && (
-            <div className="mt-3 flex flex-wrap gap-1">
+            <div className="flex flex-wrap gap-1">
               {role.labels.map((tag) => (
                 <Badge key={tag} variant="outline" className="text-[10px]">
                   {tag}
@@ -129,6 +126,12 @@ export function RoleDetailPage() {
             </div>
           )}
         </section>
+
+        {role.description && (
+          <section className="border border-zinc-800 bg-zinc-900/30 p-5">
+            <MarkdownContent className="text-zinc-400" collapsedHeight={200}>{role.description}</MarkdownContent>
+          </section>
+        )}
 
         {role.inputs.length > 0 && (
           <section className="border border-zinc-800 bg-zinc-900/30 p-4 space-y-2">

@@ -20,6 +20,7 @@ import {
   ResizablePanelGroup,
 } from "@/components/ui/resizable";
 import { Sidebar } from "@/components/sidebar/sidebar";
+import { CommandPalette } from "@/components/command-palette";
 import { useSetupStore } from "@/stores/setup";
 import { useHosts } from "@/hooks/queries";
 import { usePingStore } from "@/stores/ping";
@@ -265,6 +266,7 @@ export function AppShell({ children }: AppShellProps) {
         </ResizablePanel>
       </ResizablePanelGroup>
       {publicKeyDialog}
+      <CommandPalette />
     </div>
   );
 }

@@ -112,7 +112,7 @@ export function RegistryRolePage() {
 
   return (
     <>
-    <PageContainer>
+    <PageContainer wide>
         <div className="flex items-center gap-2 text-xs text-zinc-500">
           <Link to="/registry" className="hover:text-zinc-300">
             Registry
@@ -127,12 +127,7 @@ export function RegistryRolePage() {
               <h1 className="text-xl font-semibold text-zinc-100">
                 {version?.name ?? role.id}
               </h1>
-              {version?.description ? (
-                <MarkdownContent className="text-zinc-500">{version.description}</MarkdownContent>
-              ) : (
-                <p className="text-sm text-zinc-500">No description</p>
-              )}
-              <div className="flex items-center gap-2 pt-2">
+              <div className="flex items-center gap-2 pt-1">
                 <img
                   src={role.owner.avatar_url}
                   alt=""
@@ -229,6 +224,12 @@ export function RegistryRolePage() {
             </p>
           ) : null}
         </section>
+
+        {version?.description ? (
+          <section className="border border-zinc-800 bg-zinc-900/30 p-5">
+            <MarkdownContent className="text-zinc-500" collapsedHeight={200}>{version.description}</MarkdownContent>
+          </section>
+        ) : null}
 
         {inputs.length > 0 ? (
           <Card className="border-zinc-800">
