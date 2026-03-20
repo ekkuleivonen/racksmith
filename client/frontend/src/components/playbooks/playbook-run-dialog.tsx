@@ -164,7 +164,8 @@ export function PlaybookRunDialog({
     setPhase("pick-hosts");
     getPlaybook(pb.id)
       .then((detail) => {
-        setRolesCatalog(detail.playbook.roles_catalog);
+        const pbRoleIds = new Set(pb.roles);
+        setRolesCatalog(detail.playbook.roles_catalog.filter((r) => pbRoleIds.has(r.id)));
         setPlaybookBecome(detail.playbook.become ?? false);
       })
       .catch(() => {});
@@ -206,7 +207,8 @@ export function PlaybookRunDialog({
       setSelectedPlaybook(pb);
       try {
         const detail = await getPlaybook(pb.id);
-        const catalog = detail.playbook.roles_catalog;
+        const pbRoleIds = new Set(pb.roles);
+        const catalog = detail.playbook.roles_catalog.filter((r) => pbRoleIds.has(r.id));
         const become = detail.playbook.become ?? false;
         setRolesCatalog(catalog);
         setPlaybookBecome(become);

@@ -6,8 +6,10 @@ import {
   createHost,
   deleteHost,
   refreshHost,
+  relocateHost,
   updateHost,
   type HostInput,
+  type RelocateResponse,
 } from "@/lib/hosts";
 import {
   createGroup,
@@ -70,6 +72,17 @@ export const useDeleteHost = () =>
 export const useRefreshHost = () =>
   useToastMutation((id: string) => refreshHost(id), {
     success: "Host probed",
+  });
+
+export const useRelocateHost = () =>
+  useToastMutation((id: string) => relocateHost(id), {
+    success: (data: RelocateResponse) =>
+      data.changed
+        ? `IP updated: ${data.previous_ip} → ${data.new_ip}`
+        : `IP unchanged (${data.new_ip})`,
+    onSuccess: () => {
+      invalidateResource("hosts");
+    },
   });
 
 export const useRebootHost = () =>

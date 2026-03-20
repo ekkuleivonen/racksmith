@@ -149,6 +149,21 @@ export async function refreshHost(id: string) {
   return result;
 }
 
+export type RelocateResponse = {
+  host: Host;
+  previous_ip: string;
+  new_ip: string;
+  changed: boolean;
+};
+
+export async function relocateHost(id: string, subnet?: string) {
+  const result = await apiPost<RelocateResponse>(`/hosts/${id}/relocate`, {
+    subnet: subnet ?? null,
+  });
+  invalidateAfterHostMutation();
+  return result;
+}
+
 export async function previewHost(payload: HostInput) {
   return apiPost<{ host: Host }>("/hosts/preview", payload);
 }

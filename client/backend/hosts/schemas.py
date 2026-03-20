@@ -105,3 +105,14 @@ class BulkHostCreateRequest(BaseModel):
 
 class BulkHostCreateResponse(BaseModel):
     hosts: list[Host]
+
+
+class RelocateRequest(BaseModel):
+    subnet: str | None = None
+
+
+class RelocateResponse(BaseModel):
+    host: Host
+    previous_ip: str
+    new_ip: str
+    changed: bool

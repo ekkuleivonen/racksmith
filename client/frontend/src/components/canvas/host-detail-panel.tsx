@@ -1,5 +1,6 @@
 import { useMemo, useRef, useState } from "react";
 import {
+  Locate,
   Plus,
   Power,
   RefreshCw,
@@ -40,6 +41,7 @@ import {
   useDeleteHost,
   useRebootHost,
   useRefreshHost,
+  useRelocateHost,
   useUpdateHost,
 } from "@/hooks/mutations";
 import { LoadingState } from "@/components/shared/loading-state";
@@ -92,6 +94,7 @@ function HostActions({
   onClose: () => void;
 }) {
   const refreshMutation = useRefreshHost();
+  const relocateMutation = useRelocateHost();
   const rebootMutation = useRebootHost();
   const deleteMutation = useDeleteHost();
 
@@ -116,6 +119,27 @@ function HostActions({
           Probe host
         </TooltipContent>
       </Tooltip>
+      {host.mac_address ? (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              size="icon"
+              variant="ghost"
+              className="h-7 w-7"
+              disabled={relocateMutation.isPending}
+              aria-label="Relocate IP"
+              onClick={() => relocateMutation.mutate(host.id)}
+            >
+              <Locate
+                className={cn("size-3", relocateMutation.isPending && "animate-spin")}
+              />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom" className="text-xs">
+            Relocate IP
+          </TooltipContent>
+        </Tooltip>
+      ) : null}
       <Tooltip>
         <TooltipTrigger asChild>
           <Button

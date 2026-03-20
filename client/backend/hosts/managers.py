@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+
 from _utils.exceptions import NotFoundError
 from _utils.helpers import generate_unique_id
 from _utils.logging import get_logger
@@ -336,6 +338,65 @@ class HostManager:
         layout = get_layout(session)
         write_host(layout, _host_to_host_data(updated))
         return updated
+
+    async def relocate_host(
+        self,
+        session: SessionData,
+        host_id: str,
+        subnet: str | None = None,
+    ) -> tuple[Host, str, str, bool]:
+        """ARP-scan the network to find a host's new IP by MAC address.
+
+        Returns ``(host, previous_ip, new_ip, changed)``.
+        """
+        from hosts.scan_misc import arp_scan, detect_subnet
+
+        host = self.get_host(session, host_id)
+        if not host.managed:
+            raise ValueError("Only managed hosts can be relocated")
+        if not host.mac_address:
+            raise ValueError("Host has no MAC address — probe the host first")
+
+        resolved_subnet = subnet or detect_subnet()
+        loop = asyncio.get_running_loop()
+        devices = await loop.run_in_executor(None, arp_scan, resolved_subnet)
+
+        target_mac = host.mac_address.lower()
+        new_ip: str | None = None
+        for ip, mac in devices:
+            if mac.lower() == target_mac:
+                new_ip = ip
+                break
+
+        if new_ip is None:
+            raise NotFoundError(
+                f"MAC {host.mac_address} not found on subnet {resolved_subnet}"
+            )
+
+        previous_ip = host.ip_address
+        changed = new_ip != previous_ip
+
+        if changed:
+            layout = get_layout(session)
+            host_data = _host_to_host_data(
+                host.model_copy(update={"ip_address": new_ip})
+            )
+            write_host(layout, host_data)
+            logger.info(
+                "host_ip_relocated",
+                host_id=host_id,
+                previous_ip=previous_ip,
+                new_ip=new_ip,
+            )
+            try:
+                host = await self.probe_host(session, host_id)
+            except Exception:
+                logger.warning("ssh_probe_after_relocate_failed", host_id=host_id, exc_info=True)
+                host = self.get_host(session, host_id)
+        else:
+            logger.info("host_ip_unchanged", host_id=host_id, ip=new_ip)
+
+        return host, previous_ip, new_ip, changed
 
     def bulk_add_label(self, session: SessionData, host_ids: list[str], label: str) -> int:
         layout = get_layout(session)

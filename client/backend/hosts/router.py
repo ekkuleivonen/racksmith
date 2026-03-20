@@ -21,6 +21,8 @@ from hosts.schemas import (
     HostListResponse,
     HostResponse,
     HostUpdate,
+    RelocateRequest,
+    RelocateResponse,
 )
 from hosts.ssh import ssh_manager
 from hosts.ssh_schemas import (
@@ -75,6 +77,19 @@ async def refresh_host(host_id: str, session: CurrentSession) -> HostResponse:
     """Probe host via SSH to refresh OS/facts."""
     host = await host_manager.probe_host(session, host_id)
     return HostResponse(host=host)
+
+
+@hosts_router.post("/{host_id}/relocate", response_model=RelocateResponse)
+async def relocate_host(
+    host_id: str, body: RelocateRequest, session: CurrentSession
+) -> RelocateResponse:
+    """ARP-scan the network to find a host's new IP by its MAC address."""
+    host, previous_ip, new_ip, changed = await host_manager.relocate_host(
+        session, host_id, body.subnet
+    )
+    return RelocateResponse(
+        host=host, previous_ip=previous_ip, new_ip=new_ip, changed=changed
+    )
 
 
 @hosts_router.post("/bulk/add-to-group", response_model=BulkAddToGroupResponse)
