@@ -115,7 +115,7 @@ function HeaderEditableDescription({
       title="Double-click to edit"
     >
       {value ? (
-        <MarkdownContent className="text-zinc-500">{value}</MarkdownContent>
+        <MarkdownContent className="text-zinc-500" collapsedHeight={200}>{value}</MarkdownContent>
       ) : (
         <p className="text-xs text-zinc-500">{placeholder}</p>
       )}
@@ -204,20 +204,16 @@ export function PlaybookDetailPage() {
 
   return (
     <>
-    <PageContainer>
+    <PageContainer wide>
       <div onBlur={handleFormBlur}>
+        <div className="space-y-4">
         <section className="border border-zinc-800 bg-zinc-900/30 p-4">
           <div className="flex flex-wrap items-start justify-between gap-3">
-            <div className="min-w-0 flex-1 space-y-1">
+            <div className="min-w-0 flex-1">
               <HeaderEditableTitle
                 value={draft.name || playbookId}
                 placeholder="Playbook name"
                 onChange={(name) => setDraft((d) => (d ? { ...d, name } : d))}
-              />
-              <HeaderEditableDescription
-                value={draft.description}
-                placeholder="Double-click to add a description"
-                onChange={(description) => setDraft((d) => (d ? { ...d, description } : d))}
               />
             </div>
             <div className="flex flex-wrap items-center gap-2">
@@ -262,6 +258,14 @@ export function PlaybookDetailPage() {
           </div>
         </section>
 
+        <section className="border border-zinc-800 bg-zinc-900/30 p-5">
+          <HeaderEditableDescription
+            value={draft.description}
+            placeholder="Double-click to add a description"
+            onChange={(description) => setDraft((d) => (d ? { ...d, description } : d))}
+          />
+        </section>
+
         <PlaybookEditorForm
           draft={draft}
           roles={roles_catalog}
@@ -270,6 +274,7 @@ export function PlaybookDetailPage() {
           compact
           onChange={setDraft}
         />
+        </div>
       </div>
     </PageContainer>
 
