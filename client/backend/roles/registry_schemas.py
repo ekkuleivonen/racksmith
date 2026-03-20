@@ -30,7 +30,6 @@ class RegistryVersion(BaseModel):
 
 class RegistryRole(BaseModel):
     id: str
-    slug: str
     owner: RegistryOwner
     download_count: int
     playbook_download_count: int = 0
@@ -75,7 +74,7 @@ class RoleUpdate(BaseModel):
 class RoleImportResponse(BaseModel):
     """Response after importing a role from registry into local repo."""
 
-    slug: str
+    id: str
     name: str
     message: str
 
@@ -103,7 +102,6 @@ class PlaybookRoleRef(BaseModel):
     version_number: int | None = None
     vars: dict = Field(default_factory=dict)
     role_name: str | None = None
-    role_slug: str | None = None
 
 
 class RegistryPlaybookVersion(BaseModel):
@@ -122,7 +120,6 @@ class RegistryPlaybookVersion(BaseModel):
 
 class RegistryPlaybook(BaseModel):
     id: str
-    slug: str
     owner: RegistryOwner
     download_count: int
     created_at: str
@@ -160,7 +157,7 @@ class PlaybookUpdate(BaseModel):
 class PlaybookImportResponse(BaseModel):
     """Response after importing a playbook from registry into local repo."""
 
-    slug: str
+    id: str
     name: str
     message: str
 

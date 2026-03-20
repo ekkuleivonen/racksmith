@@ -32,7 +32,6 @@ VERSION_UUID = "dddddddd-dddd-dddd-dddd-dddddddddddd"
 
 REGISTRY_PLAYBOOK_RESPONSE = {
     "id": PLAYBOOK_UUID,
-    "slug": "my-playbook",
     "owner": {"username": "alice", "avatar_url": "https://gh.com/alice.png"},
     "download_count": 0,
     "created_at": "2026-01-01T00:00:00",
@@ -78,7 +77,6 @@ ROLE_LIST_RESPONSE = {
     "items": [
         {
             "id": ROLE_UUID_A,
-            "slug": "role-a",
             "owner": {"username": "alice", "avatar_url": ""},
             "download_count": 0,
             "created_at": "2026-01-01",
@@ -87,7 +85,6 @@ ROLE_LIST_RESPONSE = {
         },
         {
             "id": ROLE_UUID_B,
-            "slug": "role-b",
             "owner": {"username": "bob", "avatar_url": ""},
             "download_count": 0,
             "created_at": "2026-01-01",
@@ -139,7 +136,7 @@ def _seed_playbook(layout, playbook_id: str, roles: list[PlaybookRoleEntry] | No
 
 
 def _mark_role_as_published(layout, role_id: str, registry_id: str) -> None:
-    """Write registry_id into .racksmith.yml for a role, like import_role does."""
+    """Write registry_id into .racksmith.yml for a role."""
     meta = read_meta(layout)
     rmeta = get_role_meta(meta, role_id)
     rmeta["registry_id"] = registry_id
@@ -195,7 +192,7 @@ class TestPushPlaybook:
     @respx.mock
     @pytest.mark.asyncio
     async def test_push_resolves_role_registry_ids(self, mock_session, layout, repo_path):
-        """Happy path: roles have registry_ids, push sends correct UUIDs."""
+        """Happy path: roles have registry_ids (UUIDs), push sends correct UUIDs."""
         _seed_role(layout, "my_role")
         _mark_role_as_published(layout, "my_role", ROLE_UUID_A)
         _seed_playbook(layout, "test_pb", roles=[
@@ -209,7 +206,7 @@ class TestPushPlaybook:
         with _settings_and_repo_patches(repo_path)():
             result = await registry_manager.push_playbook(mock_session, "test_pb")
 
-        assert result.slug == "my-playbook"
+        assert result.id == PLAYBOOK_UUID
         assert upsert_route.called
         sent_body = upsert_route.calls[0].request.content
         import json
@@ -229,7 +226,6 @@ class TestPushPlaybook:
         auto_push_role_uuid = "eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee"
         role_response = {
             "id": auto_push_role_uuid,
-            "slug": "unpushed-role",
             "owner": {"username": "alice", "avatar_url": ""},
             "download_count": 0,
             "created_at": "2026-01-01",
@@ -249,7 +245,7 @@ class TestPushPlaybook:
 
         assert role_upsert_route.called
         assert pb_upsert_route.called
-        assert result.slug == "my-playbook"
+        assert result.id == PLAYBOOK_UUID
 
         import json
         pb_body = json.loads(pb_upsert_route.calls[0].request.content)
@@ -271,7 +267,7 @@ class TestPushPlaybook:
         _seed_playbook(layout, "test_pb", roles=[
             PlaybookRoleEntry(role="my_role"),
         ])
-        _mark_playbook_as_published(layout, "test_pb", "my-playbook")
+        _mark_playbook_as_published(layout, "test_pb", PLAYBOOK_UUID)
 
         upsert_route = respx.put(f"{REGISTRY_URL}/playbooks").mock(
             return_value=httpx.Response(200, json=REGISTRY_PLAYBOOK_RESPONSE)
@@ -280,7 +276,7 @@ class TestPushPlaybook:
         with _settings_and_repo_patches(repo_path)():
             result = await registry_manager.push_playbook(mock_session, "test_pb")
 
-        assert result.slug == "my-playbook"
+        assert result.id == PLAYBOOK_UUID
         assert upsert_route.called
 
 
@@ -301,12 +297,12 @@ class TestImportPlaybook:
         _seed_role(layout, "local_role_b")
         _mark_role_as_published(layout, "local_role_b", ROLE_UUID_B)
 
-        respx.post(f"{REGISTRY_URL}/playbooks/my-playbook/download").mock(
+        respx.post(f"{REGISTRY_URL}/playbooks/{PLAYBOOK_UUID}/download").mock(
             return_value=httpx.Response(200, json=PLAYBOOK_DOWNLOAD_RESPONSE)
         )
 
         with _settings_and_repo_patches(repo_path)():
-            result = await registry_manager.import_playbook(mock_session, "my-playbook")
+            result = await registry_manager.import_playbook(mock_session, PLAYBOOK_UUID)
 
         assert result.name == "My Playbook"
         assert result.message == "Playbook imported and pushed to GitHub"
@@ -332,25 +328,24 @@ class TestImportPlaybook:
     @respx.mock
     @pytest.mark.asyncio
     async def test_import_stores_registry_id_in_meta(self, mock_session, layout, repo_path):
-        """Imported playbook should have registry_id stored in .racksmith.yml."""
+        """Imported playbook should have registry_id (UUID) stored in .racksmith.yml."""
         _seed_role(layout, "local_role_a")
         _mark_role_as_published(layout, "local_role_a", ROLE_UUID_A)
         _seed_role(layout, "local_role_b")
         _mark_role_as_published(layout, "local_role_b", ROLE_UUID_B)
 
-        respx.post(f"{REGISTRY_URL}/playbooks/my-playbook/download").mock(
+        respx.post(f"{REGISTRY_URL}/playbooks/{PLAYBOOK_UUID}/download").mock(
             return_value=httpx.Response(200, json=PLAYBOOK_DOWNLOAD_RESPONSE)
         )
 
         with _settings_and_repo_patches(repo_path)():
-            await registry_manager.import_playbook(mock_session, "my-playbook")
+            await registry_manager.import_playbook(mock_session, PLAYBOOK_UUID)
 
         meta = read_meta(layout)
         playbook_files = list(layout.playbooks_path.glob("*.yml"))
         pb_id = playbook_files[0].stem
         pb_meta = get_playbook_meta(meta, pb_id)
-        assert pb_meta.get("registry_id") == "my-playbook"
-        assert pb_meta.get("registry_uuid") == PLAYBOOK_UUID
+        assert pb_meta.get("registry_id") == PLAYBOOK_UUID
 
     @respx.mock
     @pytest.mark.asyncio
@@ -360,27 +355,16 @@ class TestImportPlaybook:
         _seed_role(layout, "local_role_a")
         _mark_role_as_published(layout, "local_role_a", ROLE_UUID_A)
 
-        respx.post(f"{REGISTRY_URL}/playbooks/my-playbook/download").mock(
+        respx.post(f"{REGISTRY_URL}/playbooks/{PLAYBOOK_UUID}/download").mock(
             return_value=httpx.Response(200, json=PLAYBOOK_DOWNLOAD_RESPONSE)
         )
-        # Auto-import flow: look up role by UUID, then download by slug
-        respx.get(f"{REGISTRY_URL}/roles/by-id/{ROLE_UUID_B}").mock(
-            return_value=httpx.Response(200, json={
-                "id": ROLE_UUID_B,
-                "slug": "role-b",
-                "owner": {"username": "bob", "avatar_url": ""},
-                "download_count": 0,
-                "created_at": "2026-01-01",
-                "updated_at": None,
-                "latest_version": None,
-            })
-        )
-        respx.post(f"{REGISTRY_URL}/roles/role-b/download").mock(
+        # Auto-import flow: download role by UUID directly
+        respx.post(f"{REGISTRY_URL}/roles/{ROLE_UUID_B}/download").mock(
             return_value=httpx.Response(200, json=ROLE_DOWNLOAD_RESPONSE)
         )
 
         with _settings_and_repo_patches(repo_path)():
-            result = await registry_manager.import_playbook(mock_session, "my-playbook")
+            result = await registry_manager.import_playbook(mock_session, PLAYBOOK_UUID)
 
         assert result.name == "My Playbook"
 
@@ -434,7 +418,7 @@ class TestListAndGetPlaybooks:
                 )
                 result = await registry_manager.list_playbooks(mock_session)
         assert len(result.items) == 1
-        assert result.items[0].slug == "my-playbook"
+        assert result.items[0].id == PLAYBOOK_UUID
 
     @respx.mock
     @pytest.mark.asyncio
@@ -447,11 +431,11 @@ class TestListAndGetPlaybooks:
                 patch("roles.registry._cache_get", return_value=None),
                 patch("roles.registry._cache_set"),
             ):
-                respx.get(f"{REGISTRY_URL}/playbooks/my-playbook").mock(
+                respx.get(f"{REGISTRY_URL}/playbooks/{PLAYBOOK_UUID}").mock(
                     return_value=httpx.Response(200, json=REGISTRY_PLAYBOOK_RESPONSE)
                 )
-                result = await registry_manager.get_playbook(mock_session, "my-playbook")
-        assert result.slug == "my-playbook"
+                result = await registry_manager.get_playbook(mock_session, PLAYBOOK_UUID)
+        assert result.id == PLAYBOOK_UUID
         assert result.latest_version is not None
         assert result.latest_version.name == "My Playbook"
         assert len(result.latest_version.contributors) == 1
