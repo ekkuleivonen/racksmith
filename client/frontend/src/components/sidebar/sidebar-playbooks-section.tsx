@@ -11,6 +11,7 @@ export function SidebarPlaybooksSection() {
       basePath="/playbooks"
       createPath="/playbooks/create"
       createLabel="Create playbook"
+      collapsed
       items={playbooks}
       itemKey={(p) => p.id}
       itemPath={(p) => `/playbooks/${p.id}`}
