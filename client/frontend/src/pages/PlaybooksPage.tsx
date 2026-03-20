@@ -20,7 +20,7 @@ function useRepoKey() {
 
 function PinButton({ path, label }: { path: string; label: string }) {
   const repoKey = useRepoKey();
-  const isPinned = usePinsStore((s) => s.isPinned(repoKey, path));
+  const isPinned = usePinsStore((s) => (s.pins[repoKey] ?? []).some((p) => p.path === path));
   const togglePin = usePinsStore((s) => s.togglePin);
 
   return (

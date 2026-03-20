@@ -10,13 +10,15 @@ import { SidebarRolesSection } from "./sidebar-roles-section";
 import { SidebarFilesSection } from "./sidebar-files-section";
 import { SidebarFooter } from "./sidebar-footer";
 import { AddHostDialog } from "@/components/hosts/add-host-dialog";
-import { usePinsStore } from "@/stores/pins";
+import { usePinsStore, type PinEntry } from "@/stores/pins";
+
+const EMPTY_PINS: PinEntry[] = [];
 import { useSetupStore } from "@/stores/setup";
 
 function SidebarPinnedSection() {
   const status = useSetupStore((s) => s.status);
   const repoKey = status ? `${status.user.login}/${status.repo?.full_name ?? ""}` : "";
-  const pins = usePinsStore((s) => s.getPins(repoKey));
+  const pins = usePinsStore((s) => s.pins[repoKey] ?? EMPTY_PINS);
   const togglePin = usePinsStore((s) => s.togglePin);
   const { pathname } = useLocation();
 

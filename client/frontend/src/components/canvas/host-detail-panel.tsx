@@ -530,7 +530,7 @@ function EditableVarsSection({ host }: { host: Host }) {
 
 export function HostDetailPanel({ hostId, onClose }: HostDetailPanelProps) {
   const { data: host, isLoading } = useHost(hostId || undefined);
-  const pingStatus = usePingStatus(hostId || undefined, !!host?.ip_address);
+  const pingStatus = usePingStatus(hostId || undefined);
   const { data: allGroups = [] } = useGroups();
 
   if (isLoading) {

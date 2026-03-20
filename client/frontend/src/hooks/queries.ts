@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { queryKeys } from "@/lib/queryClient";
 import { getScanStatus, type ScanStatus } from "@/lib/discovery";
 import { getHost, listHosts, type Host } from "@/lib/hosts";
-import { fetchPingStatuses, hostStatusKey, type PingStatus } from "@/lib/ssh";
+import { hostStatusKey, type PingStatus } from "@/lib/ssh";
 import { usePingStore } from "@/stores/ping";
 import { listRacks, getRackLayout, type RackSummary } from "@/lib/racks";
 import { listGroups, getGroup } from "@/lib/groups";
@@ -45,21 +45,11 @@ export function useHost(hostId: string | undefined) {
   });
 }
 
-export function usePingStatus(hostId: string | undefined, hasIp: boolean) {
-  const storeStatus = usePingStore((s) =>
+export function usePingStatus(hostId: string | undefined) {
+  const status = usePingStore((s) =>
     hostId ? s.statuses[hostStatusKey(hostId)] : undefined,
   );
-
-  return useQuery<PingStatus>({
-    queryKey: queryKeys.ping(hostId!),
-    queryFn: async () => {
-      const response = await fetchPingStatuses([{ host_id: hostId! }]);
-      return response.statuses[0]?.status ?? "unknown";
-    },
-    enabled: !!hostId && hasIp,
-    refetchInterval: 10_000,
-    initialData: storeStatus ?? "unknown",
-  });
+  return { data: status ?? ("unknown" as PingStatus) };
 }
 
 export function useRackEntries() {

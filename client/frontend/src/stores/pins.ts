@@ -2,10 +2,12 @@ import { create } from "zustand";
 
 const STORAGE_KEY = "racksmith-pins";
 
-type PinEntry = {
+export type PinEntry = {
   path: string;
   label: string;
 };
+
+const EMPTY_PINS: PinEntry[] = [];
 
 type PinsState = {
   /** Keyed by "{login}/{repo_full_name}" */
@@ -52,9 +54,9 @@ export const usePinsStore = create<PinsState & PinsActions>((set, get) => ({
     }),
 
   isPinned: (repoKey, path) => {
-    const current = get().pins[repoKey] ?? [];
+    const current = get().pins[repoKey] ?? EMPTY_PINS;
     return current.some((p) => p.path === path);
   },
 
-  getPins: (repoKey) => get().pins[repoKey] ?? [],
+  getPins: (repoKey) => get().pins[repoKey] ?? EMPTY_PINS,
 }));

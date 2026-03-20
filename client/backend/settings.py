@@ -62,6 +62,10 @@ REDIS_REGISTRY_CACHE_PREFIX: str = env.str(
 REGISTRY_CACHE_TTL: int = env.int("REGISTRY_CACHE_TTL", default=900)
 SSH_HISTORY_TTL: int = env.int("SSH_HISTORY_TTL", default=60 * 60 * 24 * 30)  # 30 days
 SSH_HISTORY_LIMIT: int = env.int("SSH_HISTORY_LIMIT", default=100)
+PING_CACHE_TTL: int = env.int("PING_CACHE_TTL", default=15)
+REDIS_PING_CACHE_PREFIX: str = env.str(
+    "REDIS_PING_CACHE_PREFIX", default="racksmith:ping:"
+)
 
 # =============================================================================
 # Git branch

@@ -42,12 +42,21 @@ class SSHManager:
             raise ValueError("Host is missing IP address or ssh_user")
         return host
 
-    async def _ping_host(self, host: str) -> bool:
+    def _ping_cache_key(self, ip: str) -> str:
+        return f"{settings.REDIS_PING_CACHE_PREFIX}{ip}"
+
+    async def _ping_host(self, ip: str) -> bool:
+        cached = await AsyncRedis.get(self._ping_cache_key(ip))
+        if cached is not None:
+            return cached == "1"
+
         process = await asyncio.create_subprocess_exec(
             "ping",
             "-c",
             "1",
-            host,
+            "-W",
+            "1",
+            ip,
             stdout=asyncio.subprocess.DEVNULL,
             stderr=asyncio.subprocess.DEVNULL,
         )
@@ -58,8 +67,16 @@ class SSHManager:
                 process.kill()
             with suppress(ProcessLookupError):
                 await process.wait()
-            return False
-        return process.returncode == 0
+            reachable = False
+        else:
+            reachable = process.returncode == 0
+
+        await AsyncRedis.setex(
+            self._ping_cache_key(ip),
+            settings.PING_CACHE_TTL,
+            "1" if reachable else "0",
+        )
+        return reachable
 
     async def _load_history(self, user_id: str, node_id: str) -> list[CommandHistoryEntry]:
         raw = await AsyncRedis.get(self._history_key(user_id, node_id))
