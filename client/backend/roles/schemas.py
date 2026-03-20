@@ -9,6 +9,8 @@ from pydantic import BaseModel, Field
 from _utils.schemas import RoleInputSpec, RoleOutputSpec, RunStatus
 from playbooks.schemas import TargetSelection
 
+_MAX_DESCRIPTION_LENGTH = 10_000
+
 
 class RoleCreate(BaseModel):
     """Single YAML declaration format.
@@ -18,7 +20,7 @@ class RoleCreate(BaseModel):
     """
 
     name: str = Field(min_length=1, max_length=120)
-    description: str = Field(default="", max_length=500)
+    description: str = Field(default="", max_length=_MAX_DESCRIPTION_LENGTH)
     inputs: list[RoleInputSpec] = Field(default_factory=list)
     outputs: list[RoleOutputSpec] = Field(default_factory=list)
     labels: list[str] = Field(default_factory=list)

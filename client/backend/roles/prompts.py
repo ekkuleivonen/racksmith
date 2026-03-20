@@ -3,7 +3,11 @@
 _SCHEMA_DESCRIPTION = """\
 Required top-level keys:
   name        – human-readable name
-  description – short summary
+  description – rich description written in Markdown. Explain what the role does,
+                how it works, any prerequisites, idempotency behavior, and safety
+                notes. Use headings, bullet lists, inline code for paths/commands,
+                and code blocks where appropriate. Aim for a helpful README-style
+                paragraph (3-8 sentences minimum), not a one-liner.
 
 Optional top-level keys:
   labels        – list of tags (e.g. ["web", "nginx"])
@@ -65,7 +69,7 @@ Task FQCN rules — always use fully-qualified collection names for modules:
 _JSON_EXAMPLE = """\
 {
   "name": "Install Nginx",
-  "description": "Install and configure Nginx web server",
+  "description": "Installs the **Nginx** web server and starts it as a system service.\n\nConfigures a basic HTTP listener on a user-specified port. When SSL is enabled, generates a self-signed certificate and adds an HTTPS listener on port 443.\n\n**Idempotent** — safe to run repeatedly. Skips installation if Nginx is already present.",
   "labels": ["web", "nginx"],
   "compatibility": {"os_family": ["debian", "redhat"]},
   "inputs": [

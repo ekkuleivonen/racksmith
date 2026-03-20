@@ -356,9 +356,10 @@ export function PlaybookCreatePage() {
                     description: e.target.value,
                   }))
                 }
-                placeholder="Short description shown in the UI."
-                className="min-h-20"
+                placeholder="Describe what this playbook does. Supports Markdown."
+                className="min-h-32"
               />
+              <p className="text-[10px] text-zinc-600">Supports Markdown</p>
             </div>
           </section>
 

@@ -23,9 +23,12 @@ class PlaybookRoleEntry(BaseModel):
     vars: dict[str, Any] = Field(default_factory=dict)
 
 
+_MAX_DESCRIPTION_LENGTH = 10_000
+
+
 class PlaybookUpsert(BaseModel):
     name: str = Field(min_length=1, max_length=160)
-    description: str = Field(default="", max_length=500)
+    description: str = Field(default="", max_length=_MAX_DESCRIPTION_LENGTH)
     roles: list[PlaybookRoleEntry] = Field(default_factory=list)
     become: bool = Field(default=False, description="Requires privilege escalation (sudo)")
 
@@ -114,7 +117,7 @@ class PlaybookPlanRoleCreate(BaseModel):
 
     action: Literal["create"]
     name: str = Field(min_length=1, max_length=120)
-    description: str = Field(default="", max_length=500)
+    description: str = Field(default="", max_length=_MAX_DESCRIPTION_LENGTH)
     generation_prompt: str = Field(min_length=1)
     expected_inputs: list[RoleInputSpec] = Field(default_factory=list)
     expected_outputs: list[RoleOutputSpec] = Field(default_factory=list)
@@ -125,7 +128,7 @@ class PlaybookPlan(BaseModel):
     """LLM-generated playbook plan before role sub-agents run."""
 
     name: str = Field(min_length=1, max_length=160)
-    description: str = Field(default="", max_length=500)
+    description: str = Field(default="", max_length=_MAX_DESCRIPTION_LENGTH)
     become: bool = False
     roles: list[PlaybookPlanRoleReuse | PlaybookPlanRoleCreate] = Field(min_length=1)
 
