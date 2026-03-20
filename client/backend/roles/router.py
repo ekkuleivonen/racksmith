@@ -208,14 +208,14 @@ async def list_registry_roles(
     )
 
 
-@registry_router.get("/roles/{slug}", response_model=RegistryRole)
+@registry_router.get("/roles/{role_id}", response_model=RegistryRole)
 async def get_registry_role(
-    slug: str,
+    role_id: str,
     session: CurrentSession,
 ) -> RegistryRole | None:
-    """Get a single registry role by slug."""
+    """Get a single registry role by id."""
     try:
-        return await registry_manager.get_role(session, slug)
+        return await registry_manager.get_role(session, role_id)
     except Exception as exc:
         _handle_registry_error(exc)
 
@@ -232,26 +232,26 @@ async def push_role(
         _handle_registry_error(exc)
 
 
-@registry_router.post("/roles/{slug}/import", response_model=RoleImportResponse)
+@registry_router.post("/roles/{role_id}/import", response_model=RoleImportResponse)
 async def import_role(
-    slug: str,
+    role_id: str,
     session: CurrentSession,
 ) -> RoleImportResponse | None:
     """Import a role from the registry into the active repo."""
     try:
-        return await registry_manager.import_role(session, slug)
+        return await registry_manager.import_role(session, role_id)
     except Exception as exc:
         _handle_registry_error(exc)
 
 
-@registry_router.delete("/roles/{slug}", status_code=204)
+@registry_router.delete("/roles/{role_id}", status_code=204)
 async def delete_registry_role(
-    slug: str,
+    role_id: str,
     session: CurrentSession,
 ) -> None:
     """Delete a role from the community registry."""
     try:
-        await registry_manager.delete_role(session, slug)
+        await registry_manager.delete_role(session, role_id)
     except Exception as exc:
         _handle_registry_error(exc)
 
@@ -294,14 +294,14 @@ async def list_registry_playbooks(
     )
 
 
-@registry_router.get("/playbooks/{slug}", response_model=RegistryPlaybook)
+@registry_router.get("/playbooks/{playbook_id}", response_model=RegistryPlaybook)
 async def get_registry_playbook(
-    slug: str,
+    playbook_id: str,
     session: CurrentSession,
 ) -> RegistryPlaybook | None:
-    """Get a single registry playbook by slug."""
+    """Get a single registry playbook by id."""
     try:
-        return await registry_manager.get_playbook(session, slug)
+        return await registry_manager.get_playbook(session, playbook_id)
     except Exception as exc:
         _handle_registry_error(exc)
 
@@ -318,25 +318,25 @@ async def push_playbook(
         _handle_registry_error(exc)
 
 
-@registry_router.post("/playbooks/{slug}/import", response_model=PlaybookImportResponse)
+@registry_router.post("/playbooks/{playbook_id}/import", response_model=PlaybookImportResponse)
 async def import_playbook(
-    slug: str,
+    playbook_id: str,
     session: CurrentSession,
 ) -> PlaybookImportResponse | None:
     """Import a playbook from the registry into the active repo."""
     try:
-        return await registry_manager.import_playbook(session, slug)
+        return await registry_manager.import_playbook(session, playbook_id)
     except Exception as exc:
         _handle_registry_error(exc)
 
 
-@registry_router.delete("/playbooks/{slug}", status_code=204)
+@registry_router.delete("/playbooks/{playbook_id}", status_code=204)
 async def delete_registry_playbook(
-    slug: str,
+    playbook_id: str,
     session: CurrentSession,
 ) -> None:
     """Delete a playbook from the community registry."""
     try:
-        await registry_manager.delete_playbook(session, slug)
+        await registry_manager.delete_playbook(session, playbook_id)
     except Exception as exc:
         _handle_registry_error(exc)

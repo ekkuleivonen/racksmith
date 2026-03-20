@@ -4,6 +4,7 @@ import { Loader2 as PushLoader, Package, Play } from "lucide-react";
 import { toast } from "sonner";
 import { toastApiError } from "@/lib/api";
 import { DetailLoading } from "@/components/shared/detail-states";
+import { MarkdownContent } from "@/components/shared/markdown-content";
 import { PageContainer } from "@/components/shared/page-container";
 import { PlaybookEditorForm } from "@/components/playbooks/playbook-editor-form";
 import { PlaybookRunDialog } from "@/components/playbooks/playbook-run-dialog";
@@ -90,28 +91,35 @@ function HeaderEditableDescription({
   }, [editing]);
   if (editing) {
     return (
-      <Textarea
-        ref={ref}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        onBlur={() => setEditing(false)}
-        onKeyDown={(e) => {
-          if ((e.metaKey || e.ctrlKey) && e.key === "Enter") setEditing(false);
-          if (e.key === "Escape") setEditing(false);
-        }}
-        placeholder={placeholder}
-        className="text-xs text-zinc-500 min-h-16 mt-1 -mx-2 px-2"
-      />
+      <div className="mt-1 -mx-2 space-y-1">
+        <Textarea
+          ref={ref}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          onBlur={() => setEditing(false)}
+          onKeyDown={(e) => {
+            if ((e.metaKey || e.ctrlKey) && e.key === "Enter") setEditing(false);
+            if (e.key === "Escape") setEditing(false);
+          }}
+          placeholder={placeholder}
+          className="text-xs text-zinc-500 min-h-32 px-2"
+        />
+        <p className="text-[10px] text-zinc-600 px-2">Supports Markdown</p>
+      </div>
     );
   }
   return (
-    <p
-      className="text-xs text-zinc-500 cursor-text rounded px-2 -mx-2 py-0.5 hover:bg-zinc-800/50 min-h-[1.25rem]"
+    <div
+      className="cursor-text rounded px-2 -mx-2 py-0.5 hover:bg-zinc-800/50 min-h-[1.25rem]"
       onDoubleClick={() => setEditing(true)}
       title="Double-click to edit"
     >
-      {value || placeholder}
-    </p>
+      {value ? (
+        <MarkdownContent className="text-zinc-500">{value}</MarkdownContent>
+      ) : (
+        <p className="text-xs text-zinc-500">{placeholder}</p>
+      )}
+    </div>
   );
 }
 

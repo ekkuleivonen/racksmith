@@ -1,7 +1,6 @@
-import re
 from uuid import UUID as StdUUID
 
-from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request
+from fastapi import APIRouter, Depends, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from auth.dependencies import get_current_user
@@ -20,15 +19,6 @@ from roles.schemas import (
 )
 
 router = APIRouter()
-
-_SLUG_RE = re.compile(r"^[a-z0-9][-a-z0-9]*$")
-_SLUG_MAX_LEN = 200
-
-
-def _validated_slug(slug: str = Path(...)) -> str:
-    if len(slug) > _SLUG_MAX_LEN or not _SLUG_RE.match(slug):
-        raise HTTPException(status_code=400, detail="Invalid slug format")
-    return slug
 
 
 def _version_to_out(v, *, download_event_id: StdUUID | str | None = None) -> VersionOut:
@@ -57,7 +47,6 @@ async def _role_to_out(
     dl_count = await managers._confirmed_download_count(session, role_id=role.id)
     return RoleOut(
         id=role.id,
-        slug=role.slug,
         owner=role.owner,
         download_count=dl_count,
         playbook_download_count=playbook_download_count,
@@ -113,35 +102,24 @@ async def list_roles(
     )
 
 
-@router.get("/roles/by-id/{role_uuid}", response_model=RoleOut)
-async def get_role_by_uuid(
-    role_uuid: StdUUID,
-    session: AsyncSession = Depends(get_db),
-    _user: User = Depends(get_current_user),
-):
-    role = await managers.get_role_by_uuid(session, role_uuid)
-    pb_count = await managers.get_playbook_download_count(session, role.id)
-    return await _role_to_out(role, session, playbook_download_count=pb_count)
-
-
-@router.get("/roles/{slug}", response_model=RoleOut)
+@router.get("/roles/{role_id}", response_model=RoleOut)
 async def get_role(
-    slug: str = Depends(_validated_slug),
+    role_id: StdUUID,
     session: AsyncSession = Depends(get_db),
     _user: User = Depends(get_current_user),
 ):
-    role = await managers.get_role(session, slug)
+    role = await managers.get_role(session, role_id)
     pb_count = await managers.get_playbook_download_count(session, role.id)
     return await _role_to_out(role, session, playbook_download_count=pb_count)
 
 
-@router.get("/roles/{slug}/versions", response_model=list[VersionOut])
+@router.get("/roles/{role_id}/versions", response_model=list[VersionOut])
 async def list_versions(
-    slug: str = Depends(_validated_slug),
+    role_id: StdUUID,
     session: AsyncSession = Depends(get_db),
     _user: User = Depends(get_current_user),
 ):
-    role = await managers.get_role(session, slug)
+    role = await managers.get_role(session, role_id)
     return [_version_to_out(v) for v in role.versions]
 
 
@@ -173,44 +151,44 @@ async def upsert_role(
     return out
 
 
-@router.put("/roles/{slug}", response_model=RoleOut)
+@router.put("/roles/{role_id}", response_model=RoleOut)
 @limiter.limit("20/minute")
 async def update_role(
     request: Request,
     data: RoleUpdate,
-    slug: str = Depends(_validated_slug),
+    role_id: StdUUID,
     session: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    role = await managers.update_role(session, slug, data, user)
+    role = await managers.update_role(session, role_id, data, user)
     return await _role_to_out(role, session)
 
 
-@router.delete("/roles/{slug}", status_code=204)
+@router.delete("/roles/{role_id}", status_code=204)
 @limiter.limit("10/minute")
 async def delete_role(
     request: Request,
-    slug: str = Depends(_validated_slug),
+    role_id: StdUUID,
     session: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    await managers.delete_role(session, slug, user)
+    await managers.delete_role(session, role_id, user)
 
 
-@router.post("/roles/{slug}/download", response_model=VersionOut)
+@router.post("/roles/{role_id}/download", response_model=VersionOut)
 async def download_role(
-    slug: str = Depends(_validated_slug),
+    role_id: StdUUID,
     session: AsyncSession = Depends(get_db),
     _user: User = Depends(get_current_user),
 ):
-    version, event = await managers.download_role(session, slug)
+    version, event = await managers.download_role(session, role_id)
     return _version_to_out(version, download_event_id=event.id)
 
 
-@router.post("/roles/{slug}/confirm-download", status_code=204)
+@router.post("/roles/{role_id}/confirm-download", status_code=204)
 async def confirm_role_download(
     data: ConfirmDownloadRequest,
-    slug: str = Depends(_validated_slug),
+    role_id: StdUUID,
     session: AsyncSession = Depends(get_db),
     _user: User = Depends(get_current_user),
 ):

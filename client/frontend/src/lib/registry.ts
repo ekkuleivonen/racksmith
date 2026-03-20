@@ -27,7 +27,6 @@ export type RegistryVersion = {
 
 export type RegistryRole = {
   id: string;
-  slug: string;
   owner: RegistryOwner;
   download_count: number;
   playbook_download_count: number;
@@ -82,8 +81,8 @@ export async function getRegistryFacets(): Promise<RegistryFacets> {
   return apiGet<RegistryFacets>("/registry/roles/facets");
 }
 
-export async function getRegistryRole(slug: string): Promise<RegistryRole> {
-  return apiGet<RegistryRole>(`/registry/roles/${slug}`);
+export async function getRegistryRole(id: string): Promise<RegistryRole> {
+  return apiGet<RegistryRole>(`/registry/roles/${id}`);
 }
 
 export async function pushToRegistry(roleId: string): Promise<RegistryRole> {
@@ -93,21 +92,21 @@ export async function pushToRegistry(roleId: string): Promise<RegistryRole> {
 }
 
 export type RoleImportResponse = {
-  slug: string;
+  id: string;
   name: string;
   message: string;
 };
 
 export async function importFromRegistry(
-  slug: string
+  id: string
 ): Promise<RoleImportResponse> {
-  const result = await apiPost<RoleImportResponse>(`/registry/roles/${slug}/import`);
+  const result = await apiPost<RoleImportResponse>(`/registry/roles/${id}/import`);
   invalidateResource("roles", "filesTree", "playbooks", "registry");
   return result;
 }
 
-export async function deleteRegistryRole(slug: string): Promise<void> {
-  await apiDelete(`/registry/roles/${slug}`);
+export async function deleteRegistryRole(id: string): Promise<void> {
+  await apiDelete(`/registry/roles/${id}`);
   invalidateResource("registry");
 }
 
@@ -125,7 +124,6 @@ export type PlaybookRoleRef = {
   version_number: number | null;
   vars: Record<string, unknown>;
   role_name: string | null;
-  role_slug: string | null;
 };
 
 export type RegistryPlaybookVersion = {
@@ -143,7 +141,6 @@ export type RegistryPlaybookVersion = {
 
 export type RegistryPlaybook = {
   id: string;
-  slug: string;
   owner: RegistryOwner;
   download_count: number;
   created_at: string;
@@ -172,7 +169,7 @@ export type PlaybookFacets = {
 };
 
 export type PlaybookImportResponse = {
-  slug: string;
+  id: string;
   name: string;
   message: string;
 };
@@ -202,9 +199,9 @@ export async function getRegistryPlaybookFacets(): Promise<PlaybookFacets> {
 }
 
 export async function getRegistryPlaybook(
-  slug: string,
+  id: string,
 ): Promise<RegistryPlaybook> {
-  return apiGet<RegistryPlaybook>(`/registry/playbooks/${slug}`);
+  return apiGet<RegistryPlaybook>(`/registry/playbooks/${id}`);
 }
 
 export async function pushPlaybookToRegistry(
@@ -218,16 +215,16 @@ export async function pushPlaybookToRegistry(
 }
 
 export async function importPlaybookFromRegistry(
-  slug: string,
+  id: string,
 ): Promise<PlaybookImportResponse> {
   const result = await apiPost<PlaybookImportResponse>(
-    `/registry/playbooks/${slug}/import`,
+    `/registry/playbooks/${id}/import`,
   );
   invalidateResource("playbooks", "filesTree", "registry");
   return result;
 }
 
-export async function deleteRegistryPlaybook(slug: string): Promise<void> {
-  await apiDelete(`/registry/playbooks/${slug}`);
+export async function deleteRegistryPlaybook(id: string): Promise<void> {
+  await apiDelete(`/registry/playbooks/${id}`);
   invalidateResource("registry");
 }

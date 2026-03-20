@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { Info, Loader2, Trash2, Upload } from "lucide-react";
 import { DetailLoading, DetailNotFound } from "@/components/shared/detail-states";
+import { MarkdownContent } from "@/components/shared/markdown-content";
 import { PageContainer } from "@/components/shared/page-container";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
@@ -81,7 +82,7 @@ export function RoleDetailPage() {
                 {role.name}
               </h1>
               {role.description && (
-                <p className="text-sm text-zinc-500">{role.description}</p>
+                <MarkdownContent className="text-zinc-500">{role.description}</MarkdownContent>
               )}
               <p className="text-[11px] font-mono text-zinc-600">
                 {role.id}

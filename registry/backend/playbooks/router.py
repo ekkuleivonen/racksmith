@@ -1,7 +1,6 @@
-import re
 from uuid import UUID as StdUUID
 
-from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request
+from fastapi import APIRouter, Depends, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from auth.dependencies import get_current_user
@@ -24,15 +23,6 @@ from roles.managers import _confirmed_download_count, confirm_download
 
 router = APIRouter()
 
-_SLUG_RE = re.compile(r"^[a-z0-9][-a-z0-9]*$")
-_SLUG_MAX_LEN = 200
-
-
-def _validated_slug(slug: str = Path(...)) -> str:
-    if len(slug) > _SLUG_MAX_LEN or not _SLUG_RE.match(slug):
-        raise HTTPException(status_code=400, detail="Invalid slug format")
-    return slug
-
 
 def _build_role_refs(version) -> list[PlaybookRoleRef]:
     """Build PlaybookRoleRef list from the join table entries."""
@@ -43,8 +33,7 @@ def _build_role_refs(version) -> list[PlaybookRoleRef]:
         refs.append(PlaybookRoleRef(
             registry_role_id=entry.role_id,
             vars=entry.vars or {},
-            role_slug=role.slug,
-            role_name=latest_rv.name if latest_rv else role.slug,
+            role_name=latest_rv.name if latest_rv else str(entry.role_id),
         ))
     return refs
 
@@ -94,7 +83,6 @@ async def _playbook_to_out(playbook, session: AsyncSession) -> PlaybookOut:
     dl_count = await _confirmed_download_count(session, playbook_id=playbook.id)
     return PlaybookOut(
         id=playbook.id,
-        slug=playbook.slug,
         owner=playbook.owner,
         download_count=dl_count,
         created_at=playbook.created_at,
@@ -140,23 +128,23 @@ async def list_playbooks(
     )
 
 
-@router.get("/playbooks/{slug}", response_model=PlaybookOut)
+@router.get("/playbooks/{playbook_id}", response_model=PlaybookOut)
 async def get_playbook(
-    slug: str = Depends(_validated_slug),
+    playbook_id: StdUUID,
     session: AsyncSession = Depends(get_db),
     _user: User = Depends(get_current_user),
 ):
-    playbook = await managers.get_playbook(session, slug)
+    playbook = await managers.get_playbook(session, playbook_id)
     return await _playbook_to_out(playbook, session)
 
 
-@router.get("/playbooks/{slug}/versions", response_model=list[PlaybookVersionOut])
+@router.get("/playbooks/{playbook_id}/versions", response_model=list[PlaybookVersionOut])
 async def list_versions(
-    slug: str = Depends(_validated_slug),
+    playbook_id: StdUUID,
     session: AsyncSession = Depends(get_db),
     _user: User = Depends(get_current_user),
 ):
-    playbook = await managers.get_playbook(session, slug)
+    playbook = await managers.get_playbook(session, playbook_id)
     return [_version_to_out(v, playbook.owner) for v in playbook.versions]
 
 
@@ -188,45 +176,45 @@ async def upsert_playbook(
     return out
 
 
-@router.put("/playbooks/{slug}", response_model=PlaybookOut)
+@router.put("/playbooks/{playbook_id}", response_model=PlaybookOut)
 @limiter.limit("20/minute")
 async def update_playbook(
     request: Request,
     data: PlaybookUpdate,
-    slug: str = Depends(_validated_slug),
+    playbook_id: StdUUID,
     session: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    playbook = await managers.update_playbook(session, slug, data, user)
+    playbook = await managers.update_playbook(session, playbook_id, data, user)
     return await _playbook_to_out(playbook, session)
 
 
-@router.delete("/playbooks/{slug}", status_code=204)
+@router.delete("/playbooks/{playbook_id}", status_code=204)
 @limiter.limit("10/minute")
 async def delete_playbook(
     request: Request,
-    slug: str = Depends(_validated_slug),
+    playbook_id: StdUUID,
     session: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    await managers.delete_playbook(session, slug, user)
+    await managers.delete_playbook(session, playbook_id, user)
 
 
-@router.post("/playbooks/{slug}/download", response_model=PlaybookVersionOut)
+@router.post("/playbooks/{playbook_id}/download", response_model=PlaybookVersionOut)
 async def download_playbook(
-    slug: str = Depends(_validated_slug),
+    playbook_id: StdUUID,
     session: AsyncSession = Depends(get_db),
     _user: User = Depends(get_current_user),
 ):
-    version, event = await managers.download_playbook(session, slug)
-    playbook = await managers.get_playbook(session, slug)
+    version, event = await managers.download_playbook(session, playbook_id)
+    playbook = await managers.get_playbook(session, playbook_id)
     return _version_to_out(version, playbook.owner, download_event_id=event.id)
 
 
-@router.post("/playbooks/{slug}/confirm-download", status_code=204)
+@router.post("/playbooks/{playbook_id}/confirm-download", status_code=204)
 async def confirm_playbook_download(
     data: ConfirmDownloadRequest,
-    slug: str = Depends(_validated_slug),
+    playbook_id: StdUUID,
     session: AsyncSession = Depends(get_db),
     _user: User = Depends(get_current_user),
 ):

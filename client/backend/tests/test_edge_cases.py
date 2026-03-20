@@ -1,8 +1,8 @@
 """Edge-case tests for playbook/role lifecycle on the client side.
 
 These tests verify that the client-side fixes work correctly:
-- push_role/push_playbook store slug as registry_id (not UUID)
-- import_playbook uses /roles/by-id/ endpoint (not paginated list)
+- push_role/push_playbook store UUID as registry_id
+- import_playbook auto-imports missing roles by UUID
 - import_playbook fails fast when a role is missing
 - remove_role blocks deletion when playbooks reference the role
 - confirm-download is called after successful import
@@ -81,20 +81,18 @@ def _seed_playbook(
     )
 
 
-def _mark_role_as_published(layout, role_id: str, *, slug: str, uuid: str) -> None:
+def _mark_role_as_published(layout, role_id: str, *, registry_id: str) -> None:
     meta = read_meta(layout)
     rmeta = get_role_meta(meta, role_id)
-    rmeta["registry_id"] = slug
-    rmeta["registry_uuid"] = uuid
+    rmeta["registry_id"] = registry_id
     set_role_meta(meta, role_id, rmeta)
     write_meta(layout, meta)
 
 
-def _mark_playbook_as_published(layout, playbook_id: str, *, slug: str, uuid: str) -> None:
+def _mark_playbook_as_published(layout, playbook_id: str, *, registry_id: str) -> None:
     meta = read_meta(layout)
     pmeta = get_playbook_meta(meta, playbook_id)
-    pmeta["registry_id"] = slug
-    pmeta["registry_uuid"] = uuid
+    pmeta["registry_id"] = registry_id
     set_playbook_meta(meta, playbook_id, pmeta)
     write_meta(layout, meta)
 
@@ -124,10 +122,9 @@ def _settings_and_repo_patches(repo_path):
     return ctx
 
 
-def _role_response(*, id: str = ROLE_UUID_A, slug: str = "my-role") -> dict:
+def _role_response(*, id: str = ROLE_UUID_A) -> dict:
     return {
         "id": id,
-        "slug": slug,
         "owner": {"username": "user", "avatar_url": ""},
         "download_count": 0,
         "created_at": "2024-01-01",
@@ -160,7 +157,6 @@ def _role_download_response(
 def _playbook_response() -> dict:
     return {
         "id": PLAYBOOK_UUID,
-        "slug": "my-playbook",
         "owner": {"username": "alice", "avatar_url": ""},
         "download_count": 0,
         "created_at": "2026-01-01T00:00:00",
@@ -211,13 +207,13 @@ def _playbook_download_response(
 
 
 # ===========================================================================
-# Group A — Re-push stores slug (not UUID) as registry_id
+# Group A — Re-push stores UUID as registry_id
 # ===========================================================================
 
 
 class TestRepushFixed:
     """push_role/push_playbook use a single upsert endpoint (PUT /roles, PUT /playbooks).
-    Registry handles create-or-update. Client stores slug as registry_id.
+    Registry handles create-or-update. Client stores UUID as registry_id.
     """
 
     @respx.mock
@@ -225,7 +221,7 @@ class TestRepushFixed:
     async def test_repush_role_after_first_push(self, mock_session, layout, repo_path):
         _seed_role(layout, "my_role")
 
-        role_resp = _role_response(id=ROLE_UUID_A, slug="my-role")
+        role_resp = _role_response(id=ROLE_UUID_A)
 
         upsert_route = respx.put(f"{REGISTRY_URL}/roles").mock(
             return_value=httpx.Response(200, json=role_resp),
@@ -233,15 +229,14 @@ class TestRepushFixed:
 
         with _settings_and_repo_patches(repo_path)():
             first = await registry_manager.push_role(mock_session, "my_role")
-            assert first.slug == "my-role"
+            assert first.id == ROLE_UUID_A
 
             meta = read_meta(layout)
             rmeta = get_role_meta(meta, "my_role")
-            assert rmeta["registry_id"] == "my-role"
-            assert rmeta["registry_uuid"] == ROLE_UUID_A
+            assert rmeta["registry_id"] == ROLE_UUID_A
 
             second = await registry_manager.push_role(mock_session, "my_role")
-            assert second.slug == "my-role"
+            assert second.id == ROLE_UUID_A
 
         assert upsert_route.call_count == 2
 
@@ -249,7 +244,7 @@ class TestRepushFixed:
     @pytest.mark.asyncio
     async def test_repush_playbook_after_first_push(self, mock_session, layout, repo_path):
         _seed_role(layout, "my_role")
-        _mark_role_as_published(layout, "my_role", slug="my-role", uuid=ROLE_UUID_A)
+        _mark_role_as_published(layout, "my_role", registry_id=ROLE_UUID_A)
         _seed_playbook(
             layout,
             "test_pb",
@@ -264,21 +259,20 @@ class TestRepushFixed:
 
         with _settings_and_repo_patches(repo_path)():
             first = await registry_manager.push_playbook(mock_session, "test_pb")
-            assert first.slug == "my-playbook"
+            assert first.id == PLAYBOOK_UUID
 
             meta = read_meta(layout)
             pmeta = get_playbook_meta(meta, "test_pb")
-            assert pmeta["registry_id"] == "my-playbook"
-            assert pmeta["registry_uuid"] == PLAYBOOK_UUID
+            assert pmeta["registry_id"] == PLAYBOOK_UUID
 
             second = await registry_manager.push_playbook(mock_session, "test_pb")
-            assert second.slug == "my-playbook"
+            assert second.id == PLAYBOOK_UUID
 
         assert upsert_route.call_count == 2
 
 
 # ===========================================================================
-# Group B — Auto-import uses /roles/by-id/ and fails fast
+# Group B — Auto-import uses UUID-based routes and fails fast
 # ===========================================================================
 
 
@@ -286,35 +280,30 @@ class TestAutoImportFixed:
 
     @respx.mock
     @pytest.mark.asyncio
-    async def test_auto_import_uses_by_id_endpoint(
+    async def test_auto_import_uses_uuid_endpoint(
         self, mock_session, layout, repo_path,
     ):
-        """Playbook import uses /roles/by-id/{uuid} instead of paginated list."""
+        """Playbook import auto-imports missing roles by UUID."""
         download_resp = _playbook_download_response()
-        respx.post(f"{REGISTRY_URL}/playbooks/test-pb/download").mock(
+        respx.post(f"{REGISTRY_URL}/playbooks/{PLAYBOOK_UUID}/download").mock(
             return_value=httpx.Response(200, json=download_resp),
         )
 
-        # The by-id endpoint returns the role
-        respx.get(f"{REGISTRY_URL}/roles/by-id/{ROLE_UUID_A}").mock(
-            return_value=httpx.Response(200, json=_role_response()),
-        )
-
-        # Role download for auto-import
-        respx.post(f"{REGISTRY_URL}/roles/my-role/download").mock(
+        # Role download for auto-import (now uses UUID directly)
+        respx.post(f"{REGISTRY_URL}/roles/{ROLE_UUID_A}/download").mock(
             return_value=httpx.Response(200, json=_role_download_response()),
         )
 
         # Confirm download endpoints
-        respx.post(f"{REGISTRY_URL}/roles/my-role/confirm-download").mock(
+        respx.post(f"{REGISTRY_URL}/roles/{ROLE_UUID_A}/confirm-download").mock(
             return_value=httpx.Response(204),
         )
-        respx.post(f"{REGISTRY_URL}/playbooks/test-pb/confirm-download").mock(
+        respx.post(f"{REGISTRY_URL}/playbooks/{PLAYBOOK_UUID}/confirm-download").mock(
             return_value=httpx.Response(204),
         )
 
         with _settings_and_repo_patches(repo_path)():
-            result = await registry_manager.import_playbook(mock_session, "test-pb")
+            result = await registry_manager.import_playbook(mock_session, PLAYBOOK_UUID)
 
         assert result.name == "My Playbook"
 
@@ -339,18 +328,18 @@ class TestAutoImportFixed:
         download_resp["roles"] = [
             {"registry_role_id": ROLE_UUID_B, "version_number": None, "vars": {}},
         ]
-        respx.post(f"{REGISTRY_URL}/playbooks/test-pb/download").mock(
+        respx.post(f"{REGISTRY_URL}/playbooks/{PLAYBOOK_UUID}/download").mock(
             return_value=httpx.Response(200, json=download_resp),
         )
 
-        # Role lookup returns 404 — role no longer exists
-        respx.get(f"{REGISTRY_URL}/roles/by-id/{ROLE_UUID_B}").mock(
+        # Role download returns 404 — role no longer exists
+        respx.post(f"{REGISTRY_URL}/roles/{ROLE_UUID_B}/download").mock(
             return_value=httpx.Response(404, json={"detail": "Role not found"}),
         )
 
         with _settings_and_repo_patches(repo_path)():
             with pytest.raises(httpx.HTTPStatusError):
-                await registry_manager.import_playbook(mock_session, "test-pb")
+                await registry_manager.import_playbook(mock_session, PLAYBOOK_UUID)
 
         # No playbook file should have been written
         playbook_files = list(layout.playbooks_path.glob("*.yml"))
@@ -388,22 +377,22 @@ class TestLocalRoleDeletionBlocked:
 
 
 # ===========================================================================
-# Group D — Push playbook uses registry_uuid for role refs
+# Group D — Push playbook uses registry_id (UUID) for role refs
 # ===========================================================================
 
 
-class TestPushPlaybookUsesRegistryUuid:
+class TestPushPlaybookUsesRegistryId:
 
     @respx.mock
     @pytest.mark.asyncio
-    async def test_push_playbook_sends_uuid_not_slug_for_role_refs(
+    async def test_push_playbook_sends_uuid_for_role_refs(
         self, mock_session, layout, repo_path,
     ):
-        """push_playbook reads registry_uuid (not registry_id/slug) to build
+        """push_playbook reads registry_id (UUID) to build
         the PlaybookRoleRef.registry_role_id sent to the registry.
         """
         _seed_role(layout, "my_role")
-        _mark_role_as_published(layout, "my_role", slug="my-role", uuid=ROLE_UUID_A)
+        _mark_role_as_published(layout, "my_role", registry_id=ROLE_UUID_A)
         _seed_playbook(
             layout,
             "test_pb",
@@ -444,20 +433,20 @@ class TestDownloadCountOnFailedImport:
         called, so the download event stays unconfirmed and doesn't
         count toward the download total.
         """
-        respx.post(f"{REGISTRY_URL}/roles/my-role/download").mock(
+        respx.post(f"{REGISTRY_URL}/roles/{ROLE_UUID_A}/download").mock(
             return_value=httpx.Response(
                 200, json=_role_download_response(role_id=ROLE_UUID_A),
             ),
         )
 
-        confirm_route = respx.post(f"{REGISTRY_URL}/roles/my-role/confirm-download").mock(
+        confirm_route = respx.post(f"{REGISTRY_URL}/roles/{ROLE_UUID_A}/confirm-download").mock(
             return_value=httpx.Response(204),
         )
 
         with _settings_and_repo_patches(repo_path)():
             with patch("roles.registry.write_role", side_effect=OSError("disk full")):
                 with pytest.raises(OSError, match="disk full"):
-                    await registry_manager.import_role(mock_session, "my-role")
+                    await registry_manager.import_role(mock_session, ROLE_UUID_A)
 
         # Confirm-download should NOT have been called
         assert not confirm_route.called
@@ -468,24 +457,24 @@ class TestDownloadCountOnFailedImport:
         self, mock_session, layout, repo_path,
     ):
         """When import succeeds, the confirm endpoint is called."""
-        respx.post(f"{REGISTRY_URL}/roles/my-role/download").mock(
+        respx.post(f"{REGISTRY_URL}/roles/{ROLE_UUID_A}/download").mock(
             return_value=httpx.Response(
                 200, json=_role_download_response(role_id=ROLE_UUID_A),
             ),
         )
 
-        confirm_route = respx.post(f"{REGISTRY_URL}/roles/my-role/confirm-download").mock(
+        confirm_route = respx.post(f"{REGISTRY_URL}/roles/{ROLE_UUID_A}/confirm-download").mock(
             return_value=httpx.Response(204),
         )
 
         with _settings_and_repo_patches(repo_path)():
-            await registry_manager.import_role(mock_session, "my-role")
+            await registry_manager.import_role(mock_session, ROLE_UUID_A)
 
         assert confirm_route.called
 
 
 # ===========================================================================
-# Group F — Import dedup uses registry_uuid
+# Group F — Import dedup uses registry_id (UUID)
 # ===========================================================================
 
 
@@ -493,21 +482,21 @@ class TestImportDedup:
 
     @respx.mock
     @pytest.mark.asyncio
-    async def test_import_role_dedup_uses_registry_uuid(
+    async def test_import_role_dedup_uses_registry_id(
         self, mock_session, layout, repo_path,
     ):
-        """Import detects already-imported roles via registry_uuid field."""
+        """Import detects already-imported roles via registry_id (UUID) field."""
         _seed_role(layout, "existing_role")
-        _mark_role_as_published(layout, "existing_role", slug="my-role", uuid=ROLE_UUID_A)
+        _mark_role_as_published(layout, "existing_role", registry_id=ROLE_UUID_A)
 
-        respx.post(f"{REGISTRY_URL}/roles/my-role/download").mock(
+        respx.post(f"{REGISTRY_URL}/roles/{ROLE_UUID_A}/download").mock(
             return_value=httpx.Response(
                 200, json=_role_download_response(role_id=ROLE_UUID_A),
             ),
         )
 
         with _settings_and_repo_patches(repo_path)():
-            result = await registry_manager.import_role(mock_session, "my-role")
+            result = await registry_manager.import_role(mock_session, ROLE_UUID_A)
 
         assert result.message == "Role already exists locally"
 
@@ -651,7 +640,7 @@ class TestPushUpsertErrors:
     async def test_push_playbook_raises_on_500(self, mock_session, layout, repo_path):
         """Registry returning 500 on upsert should raise."""
         _seed_role(layout, "my_role")
-        _mark_role_as_published(layout, "my_role", slug="my-role", uuid=ROLE_UUID_A)
+        _mark_role_as_published(layout, "my_role", registry_id=ROLE_UUID_A)
         _seed_playbook(
             layout,
             "test_pb",
@@ -680,39 +669,34 @@ class TestImportPlaybookDescription:
     async def test_import_playbook_retains_description(
         self, mock_session, layout, repo_path,
     ):
-        """After import_playbook, both description and registry_uuid
+        """After import_playbook, both description and registry_id (UUID)
         should be present in .racksmith.yml metadata."""
         download_resp = _playbook_download_response()
         download_resp["description"] = "Important playbook description"
 
-        respx.post(f"{REGISTRY_URL}/playbooks/test-pb/download").mock(
+        respx.post(f"{REGISTRY_URL}/playbooks/{PLAYBOOK_UUID}/download").mock(
             return_value=httpx.Response(200, json=download_resp),
         )
-        respx.get(f"{REGISTRY_URL}/roles/by-id/{ROLE_UUID_A}").mock(
-            return_value=httpx.Response(200, json=_role_response()),
-        )
-        respx.post(f"{REGISTRY_URL}/roles/my-role/download").mock(
+        respx.post(f"{REGISTRY_URL}/roles/{ROLE_UUID_A}/download").mock(
             return_value=httpx.Response(200, json=_role_download_response()),
         )
-        respx.post(f"{REGISTRY_URL}/roles/my-role/confirm-download").mock(
+        respx.post(f"{REGISTRY_URL}/roles/{ROLE_UUID_A}/confirm-download").mock(
             return_value=httpx.Response(204),
         )
-        respx.post(f"{REGISTRY_URL}/playbooks/test-pb/confirm-download").mock(
+        respx.post(f"{REGISTRY_URL}/playbooks/{PLAYBOOK_UUID}/confirm-download").mock(
             return_value=httpx.Response(204),
         )
 
         with _settings_and_repo_patches(repo_path)():
-            await registry_manager.import_playbook(mock_session, "test-pb")
+            await registry_manager.import_playbook(mock_session, PLAYBOOK_UUID)
 
-        # Find the created playbook ID
         playbook_files = list(layout.playbooks_path.glob("*.yml"))
         assert len(playbook_files) == 1
         pb_id = playbook_files[0].stem
 
         meta = read_meta(layout)
         pb_meta = get_playbook_meta(meta, pb_id)
-        assert pb_meta.get("registry_uuid") == PLAYBOOK_UUID
-        assert pb_meta.get("registry_id") == "test-pb"
+        assert pb_meta.get("registry_id") == PLAYBOOK_UUID
         assert pb_meta.get("description") == "Important playbook description"
 
 
@@ -729,10 +713,10 @@ class TestGitAddScope:
         self, mock_session, layout, repo_path,
     ):
         """import_role git-adds both the role dir and .racksmith.yml."""
-        respx.post(f"{REGISTRY_URL}/roles/my-role/download").mock(
+        respx.post(f"{REGISTRY_URL}/roles/{ROLE_UUID_A}/download").mock(
             return_value=httpx.Response(200, json=_role_download_response()),
         )
-        respx.post(f"{REGISTRY_URL}/roles/my-role/confirm-download").mock(
+        respx.post(f"{REGISTRY_URL}/roles/{ROLE_UUID_A}/confirm-download").mock(
             return_value=httpx.Response(204),
         )
 
@@ -746,7 +730,7 @@ class TestGitAddScope:
                 rm.current_repo.return_value = binding
                 git_mock = AsyncMock()
                 with patch("roles.registry.arun_git", git_mock):
-                    await registry_manager.import_role(mock_session, "my-role")
+                    await registry_manager.import_role(mock_session, ROLE_UUID_A)
 
         add_calls = [c for c in git_mock.call_args_list if "add" in c.args[1]]
         assert len(add_calls) == 1
@@ -760,19 +744,16 @@ class TestGitAddScope:
     ):
         """import_playbook should not use 'git add .' — it should be targeted."""
         download_resp = _playbook_download_response()
-        respx.post(f"{REGISTRY_URL}/playbooks/test-pb/download").mock(
+        respx.post(f"{REGISTRY_URL}/playbooks/{PLAYBOOK_UUID}/download").mock(
             return_value=httpx.Response(200, json=download_resp),
         )
-        respx.get(f"{REGISTRY_URL}/roles/by-id/{ROLE_UUID_A}").mock(
-            return_value=httpx.Response(200, json=_role_response()),
-        )
-        respx.post(f"{REGISTRY_URL}/roles/my-role/download").mock(
+        respx.post(f"{REGISTRY_URL}/roles/{ROLE_UUID_A}/download").mock(
             return_value=httpx.Response(200, json=_role_download_response()),
         )
-        respx.post(f"{REGISTRY_URL}/roles/my-role/confirm-download").mock(
+        respx.post(f"{REGISTRY_URL}/roles/{ROLE_UUID_A}/confirm-download").mock(
             return_value=httpx.Response(204),
         )
-        respx.post(f"{REGISTRY_URL}/playbooks/test-pb/confirm-download").mock(
+        respx.post(f"{REGISTRY_URL}/playbooks/{PLAYBOOK_UUID}/confirm-download").mock(
             return_value=httpx.Response(204),
         )
 
@@ -786,7 +767,7 @@ class TestGitAddScope:
                 rm.current_repo.return_value = binding
                 git_mock = AsyncMock()
                 with patch("roles.registry.arun_git", git_mock):
-                    await registry_manager.import_playbook(mock_session, "test-pb")
+                    await registry_manager.import_playbook(mock_session, PLAYBOOK_UUID)
 
         # Find the playbook-import git add call (not the role-import one)
         add_calls = [c for c in git_mock.call_args_list if "add" in c.args[1]]
@@ -896,15 +877,15 @@ class TestDefaultsYamlStrip:
         download_resp = _role_download_response()
         download_resp["defaults_yaml"] = "   \n  \n"
 
-        respx.post(f"{REGISTRY_URL}/roles/my-role/download").mock(
+        respx.post(f"{REGISTRY_URL}/roles/{ROLE_UUID_A}/download").mock(
             return_value=httpx.Response(200, json=download_resp),
         )
-        respx.post(f"{REGISTRY_URL}/roles/my-role/confirm-download").mock(
+        respx.post(f"{REGISTRY_URL}/roles/{ROLE_UUID_A}/confirm-download").mock(
             return_value=httpx.Response(204),
         )
 
         with _settings_and_repo_patches(repo_path)():
-            await registry_manager.import_role(mock_session, "my-role")
+            await registry_manager.import_role(mock_session, ROLE_UUID_A)
 
         role_dirs = [d for d in layout.roles_path.iterdir() if d.is_dir()]
         assert len(role_dirs) == 1
@@ -920,15 +901,15 @@ class TestDefaultsYamlStrip:
         download_resp = _role_download_response()
         download_resp["defaults_yaml"] = "http_port: 80\n"
 
-        respx.post(f"{REGISTRY_URL}/roles/my-role/download").mock(
+        respx.post(f"{REGISTRY_URL}/roles/{ROLE_UUID_A}/download").mock(
             return_value=httpx.Response(200, json=download_resp),
         )
-        respx.post(f"{REGISTRY_URL}/roles/my-role/confirm-download").mock(
+        respx.post(f"{REGISTRY_URL}/roles/{ROLE_UUID_A}/confirm-download").mock(
             return_value=httpx.Response(204),
         )
 
         with _settings_and_repo_patches(repo_path)():
-            await registry_manager.import_role(mock_session, "my-role")
+            await registry_manager.import_role(mock_session, ROLE_UUID_A)
 
         role_dirs = [d for d in layout.roles_path.iterdir() if d.is_dir()]
         assert len(role_dirs) == 1
@@ -948,52 +929,52 @@ class TestDeleteAndFacets:
     @respx.mock
     @pytest.mark.asyncio
     async def test_delete_role_success(self, mock_session):
-        respx.delete(f"{REGISTRY_URL}/roles/my-role").mock(
+        respx.delete(f"{REGISTRY_URL}/roles/{ROLE_UUID_A}").mock(
             return_value=httpx.Response(204),
         )
         with _settings_and_repo_patches(None)():
-            await registry_manager.delete_role(mock_session, "my-role")
+            await registry_manager.delete_role(mock_session, ROLE_UUID_A)
 
     @respx.mock
     @pytest.mark.asyncio
     async def test_delete_role_raises_on_403(self, mock_session):
-        respx.delete(f"{REGISTRY_URL}/roles/my-role").mock(
+        respx.delete(f"{REGISTRY_URL}/roles/{ROLE_UUID_A}").mock(
             return_value=httpx.Response(403, json={"detail": "forbidden"}),
         )
         with _settings_and_repo_patches(None)():
             with pytest.raises(httpx.HTTPStatusError) as exc_info:
-                await registry_manager.delete_role(mock_session, "my-role")
+                await registry_manager.delete_role(mock_session, ROLE_UUID_A)
             assert exc_info.value.response.status_code == 403
 
     @respx.mock
     @pytest.mark.asyncio
     async def test_delete_role_raises_on_409(self, mock_session):
-        respx.delete(f"{REGISTRY_URL}/roles/my-role").mock(
+        respx.delete(f"{REGISTRY_URL}/roles/{ROLE_UUID_A}").mock(
             return_value=httpx.Response(409, json={"detail": "referenced by playbooks"}),
         )
         with _settings_and_repo_patches(None)():
             with pytest.raises(httpx.HTTPStatusError) as exc_info:
-                await registry_manager.delete_role(mock_session, "my-role")
+                await registry_manager.delete_role(mock_session, ROLE_UUID_A)
             assert exc_info.value.response.status_code == 409
 
     @respx.mock
     @pytest.mark.asyncio
     async def test_delete_playbook_success(self, mock_session):
-        respx.delete(f"{REGISTRY_URL}/playbooks/my-pb").mock(
+        respx.delete(f"{REGISTRY_URL}/playbooks/{PLAYBOOK_UUID}").mock(
             return_value=httpx.Response(204),
         )
         with _settings_and_repo_patches(None)():
-            await registry_manager.delete_playbook(mock_session, "my-pb")
+            await registry_manager.delete_playbook(mock_session, PLAYBOOK_UUID)
 
     @respx.mock
     @pytest.mark.asyncio
     async def test_delete_playbook_raises_on_403(self, mock_session):
-        respx.delete(f"{REGISTRY_URL}/playbooks/my-pb").mock(
+        respx.delete(f"{REGISTRY_URL}/playbooks/{PLAYBOOK_UUID}").mock(
             return_value=httpx.Response(403, json={"detail": "forbidden"}),
         )
         with _settings_and_repo_patches(None)():
             with pytest.raises(httpx.HTTPStatusError) as exc_info:
-                await registry_manager.delete_playbook(mock_session, "my-pb")
+                await registry_manager.delete_playbook(mock_session, PLAYBOOK_UUID)
             assert exc_info.value.response.status_code == 403
 
     @respx.mock

@@ -10,6 +10,8 @@ import respx
 
 from roles.registry import registry_manager
 
+ROLE_UUID = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+
 
 @respx.mock
 @pytest.mark.asyncio
@@ -22,8 +24,7 @@ async def test_list_roles(mock_session):
                 json={
                     "items": [
                         {
-                            "id": "1",
-                            "slug": "install-packages",
+                            "id": ROLE_UUID,
                             "owner": {"username": "user", "avatar_url": ""},
                             "download_count": 0,
                             "created_at": "2024-01-01",
@@ -39,7 +40,7 @@ async def test_list_roles(mock_session):
         )
         result = await registry_manager.list_roles(mock_session)
     assert len(result.items) == 1
-    assert result.items[0].slug == "install-packages"
+    assert result.items[0].id == ROLE_UUID
 
 
 @respx.mock
@@ -47,19 +48,18 @@ async def test_list_roles(mock_session):
 async def test_get_role(mock_session):
     with patch("roles.registry.settings") as s:
         s.REGISTRY_URL = "http://registry.test"
-        respx.get("http://registry.test/roles/my-role").mock(
+        respx.get(f"http://registry.test/roles/{ROLE_UUID}").mock(
             return_value=httpx.Response(
                 200,
                 json={
-                    "id": "1",
-                    "slug": "my-role",
+                    "id": ROLE_UUID,
                     "owner": {"username": "user", "avatar_url": ""},
                     "download_count": 0,
                     "created_at": "2024-01-01",
                     "updated_at": None,
                     "latest_version": {
                         "id": "v1",
-                        "role_id": "1",
+                        "role_id": ROLE_UUID,
                         "version_number": 1,
                         "name": "My Role",
                         "description": "A test role",
@@ -74,5 +74,5 @@ async def test_get_role(mock_session):
                 },
             )
         )
-        result = await registry_manager.get_role(mock_session, "my-role")
-    assert result.slug == "my-role"
+        result = await registry_manager.get_role(mock_session, ROLE_UUID)
+    assert result.id == ROLE_UUID

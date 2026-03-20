@@ -241,18 +241,18 @@ class RegistryManager:
     async def get_role(
         self,
         session: SessionData,
-        slug: str,
+        role_id: str,
     ) -> RegistryRole:
-        cache_k = _cache_key("role", {"slug": slug})
+        cache_k = _cache_key("role", {"id": role_id})
         cached = await _cache_get(cache_k)
         if cached:
             return RegistryRole.model_validate_json(cached)
 
-        resp = await self._request(session, "GET", f"/roles/{slug}")
+        resp = await self._request(session, "GET", f"/roles/{role_id}")
         try:
             resp.raise_for_status()
         except httpx.HTTPStatusError as exc:
-            logger.warning("registry_request_failed", slug=slug, status_code=exc.response.status_code, error=str(exc), exc_info=True)
+            logger.warning("registry_request_failed", role_id=role_id, status_code=exc.response.status_code, error=str(exc), exc_info=True)
             raise
 
         result = RegistryRole.model_validate(resp.json())
@@ -331,22 +331,21 @@ class RegistryManager:
         meta = read_meta(layout)
         role_meta = get_role_meta(meta, role_id)
 
-        role_meta["registry_id"] = result.slug
-        role_meta["registry_uuid"] = result.id
+        role_meta["registry_id"] = result.id
         set_role_meta(meta, role_id, role_meta)
         write_meta(layout, meta)
 
-        logger.info("registry_role_pushed", role_id=role_id, registry_slug=result.slug)
+        logger.info("registry_role_pushed", role_id=role_id, registry_id=result.id)
         await _cache_invalidate()
         return result
 
-    async def import_role(self, session: SessionData, slug: str) -> RoleImportResponse:
+    async def import_role(self, session: SessionData, registry_role_id: str) -> RoleImportResponse:
         """Download from registry, write to local repo using ansible/roles module."""
-        resp = await self._request(session, "POST", f"/roles/{slug}/download")
+        resp = await self._request(session, "POST", f"/roles/{registry_role_id}/download")
         try:
             resp.raise_for_status()
         except httpx.HTTPStatusError as exc:
-            logger.warning("registry_request_failed", slug=slug, status_code=exc.response.status_code, error=str(exc), exc_info=True)
+            logger.warning("registry_request_failed", registry_role_id=registry_role_id, status_code=exc.response.status_code, error=str(exc), exc_info=True)
             raise
 
         version = RegistryVersion.model_validate(resp.json())
@@ -356,10 +355,10 @@ class RegistryManager:
         meta = read_meta(layout)
         for r in list_local_roles(layout):
             rmeta = get_role_meta(meta, r.id)
-            existing_uuid = str(rmeta.get("registry_uuid", rmeta.get("registry_id", "")))
-            if existing_uuid == str(version.role_id):
+            existing_id = str(rmeta.get("registry_id", ""))
+            if existing_id == str(version.role_id):
                 return RoleImportResponse(
-                    slug=slug, name=version.name,
+                    id=registry_role_id, name=version.name,
                     message="Role already exists locally",
                 )
 
@@ -402,8 +401,7 @@ class RegistryManager:
 
         meta = read_meta(layout)
         role_meta = get_role_meta(meta, role_id)
-        role_meta["registry_id"] = slug
-        role_meta["registry_uuid"] = version.role_id
+        role_meta["registry_id"] = str(version.role_id)
         role_meta["registry_version"] = version.version_number
         set_role_meta(meta, role_id, role_meta)
         write_meta(layout, meta)
@@ -416,11 +414,11 @@ class RegistryManager:
         if version.download_event_id:
             try:
                 await self._request(
-                    session, "POST", f"/roles/{slug}/confirm-download",
+                    session, "POST", f"/roles/{registry_role_id}/confirm-download",
                     json_body={"download_event_id": version.download_event_id},
                 )
             except Exception:
-                logger.warning("confirm_download_failed", slug=slug, exc_info=True)
+                logger.warning("confirm_download_failed", registry_role_id=registry_role_id, exc_info=True)
 
         role_dir = layout.roles_path / role_id
         binding = repos_manager.current_repo(session)
@@ -445,27 +443,27 @@ class RegistryManager:
                     f"user.email={settings.GIT_COMMIT_USER_EMAIL}",
                     "commit",
                     "-m",
-                    f"Import role from registry: {slug}",
+                    f"Import role from registry: {version.name}",
                 ],
                 check=False,
             )
             await arun_git(repo_path, ["push", "origin", settings.GIT_RACKSMITH_BRANCH], check=False)
 
-        logger.info("role_imported_from_registry", slug=slug, version=version.version_number)
+        logger.info("role_imported_from_registry", registry_role_id=registry_role_id, version=version.version_number)
         return RoleImportResponse(
-            slug=slug,
+            id=registry_role_id,
             name=version.name,
             message="Imported and pushed to GitHub",
         )
 
-    async def delete_role(self, session: SessionData, slug: str) -> None:
-        resp = await self._request(session, "DELETE", f"/roles/{slug}")
+    async def delete_role(self, session: SessionData, role_id: str) -> None:
+        resp = await self._request(session, "DELETE", f"/roles/{role_id}")
         try:
             resp.raise_for_status()
         except httpx.HTTPStatusError as exc:
-            logger.warning("registry_request_failed", slug=slug, status_code=exc.response.status_code, error=str(exc), exc_info=True)
+            logger.warning("registry_request_failed", role_id=role_id, status_code=exc.response.status_code, error=str(exc), exc_info=True)
             raise
-        logger.info("registry_role_deleted", slug=slug)
+        logger.info("registry_role_deleted", role_id=role_id)
         await _cache_invalidate()
 
     # ── Playbook methods ──────────────────────────────────────────────────
@@ -533,18 +531,18 @@ class RegistryManager:
     async def get_playbook(
         self,
         session: SessionData,
-        slug: str,
+        playbook_id: str,
     ) -> RegistryPlaybook:
-        cache_k = _cache_key("playbook", {"slug": slug})
+        cache_k = _cache_key("playbook", {"id": playbook_id})
         cached = await _cache_get(cache_k)
         if cached:
             return RegistryPlaybook.model_validate_json(cached)
 
-        resp = await self._request(session, "GET", f"/playbooks/{slug}")
+        resp = await self._request(session, "GET", f"/playbooks/{playbook_id}")
         try:
             resp.raise_for_status()
         except httpx.HTTPStatusError as exc:
-            logger.warning("registry_request_failed", slug=slug, status_code=exc.response.status_code, error=str(exc), exc_info=True)
+            logger.warning("registry_request_failed", playbook_id=playbook_id, status_code=exc.response.status_code, error=str(exc), exc_info=True)
             raise
 
         result = RegistryPlaybook.model_validate(resp.json())
@@ -568,13 +566,13 @@ class RegistryManager:
         role_refs: list[PlaybookRoleRef] = []
         for re_entry in pb.roles:
             role_meta = get_role_meta(meta, re_entry.role)
-            registry_uuid = str(role_meta.get("registry_uuid", role_meta.get("registry_id", "")))
-            if not registry_uuid:
+            registry_id = str(role_meta.get("registry_id", ""))
+            if not registry_id:
                 pushed = await self.push_role(session, re_entry.role)
-                registry_uuid = pushed.id
+                registry_id = pushed.id
                 meta = read_meta(layout)
             role_refs.append(PlaybookRoleRef(
-                registry_role_id=registry_uuid,
+                registry_role_id=registry_id,
                 vars=re_entry.vars,
             ))
 
@@ -600,22 +598,21 @@ class RegistryManager:
 
         meta = read_meta(layout)
         pb_meta = get_playbook_meta(meta, playbook_id)
-        pb_meta["registry_id"] = result.slug
-        pb_meta["registry_uuid"] = result.id
+        pb_meta["registry_id"] = result.id
         set_playbook_meta(meta, playbook_id, pb_meta)
         write_meta(layout, meta)
 
-        logger.info("registry_playbook_pushed", playbook_id=playbook_id, registry_slug=result.slug)
+        logger.info("registry_playbook_pushed", playbook_id=playbook_id, registry_id=result.id)
         await _cache_invalidate()
         return result
 
-    async def import_playbook(self, session: SessionData, slug: str) -> PlaybookImportResponse:
+    async def import_playbook(self, session: SessionData, registry_playbook_id: str) -> PlaybookImportResponse:
         """Download playbook from registry, auto-import missing roles, write locally."""
-        resp = await self._request(session, "POST", f"/playbooks/{slug}/download")
+        resp = await self._request(session, "POST", f"/playbooks/{registry_playbook_id}/download")
         try:
             resp.raise_for_status()
         except httpx.HTTPStatusError as exc:
-            logger.warning("registry_request_failed", slug=slug, status_code=exc.response.status_code, error=str(exc), exc_info=True)
+            logger.warning("registry_request_failed", registry_playbook_id=registry_playbook_id, status_code=exc.response.status_code, error=str(exc), exc_info=True)
             raise
 
         version = RegistryPlaybookVersion.model_validate(resp.json())
@@ -625,19 +622,19 @@ class RegistryManager:
 
         for pb in list_local_playbooks(layout):
             pb_meta_check = get_playbook_meta(meta, pb.id)
-            existing_uuid = str(pb_meta_check.get("registry_uuid", pb_meta_check.get("registry_id", "")))
-            if existing_uuid == str(version.playbook_id):
+            existing_id = str(pb_meta_check.get("registry_id", ""))
+            if existing_id == str(version.playbook_id):
                 return PlaybookImportResponse(
-                    slug=slug, name=version.name,
+                    id=registry_playbook_id, name=version.name,
                     message="Playbook already exists locally",
                 )
 
-        # Build a mapping of registry_uuid -> local_role_id
+        # Build a mapping of registry_id (UUID) -> local_role_id
         local_roles = list_local_roles(layout)
         registry_to_local: dict[str, str] = {}
         for r in local_roles:
             rmeta = get_role_meta(meta, r.id)
-            rid = str(rmeta.get("registry_uuid", rmeta.get("registry_id", "")))
+            rid = str(rmeta.get("registry_id", ""))
             if rid:
                 registry_to_local[rid] = r.id
 
@@ -645,18 +642,13 @@ class RegistryManager:
         for role_ref in version.roles:
             rid = role_ref.registry_role_id
             if rid not in registry_to_local:
-                logger.info("auto_importing_role_for_playbook", registry_role_id=rid, playbook_slug=slug)
-                role_resp = await self._request(session, "GET", f"/roles/by-id/{rid}")
-                role_resp.raise_for_status()
-                role_data = RegistryRole.model_validate(role_resp.json())
-                role_slug = role_data.slug
-
-                await self.import_role(session, role_slug)
+                logger.info("auto_importing_role_for_playbook", registry_role_id=rid, playbook_id=registry_playbook_id)
+                await self.import_role(session, rid)
                 meta = read_meta(layout)
                 new_local_roles = list_local_roles(layout)
                 for r in new_local_roles:
                     rmeta = get_role_meta(meta, r.id)
-                    r_rid = str(rmeta.get("registry_uuid", rmeta.get("registry_id", "")))
+                    r_rid = str(rmeta.get("registry_id", ""))
                     if r_rid == str(rid):
                         registry_to_local[str(rid)] = r.id
                         break
@@ -694,8 +686,7 @@ class RegistryManager:
         # Re-read after write_playbook (which does its own read/write cycle)
         meta = read_meta(layout)
         pb_meta = get_playbook_meta(meta, playbook_id)
-        pb_meta["registry_id"] = slug
-        pb_meta["registry_uuid"] = version.playbook_id
+        pb_meta["registry_id"] = str(version.playbook_id)
         pb_meta["registry_version"] = version.version_number
         set_playbook_meta(meta, playbook_id, pb_meta)
         write_meta(layout, meta)
@@ -703,11 +694,11 @@ class RegistryManager:
         if version.download_event_id:
             try:
                 await self._request(
-                    session, "POST", f"/playbooks/{slug}/confirm-download",
+                    session, "POST", f"/playbooks/{registry_playbook_id}/confirm-download",
                     json_body={"download_event_id": version.download_event_id},
                 )
             except Exception:
-                logger.warning("confirm_download_failed", slug=slug, exc_info=True)
+                logger.warning("confirm_download_failed", registry_playbook_id=registry_playbook_id, exc_info=True)
 
         # Git commit and push
         binding = repos_manager.current_repo(session)
@@ -733,27 +724,27 @@ class RegistryManager:
                     f"user.email={settings.GIT_COMMIT_USER_EMAIL}",
                     "commit",
                     "-m",
-                    f"Import playbook from registry: {slug}",
+                    f"Import playbook from registry: {version.name}",
                 ],
                 check=False,
             )
             await arun_git(repo_path, ["push", "origin", settings.GIT_RACKSMITH_BRANCH], check=False)
 
-        logger.info("playbook_imported_from_registry", slug=slug, version=version.version_number)
+        logger.info("playbook_imported_from_registry", registry_playbook_id=registry_playbook_id, version=version.version_number)
         return PlaybookImportResponse(
-            slug=slug,
+            id=registry_playbook_id,
             name=version.name,
             message="Playbook imported and pushed to GitHub",
         )
 
-    async def delete_playbook(self, session: SessionData, slug: str) -> None:
-        resp = await self._request(session, "DELETE", f"/playbooks/{slug}")
+    async def delete_playbook(self, session: SessionData, playbook_id: str) -> None:
+        resp = await self._request(session, "DELETE", f"/playbooks/{playbook_id}")
         try:
             resp.raise_for_status()
         except httpx.HTTPStatusError as exc:
-            logger.warning("registry_request_failed", slug=slug, status_code=exc.response.status_code, error=str(exc), exc_info=True)
+            logger.warning("registry_request_failed", playbook_id=playbook_id, status_code=exc.response.status_code, error=str(exc), exc_info=True)
             raise
-        logger.info("registry_playbook_deleted", slug=slug)
+        logger.info("registry_playbook_deleted", playbook_id=playbook_id)
         await _cache_invalidate()
 
 

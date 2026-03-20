@@ -31,23 +31,24 @@ import {
 import { useRegistryRole, useRoles } from "@/hooks/queries";
 import { useImportFromRegistry, useDeleteRegistryRole } from "@/hooks/mutations";
 import { useSetupStore } from "@/stores/setup";
+import { MarkdownContent } from "@/components/shared/markdown-content";
 import { PageContainer } from "@/components/shared/page-container";
 
 export function RegistryRolePage() {
-  const { slug } = useParams<{ slug: string }>();
+  const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const currentUserLogin = useSetupStore((s) => s.status?.user?.login);
 
-  const { data: role, isLoading, isError } = useRegistryRole(slug ?? null);
+  const { data: role, isLoading, isError } = useRegistryRole(id ?? null);
   const { data: localRoles } = useRoles();
   const importMutation = useImportFromRegistry();
   const deleteMutation = useDeleteRegistryRole();
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
 
   const localMatch = useMemo(() => {
-    if (!slug || !localRoles) return null;
-    return localRoles.find((r) => r.registry_id === slug) ?? null;
-  }, [slug, localRoles]);
+    if (!id || !localRoles) return null;
+    return localRoles.find((r) => r.registry_id === id) ?? null;
+  }, [id, localRoles]);
 
   const isImported = !!localMatch;
   const regVer = role?.latest_version?.version_number;
@@ -58,20 +59,20 @@ export function RegistryRolePage() {
   const versionUnknown = isImported && !versionTracked;
 
   const handleImport = () => {
-    if (!slug) return;
-    importMutation.mutate(slug);
+    if (!id) return;
+    importMutation.mutate(id);
   };
 
   const handleDelete = () => {
-    if (!slug) return;
-    deleteMutation.mutate(slug, {
+    if (!id) return;
+    deleteMutation.mutate(id, {
       onSuccess: () => navigate("/registry"),
     });
   };
 
   const isOwner = !!currentUserLogin && currentUserLogin === role?.owner?.username;
 
-  if (!slug) {
+  if (!id) {
     return (
       <PageContainer>
         <p className="text-zinc-500">Invalid role</p>
@@ -117,18 +118,20 @@ export function RegistryRolePage() {
             Registry
           </Link>
           <span>/</span>
-          <span className="text-zinc-400">{role.slug}</span>
+          <span className="text-zinc-400">{version?.name ?? role.id}</span>
         </div>
 
         <section className="border border-zinc-800 bg-zinc-900/30 p-4">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div className="min-w-0 space-y-1">
               <h1 className="text-xl font-semibold text-zinc-100">
-                {version?.name ?? role.slug}
+                {version?.name ?? role.id}
               </h1>
-              <p className="text-sm text-zinc-500">
-                {version?.description || "No description"}
-              </p>
+              {version?.description ? (
+                <MarkdownContent className="text-zinc-500">{version.description}</MarkdownContent>
+              ) : (
+                <p className="text-sm text-zinc-500">No description</p>
+              )}
               <div className="flex items-center gap-2 pt-2">
                 <img
                   src={role.owner.avatar_url}
@@ -283,7 +286,7 @@ export function RegistryRolePage() {
         <AlertDialogHeader>
           <AlertDialogTitle>Delete role from registry</AlertDialogTitle>
           <AlertDialogDescription>
-            Delete &quot;{version?.name ?? role.slug}&quot; from the registry?
+            Delete &quot;{version?.name ?? role.id}&quot; from the registry?
             This cannot be undone.
           </AlertDialogDescription>
         </AlertDialogHeader>

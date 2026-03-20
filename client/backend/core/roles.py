@@ -194,7 +194,7 @@ def _overlay_racksmith_meta(role: RoleData, role_meta: dict) -> None:
     Core role metadata (name, description, labels, compatibility) comes
     exclusively from ``meta/main.yml`` (galaxy_info).  ``.racksmith.yml``
     stores only per-input UI hints (secret + placeholder) and the
-    registry slug for imported roles.
+    registry id for imported roles.
     """
     role.registry_id = str(role_meta.get("registry_id", ""))
     role.registry_version = int(role_meta.get("registry_version", 0))

@@ -134,7 +134,6 @@ class VersionOut(BaseModel):
 
 class RoleOut(BaseModel):
     id: UUID
-    slug: str
     owner: OwnerOut
     download_count: int
     playbook_download_count: int = 0

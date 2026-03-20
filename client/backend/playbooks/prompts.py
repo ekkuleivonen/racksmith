@@ -13,7 +13,7 @@ Output a single JSON object with this structure:
 
 {
   "name": "Human-readable playbook name",
-  "description": "Short summary of what this playbook does",
+  "description": "Rich Markdown description of the playbook (see description rules below)",
   "become": true,
   "roles": [
     {
@@ -24,7 +24,7 @@ Output a single JSON object with this structure:
     {
       "action": "create",
       "name": "New Role Name",
-      "description": "What this role does",
+      "description": "Rich Markdown description of what this role does (see description rules below)",
       "generation_prompt": "Detailed instructions for generating the Ansible tasks ...",
       "expected_inputs": [
         {"key": "device_path", "type": "string", "label": "Device path", "description": "Absolute path to the block device to operate on (e.g. /dev/sda or /dev/disk/by-id/...)"}
@@ -64,20 +64,29 @@ Rules:
     Downstream roles can only link to outputs that are explicitly declared.
   - Prefer SIMPLICITY. Roles should have minimal inputs (1-3 required) with sensible defaults.
     Do not expose low-level knobs (e.g. fstab dump/passno, mkfs extra opts) as inputs
-    unless the user explicitly asks for them. Hardcode sensible values in tasks."""
+    unless the user explicitly asks for them. Hardcode sensible values in tasks.
+
+Description rules (apply to BOTH the playbook description AND each role description):
+  - Write descriptions in **Markdown**. Use headings, bold, bullet lists, inline `code`
+    for paths/commands/variables, and code blocks where helpful.
+  - Playbook description: explain what the playbook accomplishes end-to-end,
+    prerequisites, execution strategy (serial/parallel), safety notes, and a
+    summary of key variables with their defaults.
+  - Role description: explain what the role does, how it works (which tools/modules),
+    idempotency behavior, and any caveats. 3-8 sentences minimum, not a one-liner."""
 
 _EXAMPLE = """\
 Example — a playbook for formatting a disk, creating a directory, and mounting reliably:
 
 {
   "name": "Storage Setup",
-  "description": "Format SSD, create mount directory, and configure persistent mount",
+  "description": "Formats an SSD, creates mount directories, and configures a **persistent mount** via `/etc/fstab`.\n\nRuns four roles in sequence: discover the block device, partition and format it with ext4, mount it persistently, and create application directories.\n\n**Prerequisites:** Target disk attached and visible as a block device. Requires `become: true` for disk operations.\n\n**Safety:** The format role skips formatting if the device already has the requested filesystem, preventing accidental data loss.",
   "become": true,
   "roles": [
     {
       "action": "create",
       "name": "Storage Discover",
-      "description": "Discover the target block device and expose facts for downstream roles",
+      "description": "Resolves a device selector (path or `/dev/disk/by-id/` symlink) to its canonical block device path using `readlink -f`. Validates the target is a block device, collects `lsblk` and `blkid` metadata, and exposes `discovered_device_path` and `discovered_uuid` as facts for downstream roles.\n\n**Idempotent** — read-only discovery, safe to run repeatedly.",
       "generation_prompt": "Create an Ansible role that resolves a device selector to a canonical path using readlink -f, validates it is a block device, collects lsblk and blkid metadata, and exposes discovered_device_path (string) and discovered_uuid (string) via set_fact.",
       "expected_inputs": [
         {"key": "target_disk", "type": "string", "label": "Target disk", "description": "Absolute path or /dev/disk/by-id/ symlink for the block device to discover", "required": true, "placeholder": "/dev/disk/by-id/..."}
@@ -91,7 +100,7 @@ Example — a playbook for formatting a disk, creating a directory, and mounting
     {
       "action": "create",
       "name": "Storage Format",
-      "description": "Partition and format the target disk with ext4",
+      "description": "Partitions a block device with a single GPT partition using `community.general.parted`, then formats it with `mkfs.ext4`. Skips formatting if the device already has the requested filesystem.\n\nExposes the new filesystem UUID via `set_fact` for use by the mount role.",
       "generation_prompt": "Create an Ansible role that partitions a block device using community.general.parted with a single GPT partition, then formats it with mkfs.ext4. Skip formatting if the device already has the requested filesystem. Expose the new UUID via set_fact.",
       "expected_inputs": [
         {"key": "device_path", "type": "string", "label": "Device path", "description": "Canonical block device path to partition and format (e.g. /dev/sda)", "required": true}
@@ -104,7 +113,7 @@ Example — a playbook for formatting a disk, creating a directory, and mounting
     {
       "action": "create",
       "name": "Storage Mount",
-      "description": "Mount the filesystem persistently via fstab",
+      "description": "Mounts a filesystem by UUID using `ansible.posix.mount` with `state=mounted`, which both mounts it immediately and adds an `/etc/fstab` entry for persistence across reboots. Creates the mount point directory if it doesn't exist.\n\nUses sensible fstab defaults: `defaults,noatime`, dump=0, passno=2.",
       "generation_prompt": "Create an Ansible role that uses ansible.posix.mount with state=mounted to mount a filesystem by UUID. Ensure the mount point directory exists first. Hardcode sensible fstab defaults (dump=0, passno=2, opts=defaults,noatime).",
       "expected_inputs": [
         {"key": "mount_uuid", "type": "string", "label": "Filesystem UUID", "description": "UUID of the filesystem to mount (from blkid or a previous format step)", "required": true},
@@ -116,7 +125,7 @@ Example — a playbook for formatting a disk, creating a directory, and mounting
     {
       "action": "create",
       "name": "Ensure Directory",
-      "description": "Create a directory with specified ownership and permissions",
+      "description": "Ensures a single directory exists with the specified ownership and permissions using `ansible.builtin.file` with `state=directory`.\n\n**Idempotent** — no-ops if the directory already exists with the correct attributes. Designed to be added to a playbook multiple times for different directories.",
       "generation_prompt": "Create an Ansible role that ensures a single directory exists using ansible.builtin.file with state=directory. Accept path, owner, group, and mode as inputs.",
       "expected_inputs": [
         {"key": "directory_path", "type": "string", "label": "Directory path", "description": "Absolute path of the directory to create (e.g. /mnt/data/app)", "required": true},
