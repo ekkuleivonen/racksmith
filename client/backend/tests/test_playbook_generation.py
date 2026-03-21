@@ -7,7 +7,7 @@ import json
 import pytest
 from pydantic import ValidationError
 
-from playbooks.prompts import PLAYBOOK_SYSTEM_PROMPT
+from playbooks.prompts import PLAYBOOK_EDIT_SYSTEM_PROMPT, PLAYBOOK_SYSTEM_PROMPT
 from playbooks.schemas import GeneratePlaybookRequest
 
 
@@ -15,6 +15,11 @@ class TestGenerateRequest:
     def test_valid(self) -> None:
         req = GeneratePlaybookRequest(prompt="build a web server")
         assert req.prompt == "build a web server"
+        assert req.host_id is None
+
+    def test_optional_host_id(self) -> None:
+        req = GeneratePlaybookRequest(prompt="x", host_id="host_abc")
+        assert req.host_id == "host_abc"
 
     def test_rejects_empty_prompt(self) -> None:
         with pytest.raises(ValidationError):
@@ -33,6 +38,10 @@ class TestPlaybookPrompt:
 
     def test_contains_simplicity_guidance(self) -> None:
         assert "SIMPLICITY" in PLAYBOOK_SYSTEM_PROMPT
+
+    def test_mentions_optional_ssh(self) -> None:
+        assert "run_ssh_command" in PLAYBOOK_SYSTEM_PROMPT
+        assert "run_ssh_command" in PLAYBOOK_EDIT_SYSTEM_PROMPT
 
 
 class TestAgentStream:

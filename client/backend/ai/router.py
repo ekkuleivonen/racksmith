@@ -8,7 +8,9 @@ from fastapi.responses import StreamingResponse
 import settings
 from _utils.exceptions import NotFoundError
 from auth.dependencies import CurrentSession
+from auth.session import SessionData
 from hosts.managers import host_manager
+from hosts.schemas import Host
 from playbooks.managers import playbook_manager
 from playbooks.schemas import EditGeneratePlaybookRequest, GeneratePlaybookRequest
 from roles.managers import role_manager
@@ -23,6 +25,28 @@ def _require_openai() -> None:
             status_code=503,
             detail="AI generation is not configured (OPENAI_API_KEY missing)",
         )
+
+
+def _resolve_ai_probe_host(session: SessionData, host_id: str | None) -> Host | None:
+    """Return a managed host with SSH details, or None. Raises HTTPException on bad id."""
+    if not host_id or not str(host_id).strip():
+        return None
+    hid = str(host_id).strip()
+    try:
+        host = host_manager.get_host(session, hid)
+    except NotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    if not host.managed:
+        raise HTTPException(
+            status_code=400,
+            detail="Probe host must be managed for SSH access",
+        )
+    if not (host.ip_address or "").strip() or not (host.ssh_user or "").strip():
+        raise HTTPException(
+            status_code=400,
+            detail="Probe host is missing IP address or ssh_user",
+        )
+    return host
 
 
 @router.post("/roles/generate")
@@ -66,8 +90,11 @@ async def generate_playbook(
 ) -> StreamingResponse:
     """Generate a playbook (roles + assembly) from a natural-language prompt via AI."""
     _require_openai()
+    probe_host = _resolve_ai_probe_host(session, body.host_id)
     return StreamingResponse(
-        playbook_manager.generate_playbook(session, body.prompt),
+        playbook_manager.generate_playbook(
+            session, body.prompt, probe_host=probe_host
+        ),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
@@ -81,8 +108,11 @@ async def edit_generate_playbook(
 ) -> StreamingResponse:
     """Edit a playbook from a natural-language prompt via AI."""
     _require_openai()
+    probe_host = _resolve_ai_probe_host(session, body.host_id)
     return StreamingResponse(
-        playbook_manager.edit_generate_playbook(session, playbook_id, body.prompt),
+        playbook_manager.edit_generate_playbook(
+            session, playbook_id, body.prompt, probe_host=probe_host
+        ),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
   Check,
@@ -36,6 +36,13 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { usePlaybook, useHosts, useGroups } from "@/hooks/queries";
 import {
@@ -51,6 +58,7 @@ import {
   type AgentStep,
 } from "@/hooks/use-agent-stream";
 import { invalidateResource } from "@/lib/queryClient";
+import { hostDisplayLabel, isManagedHost } from "@/lib/hosts";
 
 function HeaderEditableTitle({
   value,
@@ -258,6 +266,7 @@ export function PlaybookDetailPage() {
 
   const [showAiPrompt, setShowAiPrompt] = useState(false);
   const [aiPrompt, setAiPrompt] = useState("");
+  const [aiEditProbeHostId, setAiEditProbeHostId] = useState("");
   const [expandedSteps, setExpandedSteps] = useState<Set<number>>(new Set());
   const stepsEndRef = useRef<HTMLDivElement>(null);
 
@@ -281,9 +290,12 @@ export function PlaybookDetailPage() {
       setExpandedSteps(new Set());
       return rawGenerate(`/ai/playbooks/${playbookId}/edit`, {
         prompt: p,
+        ...(aiEditProbeHostId.trim()
+          ? { host_id: aiEditProbeHostId.trim() }
+          : {}),
       });
     },
-    [rawGenerate, playbookId],
+    [rawGenerate, playbookId, aiEditProbeHostId],
   );
 
   useEffect(() => {
@@ -298,6 +310,11 @@ export function PlaybookDetailPage() {
   const { data: playbook, isLoading: loading } = usePlaybook(playbookId || undefined);
   const { data: hosts } = useHosts();
   const { data: groups } = useGroups();
+
+  const aiProbeHostOptions = useMemo(() => {
+    const list = hosts ?? [];
+    return list.filter(isManagedHost).filter((h) => h.ip_address && h.ssh_user);
+  }, [hosts]);
 
   useEffect(() => {
     if (!playbook) return;
@@ -445,6 +462,34 @@ export function PlaybookDetailPage() {
         {showAiPrompt && (
           <section className="border border-zinc-800 bg-zinc-900/30 p-4 space-y-3">
             <h2 className="text-sm font-medium text-zinc-200">AI Edit</h2>
+            {aiProbeHostOptions.length > 0 && (
+              <div className="space-y-1">
+                <p className="text-[11px] text-zinc-500">
+                  Optional: probe host for AI (SSH)
+                </p>
+                <Select
+                  value={aiEditProbeHostId || "__none__"}
+                  onValueChange={(v) =>
+                    setAiEditProbeHostId(v === "__none__" ? "" : v)
+                  }
+                  disabled={generating}
+                >
+                  <SelectTrigger className="h-8 text-xs w-full max-w-md">
+                    <SelectValue placeholder="No SSH probing" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__" className="text-xs">
+                      No SSH probing
+                    </SelectItem>
+                    {aiProbeHostOptions.map((h) => (
+                      <SelectItem key={h.id} value={h.id} className="text-xs">
+                        {hostDisplayLabel(h)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
             <Textarea
               value={aiPrompt}
               onChange={(e) => setAiPrompt(e.target.value)}

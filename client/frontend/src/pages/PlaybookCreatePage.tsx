@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   ArrowRight,
@@ -18,9 +18,17 @@ import { PageContainer } from "@/components/shared/page-container";
 import { PlaybookEditorForm } from "@/components/playbooks/playbook-editor-form";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import type { RoleCatalogEntry, PlaybookUpsert } from "@/lib/playbooks";
 import { createPlaybook, listPlaybooks } from "@/lib/playbooks";
+import { hostDisplayLabel, isManagedHost } from "@/lib/hosts";
 import { useHosts, useGroups } from "@/hooks/queries";
 import {
   useAgentStream,
@@ -43,6 +51,7 @@ function ToolLabel({ tool }: { tool: string }) {
     create_playbook: "Assembling playbook",
     get_playbook: "Reading playbook",
     update_playbook: "Updating playbook",
+    run_ssh_command: "SSH command",
   };
   return <>{labels[tool] ?? tool}</>;
 }
@@ -120,6 +129,11 @@ function StepIndicator({
               — {String(step.args.name)}
             </span>
           )}
+          {step.args && "command" in step.args && step.args.command ? (
+            <code className="text-zinc-500 truncate max-w-[14rem] text-[10px]">
+              {String(step.args.command)}
+            </code>
+          ) : null}
           <Loader2 className="size-3 animate-spin ml-auto shrink-0" />
         </div>
       );
@@ -162,6 +176,7 @@ export function PlaybookCreatePage() {
   const [saving, setSaving] = useState(false);
   const [showPrompt, setShowPrompt] = useState(false);
   const [prompt, setPrompt] = useState("");
+  const [aiProbeHostId, setAiProbeHostId] = useState("");
   const [completedId, setCompletedId] = useState<string | null>(null);
   const [expandedSteps, setExpandedSteps] = useState<Set<number>>(new Set());
   const stepsEndRef = useRef<HTMLDivElement>(null);
@@ -181,13 +196,23 @@ export function PlaybookCreatePage() {
     },
   });
 
+  const probeHostOptions = useMemo(() => {
+    const list = hosts ?? [];
+    return list.filter(isManagedHost).filter((h) => h.ip_address && h.ssh_user);
+  }, [hosts]);
+
   const generate = useCallback(
     (p: string) => {
       setCompletedId(null);
       setExpandedSteps(new Set());
-      return rawGenerate("/ai/playbooks/generate", { prompt: p });
+      return rawGenerate("/ai/playbooks/generate", {
+        prompt: p,
+        ...(aiProbeHostId.trim()
+          ? { host_id: aiProbeHostId.trim() }
+          : {}),
+      });
     },
-    [rawGenerate],
+    [rawGenerate, aiProbeHostId],
   );
 
   const aiActive = generating || completedId !== null || steps.length > 0;
@@ -241,6 +266,35 @@ export function PlaybookCreatePage() {
 
         {showPrompt && (
           <div className="space-y-3">
+            {probeHostOptions.length > 0 && (
+              <div className="space-y-1">
+                <p className="text-[11px] text-zinc-500">
+                  Optional: probe host for AI (SSH commands to inspect the box)
+                </p>
+                <Select
+                  value={aiProbeHostId || "__none__"}
+                  onValueChange={(v) =>
+                    setAiProbeHostId(v === "__none__" ? "" : v)
+                  }
+                  disabled={generating}
+                >
+                  <SelectTrigger className="h-8 text-xs w-full max-w-md">
+                    <SelectValue placeholder="No SSH probing" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__" className="text-xs">
+                      No SSH probing
+                    </SelectItem>
+                    {probeHostOptions.map((h) => (
+                      <SelectItem key={h.id} value={h.id} className="text-xs">
+                        {hostDisplayLabel(h)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
             <Textarea
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}

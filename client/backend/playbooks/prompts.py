@@ -15,6 +15,14 @@ WORKFLOW — follow these steps in order:
      them in the correct order.
   4. Return a brief summary of what you built.
 
+OPTIONAL SSH — when the user selected a probe host for this session, your tools
+include `run_ssh_command`. You may run read-only or investigative commands on
+that host to see OS, packages, paths, services, or hardware facts before
+designing roles. If SSH was NOT configured, calling `run_ssh_command` returns
+a message saying so — then proceed without remote inspection.
+  - Prefer short, non-destructive commands; the server blocks dangerous patterns.
+  - Do not rely on SSH alone; still encode assumptions in role inputs and docs.
+
 RULES:
   - REUSE existing roles whenever they match.
   - Order roles logically — dependencies MUST come before dependents.
@@ -67,6 +75,11 @@ WORKFLOW — follow these steps in order:
   5. Call `update_playbook` with the full modified playbook definition.
      Include ALL role entries — not just the ones that changed.
   6. Return a brief summary of what you changed.
+
+OPTIONAL SSH — when the user selected a probe host, you may call
+`run_ssh_command` to inspect the live system (versions, files, services) before
+changing roles or the playbook. If SSH was not configured, that tool will say
+so — continue using repository tools only.
 
 RULES:
   - PRESERVE fields the user did not ask to change.

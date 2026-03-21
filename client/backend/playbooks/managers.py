@@ -59,6 +59,21 @@ from playbooks.schemas import (
 
 logger = get_logger(__name__)
 
+
+def _agent_deps_with_optional_ssh(session: SessionData, probe_host: Host | None):
+    """Build AgentDeps; populate SSH fields when a probe host is supplied."""
+    from _utils.agent_stream import AgentDeps
+
+    if probe_host is None:
+        return AgentDeps(session=session)
+    return AgentDeps(
+        session=session,
+        host_ip=(probe_host.ip_address or "").strip(),
+        host_ssh_user=(probe_host.ssh_user or "").strip(),
+        host_ssh_port=int(probe_host.ssh_port or 22),
+    )
+
+
 def _generate_playbook_id(layout: AnsibleLayout) -> str:
     existing = {p.id for p in list_playbooks(layout)}
     return generate_unique_id("playbook", lambda c: c in existing)
@@ -415,13 +430,15 @@ class PlaybookManager(RunManagerMixin):
         self,
         session: SessionData,
         prompt: str,
+        *,
+        probe_host: Host | None = None,
     ) -> AsyncGenerator[str]:
         """Generate a playbook via an LLM agent that creates roles and assembles them."""
-        from _utils.agent_stream import AgentDeps, stream_agent
+        from _utils.agent_stream import stream_agent
         from _utils.ai import playbook_agent
         from playbooks.prompts import PLAYBOOK_SYSTEM_PROMPT
 
-        deps = AgentDeps(session=session)
+        deps = _agent_deps_with_optional_ssh(session, probe_host)
         async for event in stream_agent(playbook_agent, prompt, deps, instructions=PLAYBOOK_SYSTEM_PROMPT):
             yield event
 
@@ -430,13 +447,15 @@ class PlaybookManager(RunManagerMixin):
         session: SessionData,
         playbook_id: str,
         prompt: str,
+        *,
+        probe_host: Host | None = None,
     ) -> AsyncGenerator[str]:
         """Edit a playbook via an LLM agent using natural-language instructions."""
-        from _utils.agent_stream import AgentDeps, stream_agent
+        from _utils.agent_stream import stream_agent
         from _utils.ai import playbook_agent
         from playbooks.prompts import PLAYBOOK_EDIT_SYSTEM_PROMPT
 
-        deps = AgentDeps(session=session)
+        deps = _agent_deps_with_optional_ssh(session, probe_host)
         detail = self.get_playbook(session, playbook_id)
         catalog_by_id = {r.id: r for r in detail.roles_catalog}
 
@@ -479,7 +498,7 @@ class PlaybookManager(RunManagerMixin):
         host: Host,
     ) -> AsyncGenerator[str]:
         """Stream an AI agent that inspects the host over SSH and fixes roles/playbook."""
-        from _utils.agent_stream import DebugAgentDeps, stream_agent
+        from _utils.agent_stream import AgentDeps, stream_agent
         from _utils.ai import debug_run_agent
         from playbooks.debug_prompts import DEBUG_RUN_SYSTEM_PROMPT
 
@@ -502,13 +521,11 @@ class PlaybookManager(RunManagerMixin):
             f"ansible-playbook output:\n{output}\n"
         )
 
-        deps = DebugAgentDeps(
+        deps = AgentDeps(
             session=session,
             host_ip=(host.ip_address or "").strip(),
             host_ssh_user=(host.ssh_user or "").strip(),
             host_ssh_port=int(host.ssh_port or 22),
-            playbook_id=run.playbook_id,
-            playbook_name=run.playbook_name,
         )
         async for event in stream_agent(
             debug_run_agent,

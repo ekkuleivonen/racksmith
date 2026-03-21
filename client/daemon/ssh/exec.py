@@ -30,6 +30,14 @@ _DANGEROUS_PATTERNS = (
 )
 
 
+def _stdout_stderr_text(raw: bytes | str | None) -> str:
+    if raw is None:
+        return ""
+    if isinstance(raw, bytes):
+        return raw.decode(errors="replace")
+    return raw
+
+
 def is_dangerous_ssh_command(command: str) -> str | None:
     """Return a reason string if *command* is blocked, else None."""
     text = command.strip()
@@ -59,8 +67,8 @@ async def ssh_exec_command(
     try:
         result = await asyncio.wait_for(conn.run(command), timeout=timeout)
         exit_code = result.exit_status
-        stdout = (result.stdout or "")[:_MAX_STDOUT]
-        stderr = (result.stderr or "")[:_MAX_STDERR]
+        stdout = _stdout_stderr_text(result.stdout)[:_MAX_STDOUT]
+        stderr = _stdout_stderr_text(result.stderr)[:_MAX_STDERR]
         return exit_code, stdout, stderr
     finally:
         conn.close()

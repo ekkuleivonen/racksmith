@@ -33,17 +33,10 @@ class AgentDeps:
     session: SessionData
     created_playbook_id: str | None = field(default=None, repr=False)
     updated_playbook_id: str | None = field(default=None, repr=False)
-
-
-@dataclass
-class DebugAgentDeps(AgentDeps):
-    """Extra context for debugging a failed playbook run (SSH target + playbook id)."""
-
+    # When set (e.g. failed-run debug or playbook generate with probe host), run_ssh_command works.
     host_ip: str = ""
     host_ssh_user: str = ""
     host_ssh_port: int = 22
-    playbook_id: str = ""
-    playbook_name: str = ""
 
 
 def _sse(payload: dict[str, Any]) -> str:

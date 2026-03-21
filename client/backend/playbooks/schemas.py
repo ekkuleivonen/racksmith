@@ -112,10 +112,18 @@ class PlaybookRunResponse(BaseModel):
 
 class GeneratePlaybookRequest(BaseModel):
     prompt: str = Field(min_length=1)
+    host_id: str | None = Field(
+        default=None,
+        description="Optional managed host for run_ssh_command during generation",
+    )
 
 
 class EditGeneratePlaybookRequest(BaseModel):
     prompt: str = Field(min_length=1)
+    host_id: str | None = Field(
+        default=None,
+        description="Optional managed host for run_ssh_command during edit",
+    )
 
 
 class AvailableVarEntry(BaseModel):
