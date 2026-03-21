@@ -195,6 +195,11 @@ playbook_agent: Agent[AgentDeps, str] = Agent(
     ],
 )
 
+# Unified chat uses the same tool surface as playbook assembly (full Racksmith repo + optional SSH).
+racksmith_agent = playbook_agent
+
+RACKSMITH_CHAT_INSTRUCTIONS = """You are Racksmith's AI assistant. The user manages infrastructure here: Ansible roles and playbooks in the active Git repository, managed hosts, playbook runs, and racks. Use the tools to inspect and modify repository content; use run_ssh_command only when SSH is available on the connection the app configured for this turn. Be concise."""
+
 debug_run_agent: Agent[AgentDeps, str] = Agent(
     output_type=str,
     retries=2,

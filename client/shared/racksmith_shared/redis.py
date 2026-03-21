@@ -109,8 +109,8 @@ class AsyncRedis:
         await cls._get_client().setex(key, ttl_seconds, value)
 
     @classmethod
-    async def delete(cls, key: str) -> None:
-        await cls._get_client().delete(key)
+    async def delete(cls, key: str) -> int:
+        return int(await cls._get_client().delete(key))
 
     @classmethod
     async def sadd(cls, key: str, *members: str) -> int:

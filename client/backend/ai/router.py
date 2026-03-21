@@ -1,20 +1,22 @@
-"""AI generation endpoints (streaming) — action namespace under /api/ai."""
+"""AI endpoints: unified Racksmith chat (streaming) backed by Redis."""
 
 from __future__ import annotations
+
+import json
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 
 import settings
-from _utils.exceptions import NotFoundError
+from _utils.agent_stream import stream_racksmith_turn
+from _utils.ai import RACKSMITH_CHAT_INSTRUCTIONS, racksmith_agent
+from _utils.exceptions import RepoNotAvailableError
 from auth.dependencies import CurrentSession
-from auth.session import SessionData
-from hosts.managers import host_manager
-from hosts.schemas import Host
-from playbooks.managers import playbook_manager
-from playbooks.schemas import EditGeneratePlaybookRequest, GeneratePlaybookRequest
-from roles.managers import role_manager
-from roles.schemas import GenerateRequest, RoleAiEditRequest
+
+from .chat_context import build_agent_deps_and_prefix, parse_context_payload
+from .chat_schemas import ChatCreateResponse, ChatMessagesResponse, ChatStreamRequest, ChatUiMessage
+from .chat_store import ai_chat_store
+from .chat_view import model_messages_to_ui
 
 router = APIRouter()
 
@@ -27,130 +29,85 @@ def _require_openai() -> None:
         )
 
 
-def _resolve_ai_probe_host(session: SessionData, host_id: str | None) -> Host | None:
-    """Return a managed host with SSH details, or None. Raises HTTPException on bad id."""
-    if not host_id or not str(host_id).strip():
-        return None
-    hid = str(host_id).strip()
+@router.post("/chats", response_model=ChatCreateResponse)
+async def create_chat(session: CurrentSession) -> ChatCreateResponse:
+    """Start a new chat thread (empty history in Redis)."""
     try:
-        host = host_manager.get_host(session, hid)
-    except NotFoundError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
-    if not host.managed:
-        raise HTTPException(
-            status_code=400,
-            detail="Probe host must be managed for SSH access",
-        )
-    if not (host.ip_address or "").strip() or not (host.ssh_user or "").strip():
-        raise HTTPException(
-            status_code=400,
-            detail="Probe host is missing IP address or ssh_user",
-        )
-    return host
+        chat_id = await ai_chat_store.create(session)
+    except RepoNotAvailableError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    return ChatCreateResponse(chat_id=chat_id)
 
 
-@router.post("/roles/generate")
-async def generate_role(
-    body: GenerateRequest,
+@router.get("/chats/{chat_id}/messages", response_model=ChatMessagesResponse)
+async def get_chat_messages(chat_id: str, session: CurrentSession) -> ChatMessagesResponse:
+    """Return a simplified transcript for the SPA."""
+    try:
+        raw = await ai_chat_store.load_messages(session, chat_id)
+    except RepoNotAvailableError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    if raw is None:
+        raise HTTPException(status_code=404, detail="Chat not found")
+    rows = model_messages_to_ui(raw)
+    return ChatMessagesResponse(items=[ChatUiMessage(kind=r["kind"], text=r["text"]) for r in rows])
+
+
+@router.delete("/chats/{chat_id}", status_code=204)
+async def delete_chat(chat_id: str, session: CurrentSession) -> None:
+    try:
+        deleted = await ai_chat_store.delete(session, chat_id)
+    except RepoNotAvailableError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Chat not found")
+
+
+@router.post("/chats/{chat_id}/stream")
+async def chat_turn_stream(
+    chat_id: str,
+    body: ChatStreamRequest,
     session: CurrentSession,
 ) -> StreamingResponse:
-    """Generate an Ansible role from a natural-language prompt via AI."""
-    _require_openai()
-    return StreamingResponse(
-        role_manager.generate_with_validation(session, body.prompt),
-        media_type="text/event-stream",
-        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
-    )
-
-
-@router.post("/roles/{role_id}/edit")
-async def edit_generate_role(
-    role_id: str,
-    body: RoleAiEditRequest,
-    session: CurrentSession,
-) -> StreamingResponse:
-    """Edit an existing role via AI from a natural-language prompt."""
+    """Run one user turn; stream SSE; persist full message history on success."""
     _require_openai()
     try:
-        detail = role_manager.get_role_detail(session, role_id)
-    except FileNotFoundError as exc:
-        raise HTTPException(status_code=404, detail=f"Role '{role_id}' not found") from exc
-    existing_yaml = detail.raw_content or ""
+        prior = await ai_chat_store.load_messages(session, chat_id)
+    except RepoNotAvailableError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    if prior is None:
+        raise HTTPException(status_code=404, detail="Chat not found")
+
+    ctx = parse_context_payload(body.context)
+
+    async def event_stream():
+        try:
+            deps, prefix = await build_agent_deps_and_prefix(session, ctx)
+        except ValueError as exc:
+            yield f"data: {json.dumps({'type': 'error', 'message': str(exc)})}\n\n"
+            yield "data: [DONE]\n\n"
+            return
+
+        full_prompt = prefix + body.content.strip()
+        updated: list = []
+        async for chunk in stream_racksmith_turn(
+            racksmith_agent,
+            user_prompt=full_prompt,
+            deps=deps,
+            message_history=prior or None,
+            instructions=RACKSMITH_CHAT_INSTRUCTIONS,
+            persisted_messages=updated,
+        ):
+            yield chunk
+        if updated:
+            try:
+                await ai_chat_store.save_messages(session, chat_id, updated)
+            except ValueError as exc:
+                err = json.dumps({"type": "error", "message": f"Failed to save chat: {exc}"})
+                yield f"data: {err}\n\n"
+                yield "data: [DONE]\n\n"
+
     return StreamingResponse(
-        role_manager.edit_with_validation(session, existing_yaml, body.prompt),
-        media_type="text/event-stream",
-        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
-    )
-
-
-@router.post("/playbooks/generate")
-async def generate_playbook(
-    body: GeneratePlaybookRequest,
-    session: CurrentSession,
-) -> StreamingResponse:
-    """Generate a playbook (roles + assembly) from a natural-language prompt via AI."""
-    _require_openai()
-    probe_host = _resolve_ai_probe_host(session, body.host_id)
-    return StreamingResponse(
-        playbook_manager.generate_playbook(
-            session, body.prompt, probe_host=probe_host
-        ),
-        media_type="text/event-stream",
-        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
-    )
-
-
-@router.post("/playbooks/{playbook_id}/edit")
-async def edit_generate_playbook(
-    playbook_id: str,
-    body: EditGeneratePlaybookRequest,
-    session: CurrentSession,
-) -> StreamingResponse:
-    """Edit a playbook from a natural-language prompt via AI."""
-    _require_openai()
-    probe_host = _resolve_ai_probe_host(session, body.host_id)
-    return StreamingResponse(
-        playbook_manager.edit_generate_playbook(
-            session, playbook_id, body.prompt, probe_host=probe_host
-        ),
-        media_type="text/event-stream",
-        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
-    )
-
-
-@router.post("/runs/{run_id}/debug")
-async def debug_failed_playbook_run(
-    run_id: str,
-    session: CurrentSession,
-) -> StreamingResponse:
-    """Debug a failed playbook run: AI reads output, may SSH to first host, edits roles/playbook."""
-    _require_openai()
-    run = await playbook_manager.load_playbook_run(run_id)
-    if run is None:
-        raise HTTPException(status_code=404, detail="Run not found or expired")
-    if run.status != "failed":
-        raise HTTPException(
-            status_code=400,
-            detail="Run did not fail; nothing to debug",
-        )
-    if not run.hosts:
-        raise HTTPException(status_code=400, detail="Run has no target hosts")
-    try:
-        host = host_manager.get_host(session, run.hosts[0])
-    except NotFoundError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
-    if not host.managed:
-        raise HTTPException(
-            status_code=400,
-            detail="First target host is not managed; SSH debug unavailable",
-        )
-    if not (host.ip_address or "").strip() or not (host.ssh_user or "").strip():
-        raise HTTPException(
-            status_code=400,
-            detail="First target host is missing IP address or ssh_user",
-        )
-    return StreamingResponse(
-        playbook_manager.debug_failed_run(session, run, host),
+        event_stream(),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
