@@ -22,10 +22,10 @@ COPY client/shared/ /app/shared/
 
 # Daemon Python deps
 COPY client/daemon/pyproject.toml client/daemon/uv.lock* /app/daemon/
-RUN uv sync --frozen --no-dev || uv sync --no-dev
+RUN uv sync --frozen --no-dev
 
-# Pre-install Ansible Galaxy collections at build time
-RUN uv run ansible-galaxy collection install --force community.general ansible.posix \
+# Pre-install Ansible Galaxy collections at build time (venv binary — not `uv run`, which may sync dev)
+RUN /app/daemon/.venv/bin/ansible-galaxy collection install --force community.general ansible.posix \
     -p /app/daemon/.ansible/collections
 
 # Daemon code

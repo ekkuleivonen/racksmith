@@ -27,6 +27,10 @@ The **daemon** uses `network_mode: host` so ARP scanning sees real interfaces. I
 - [Shared library](shared/README.md)
 - [Frontend](frontend/README.md)
 
+## Production images
+
+Dockerfiles run `uv sync --frozen --no-dev` at build time. The API and daemon **start** `uvicorn`/worker via `.venv/bin/...` (not `uv run`) so containers do not re-sync and pull **ruff**, **mypy**, etc. on every boot.
+
 ## License
 
 [GNU Affero General Public License v3.0](../LICENSE) (SPDX: `AGPL-3.0`).

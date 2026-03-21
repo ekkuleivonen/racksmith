@@ -44,7 +44,8 @@ async def list_hosts(
     ),
     order: str = Query("asc", description="asc or desc"),
     page: int = Query(1, ge=1),
-    per_page: int = Query(50, ge=1, le=200),
+    # Frontend canvas uses per_page=500; keep cap modest for memory (in-memory filter/sort)
+    per_page: int = Query(50, ge=1, le=500),
 ) -> PaginatedResponse[Host]:
     hosts = host_manager.list_hosts_filtered(
         session,

@@ -169,26 +169,35 @@ function invalidateAfterHostMutation() {
   invalidateResource("hosts", "racks", "filesStatuses", "filesTree");
 }
 
-const HOSTS_PER_PAGE = 500;
+/** Keep <= backend `list_hosts` per_page max (older deployments use 200). */
+const HOSTS_PAGE_SIZE = 200;
 
 export async function listHosts(params?: ListHostsParams) {
-  const sp = new URLSearchParams();
-  sp.set("page", "1");
-  sp.set("per_page", String(HOSTS_PER_PAGE));
-  if (params?.q) sp.set("q", params.q);
-  if (params?.group?.length) sp.set("group", params.group.join(","));
-  if (params?.label?.length) sp.set("label", params.label.join(","));
-  if (params?.subnet?.length) sp.set("subnet", params.subnet.join(","));
-  if (params?.managed !== undefined) sp.set("managed", String(params.managed));
-  if (params?.sort) sp.set("sort", params.sort);
-  if (params?.order) sp.set("order", params.order);
-  const data = await apiGet<{
-    items: Host[];
-    total: number;
-    page: number;
-    per_page: number;
-  }>(`/hosts?${sp.toString()}`);
-  return data.items;
+  const all: Host[] = [];
+  let page = 1;
+  while (true) {
+    const sp = new URLSearchParams();
+    sp.set("page", String(page));
+    sp.set("per_page", String(HOSTS_PAGE_SIZE));
+    if (params?.q) sp.set("q", params.q);
+    if (params?.group?.length) sp.set("group", params.group.join(","));
+    if (params?.label?.length) sp.set("label", params.label.join(","));
+    if (params?.subnet?.length) sp.set("subnet", params.subnet.join(","));
+    if (params?.managed !== undefined) sp.set("managed", String(params.managed));
+    if (params?.sort) sp.set("sort", params.sort);
+    if (params?.order) sp.set("order", params.order);
+    const data = await apiGet<{
+      items: Host[];
+      total: number;
+      page: number;
+      per_page: number;
+    }>(`/hosts?${sp.toString()}`);
+    all.push(...data.items);
+    const got = data.items.length;
+    if (got < HOSTS_PAGE_SIZE || all.length >= data.total) break;
+    page += 1;
+  }
+  return all;
 }
 
 export async function getHost(id: string) {
