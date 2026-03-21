@@ -3,17 +3,27 @@
 # MUST have env vars (set in .env):
 #   APP_URL      — Public URL of the client (e.g. http://localhost:8080)
 #   DAEMON_SECRET — Shared secret between API and daemon
+#
+# Logging: json-file rotation caps disk use (important on Raspberry Pi / SD cards).
+
+x-logging: &log-rotated
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
 
 services:
   redis:
     image: redis:7-alpine
     restart: unless-stopped
+    logging: *log-rotated
     volumes:
       - redis_data:/data
 
   api:
     image: ghcr.io/ekkuleivonen/racksmith-client-api:${RACKSMITH_VERSION:-latest}
     restart: unless-stopped
+    logging: *log-rotated
     depends_on: [redis]
     volumes:
       - workspace:/app/workspace
@@ -26,6 +36,7 @@ services:
   daemon:
     image: ghcr.io/ekkuleivonen/racksmith-client-daemon:${RACKSMITH_VERSION:-latest}
     restart: unless-stopped
+    logging: *log-rotated
     depends_on: [redis]
     network_mode: host
     volumes:
@@ -37,12 +48,14 @@ services:
   frontend:
     image: ghcr.io/ekkuleivonen/racksmith-client-frontend:${RACKSMITH_VERSION:-latest}
     restart: unless-stopped
+    logging: *log-rotated
     ports:
       - "8080:80"
     depends_on: [api]
 
   watchtower:
     image: nickfedor/watchtower
+    logging: *log-rotated
     environment:
       - WATCHTOWER_POLL_INTERVAL=60
       - WATCHTOWER_CLEANUP=true

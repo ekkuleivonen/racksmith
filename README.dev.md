@@ -91,6 +91,8 @@ See `.env.example` and [README.md](README.md) for full lists.
 | `docker-compose.client.yml` | API + daemon + frontend + Redis + watchtower |
 | `docker-compose.registry.yml` | Registry + Postgres (operator) |
 
+Both compose files set **json-file log rotation** (10 MB × 3 files per service) for SD-card–friendly defaults; edit the `x-logging` anchor to tune.
+
 **Both locally:**
 
 ```bash

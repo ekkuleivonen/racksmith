@@ -33,6 +33,8 @@ cp .env.example .env
 docker compose -f docker-compose.client.yml up -d
 ```
 
+Compose enables **log rotation** on each service (`json-file`, 10 MB × 3 files) so logs don’t fill SD cards on homelab boards (e.g. Raspberry Pi). Adjust `x-logging` in `docker-compose.client.yml` if you need more history.
+
 Open **`APP_URL`** (default in compose: `http://localhost:8080`), sign in with GitHub, and connect a repo.
 
 ### Architecture (high level)

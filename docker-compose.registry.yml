@@ -6,11 +6,20 @@
 #   TOKEN_ENCRYPTION_KEY — Fernet key
 #   REGISTRY_PUBLIC_URL  — Public URL (e.g. https://registry.racksmith.io)
 #   REGISTRY_DB_PASSWORD — PostgreSQL password
+#
+# Logging: json-file rotation caps disk use on small / SD-backed hosts.
+
+x-logging: &log-rotated
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
 
 services:
   registry-db:
     image: postgres:17-alpine
     restart: unless-stopped
+    logging: *log-rotated
     ports:
       - "5432:5432"
     environment:
@@ -32,6 +41,7 @@ services:
       dockerfile: registry/backend/Dockerfile
     image: racksmith-registry:dev
     restart: unless-stopped
+    logging: *log-rotated
     ports:
       - "8001:8001"
     env_file:
