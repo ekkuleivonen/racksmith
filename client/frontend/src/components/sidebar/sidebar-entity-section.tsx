@@ -13,7 +13,6 @@ export interface SidebarEntitySectionProps<T> {
   itemPath: (item: T) => string;
   itemLabel: (item: T) => string;
   emptyMessage: string;
-  collapsed?: boolean;
 }
 
 export function SidebarEntitySection<T>({
@@ -27,7 +26,6 @@ export function SidebarEntitySection<T>({
   itemPath,
   itemLabel,
   emptyMessage,
-  collapsed,
 }: SidebarEntitySectionProps<T>) {
   const { pathname } = useLocation();
 
@@ -68,8 +66,7 @@ export function SidebarEntitySection<T>({
           <Plus className="size-3" />
         </NavLink>
       </div>
-      {!collapsed && (
-        <div className="space-y-0.5 pl-2">
+      <div className="space-y-0.5 pl-2">
           {items.length === 0 ? (
             <p className="px-2 py-0.5 text-[10px] text-zinc-500">{emptyMessage}</p>
           ) : (
@@ -90,8 +87,7 @@ export function SidebarEntitySection<T>({
               </NavLink>
             ))
           )}
-        </div>
-      )}
+      </div>
     </div>
   );
 }

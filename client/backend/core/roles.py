@@ -60,6 +60,7 @@ class RoleData:
     id: str = ""
     registry_id: str = ""
     registry_version: int = 0
+    folder: str = ""
 
 
 def _action_type_to_ansible(t: str) -> str:
@@ -198,6 +199,7 @@ def _overlay_racksmith_meta(role: RoleData, role_meta: dict) -> None:
     """
     role.registry_id = str(role_meta.get("registry_id", ""))
     role.registry_version = int(role_meta.get("registry_version", 0))
+    role.folder = str(role_meta.get("folder", ""))
     raw_outputs = role_meta.get("outputs")
     if isinstance(raw_outputs, list):
         for entry in raw_outputs:
@@ -313,6 +315,8 @@ def write_role(
     (role_dir / TASKS_MAIN).write_text(tasks_content, encoding="utf-8")
 
     role_meta: dict[str, Any] = {}
+    if role.folder:
+        role_meta["folder"] = role.folder
     if role.outputs:
         role_meta["outputs"] = [
             o.model_dump(exclude_defaults=True) | {"key": o.key}

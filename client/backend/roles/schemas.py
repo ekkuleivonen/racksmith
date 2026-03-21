@@ -56,6 +56,7 @@ class RoleSummary(BaseModel):
     has_tasks: bool
     registry_id: str = ""
     registry_version: int = 0
+    folder: str = ""
 
 
 class RoleDetail(RoleSummary):

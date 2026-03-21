@@ -1,4 +1,4 @@
-import { apiDelete, apiGet, apiPost, apiPut, wsUrl } from "@/lib/api";
+import { apiDelete, apiGet, apiPatch, apiPost, apiPut, wsUrl } from "@/lib/api";
 import { invalidateResource } from "@/lib/queryClient";
 import type { TargetSelection } from "@/lib/playbooks";
 
@@ -35,6 +35,7 @@ export type RoleSummary = {
   has_tasks: boolean;
   registry_id: string;
   registry_version: number;
+  folder: string;
 };
 
 export type RoleDetail = RoleSummary & {
@@ -89,6 +90,11 @@ export async function createRoleFromYaml(yamlText: string) {
 
 export async function deleteRole(roleId: string) {
   await apiDelete<void>(`/roles/${roleId}`);
+  invalidateAfterRoleMutation();
+}
+
+export async function moveRoleToFolder(roleId: string, folder: string) {
+  await apiPatch<void>(`/roles/${roleId}/folder`, { folder });
   invalidateAfterRoleMutation();
 }
 

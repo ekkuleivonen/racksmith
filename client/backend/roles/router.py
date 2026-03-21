@@ -14,6 +14,7 @@ from pydantic import ValidationError
 import settings
 from _utils.websocket import require_ws_session, ws_error_handler
 from auth.dependencies import CurrentSession
+from playbooks.schemas import FolderUpdate
 from roles.managers import role_manager
 from roles.registry import registry_manager
 from roles.registry_schemas import (
@@ -131,6 +132,16 @@ async def update_role(
     """Update an existing role via raw YAML."""
     role = role_manager.update_role(session, role_id, body)
     return RoleDetailResponse(role=role)
+
+
+@roles_router.patch("/{role_id}/folder", status_code=204)
+async def move_role_to_folder(
+    role_id: str,
+    body: FolderUpdate,
+    session: CurrentSession,
+) -> None:
+    """Update the sidebar folder for a role."""
+    role_manager.move_to_folder(session, role_id, body.folder)
 
 
 @roles_router.delete("/{role_id}", status_code=204)

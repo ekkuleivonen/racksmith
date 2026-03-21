@@ -45,6 +45,7 @@ class PlaybookData:
     raw_content: str = ""
     registry_id: str = ""
     registry_version: int = 0
+    folder: str = ""
 
 
 def read_playbook(path: Path, repo_path: Path | None = None) -> PlaybookData:
@@ -107,6 +108,7 @@ def _overlay_playbook_meta(pb: PlaybookData, pb_meta: dict) -> None:
         pb.description = pb_meta["description"]
     pb.registry_id = str(pb_meta.get("registry_id", ""))
     pb.registry_version = int(pb_meta.get("registry_version", 0))
+    pb.folder = str(pb_meta.get("folder", ""))
 
 
 def read_playbook_with_meta(
@@ -175,6 +177,8 @@ def write_playbook(layout: AnsibleLayout, playbook: PlaybookData) -> Path:
     pb_meta: dict = {}
     if playbook.description:
         pb_meta["description"] = playbook.description
+    if playbook.folder:
+        pb_meta["folder"] = playbook.folder
     set_playbook_meta(meta, playbook.id, pb_meta)
     write_meta(layout, meta)
 

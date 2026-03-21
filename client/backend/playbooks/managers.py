@@ -28,6 +28,12 @@ from core.playbooks import (
 from core.playbooks import (
     PlaybookRoleEntry as AnsiblePlaybookRoleEntry,
 )
+from core.racksmith_meta import (
+    get_playbook_meta,
+    read_meta,
+    set_playbook_meta,
+    write_meta,
+)
 from core.roles import RoleData, list_roles
 from core.run import validate_become_password
 from hosts.managers import host_manager
@@ -119,6 +125,7 @@ class PlaybookManager(RunManagerMixin):
                     else now_iso(),
                     registry_id=p.registry_id,
                     registry_version=p.registry_version,
+                    folder=p.folder,
                 )
             )
         return sorted(results, key=lambda s: (s.name.lower(), s.id))
@@ -216,6 +223,22 @@ class PlaybookManager(RunManagerMixin):
         write_playbook(layout, playbook_data)
         logger.info("playbook_updated", playbook_id=playbook_id)
         return self.get_playbook(session, playbook_id)
+
+    def move_to_folder(self, session: SessionData, playbook_id: str, folder: str) -> None:
+        layout = get_layout(session)
+        playbook_path = layout.playbooks_path / f"{playbook_id}.yml"
+        if not playbook_path.exists():
+            playbook_path = layout.playbooks_path / f"{playbook_id}.yaml"
+        if not playbook_path.exists():
+            raise FileNotFoundError("Playbook not found")
+        meta = read_meta(layout)
+        pb_meta = get_playbook_meta(meta, playbook_id)
+        if folder:
+            pb_meta["folder"] = folder
+        else:
+            pb_meta.pop("folder", None)
+        set_playbook_meta(meta, playbook_id, pb_meta)
+        write_meta(layout, meta)
 
     async def generate_playbook(
         self,

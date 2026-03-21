@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import json
+import shlex
 from collections.abc import AsyncGenerator
-from typing import cast
+from typing import Any, cast
 
 import yaml
 from pydantic import ValidationError
@@ -19,7 +20,7 @@ from _utils.slugs import humanize_key
 from auth.git import aget_head_sha
 from auth.session import SessionData
 from core.config import AnsibleLayout
-from core.racksmith_meta import get_role_meta, read_meta
+from core.racksmith_meta import get_role_meta, read_meta, set_role_meta, write_meta
 from core.roles import (
     RoleData,
     RoleInput,
@@ -42,6 +43,49 @@ from roles.schemas import (
 )
 
 logger = get_logger(__name__)
+
+# Modules that accept free-form (string) arguments.  LLMs sometimes emit
+# these as a YAML list, which Ansible rejects.  Strategy per module:
+#   "argv"  → wrap list in {"argv": <list>}  (command supports argv)
+#   "join"  → shlex.join into a single string
+_FREEFORM_MODULES: dict[str, str] = {
+    "command": "argv",
+    "ansible.builtin.command": "argv",
+    "shell": "join",
+    "ansible.builtin.shell": "join",
+    "raw": "join",
+    "ansible.builtin.raw": "join",
+    "script": "join",
+    "ansible.builtin.script": "join",
+}
+
+
+def _normalize_tasks(tasks: list[Any]) -> list[Any]:
+    """Fix common LLM mistakes in Ansible task definitions.
+
+    Converts list-valued free-form modules (command, shell, …) to the
+    format Ansible actually accepts.
+    """
+    out: list[Any] = []
+    for task in tasks:
+        if not isinstance(task, dict):
+            out.append(task)
+            continue
+        task = dict(task)
+        for module, strategy in _FREEFORM_MODULES.items():
+            if module not in task or not isinstance(task[module], list):
+                continue
+            args: list[Any] = task[module]
+            if strategy == "argv":
+                task[module] = {"argv": [str(a) for a in args]}
+            else:
+                task[module] = shlex.join(str(a) for a in args)
+            break
+        for block_key in ("block", "rescue", "always"):
+            if block_key in task and isinstance(task[block_key], list):
+                task[block_key] = _normalize_tasks(task[block_key])
+        out.append(task)
+    return out
 
 
 def _generate_role_id(layout: AnsibleLayout) -> str:
@@ -95,6 +139,7 @@ def _role_data_to_summary(r: RoleData) -> RoleSummary:
         has_tasks=r.has_tasks,
         registry_id=r.registry_id,
         registry_version=r.registry_version,
+        folder=r.folder,
     )
 
 
@@ -185,9 +230,10 @@ class RoleManager(RunManagerMixin):
             has_tasks=bool(body.tasks),
             id=role_id,
         )
+        tasks = _normalize_tasks(body.tasks) if body.tasks else body.tasks
         tasks_yaml = (
-            yaml.safe_dump(body.tasks, sort_keys=False, allow_unicode=True)
-            if body.tasks
+            yaml.safe_dump(tasks, sort_keys=False, allow_unicode=True)
+            if tasks
             else None
         )
         write_role(layout, role_data, tasks_yaml=tasks_yaml)
@@ -230,6 +276,8 @@ class RoleManager(RunManagerMixin):
             has_tasks=bool(tasks_list),
             id=role_id,
         )
+        if isinstance(tasks_list, list):
+            tasks_list = _normalize_tasks(tasks_list)
         tasks_yaml = (
             yaml.safe_dump(tasks_list, sort_keys=False, allow_unicode=True)
             if tasks_list is not None
@@ -238,6 +286,20 @@ class RoleManager(RunManagerMixin):
         write_role(layout, role_data, tasks_yaml=tasks_yaml)
         logger.info("role_updated", role_id=role_id)
         return self.get_role_detail(session, role_id)
+
+    def move_to_folder(self, session: SessionData, role_id: str, folder: str) -> None:
+        layout = get_layout(session)
+        role_dir = layout.roles_path / role_id
+        if not role_dir.exists():
+            raise FileNotFoundError(f"Role '{role_id}' not found")
+        meta = read_meta(layout)
+        role_meta = get_role_meta(meta, role_id)
+        if folder:
+            role_meta["folder"] = folder
+        else:
+            role_meta.pop("folder", None)
+        set_role_meta(meta, role_id, role_meta)
+        write_meta(layout, meta)
 
     def delete_role(self, session: SessionData, role_id: str) -> None:
         layout = get_layout(session)

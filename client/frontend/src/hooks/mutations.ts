@@ -19,7 +19,7 @@ import {
 } from "@/lib/groups";
 import { createRack, deleteRack, updateRack } from "@/lib/racks";
 import { rebootHost } from "@/lib/ssh";
-import { createRoleFromYaml, deleteRole, updateRole } from "@/lib/roles";
+import { createRoleFromYaml, deleteRole, moveRoleToFolder, updateRole } from "@/lib/roles";
 import {
   pushToRegistry,
   importFromRegistry,
@@ -31,6 +31,7 @@ import {
 import {
   createPlaybook,
   deletePlaybook,
+  movePlaybookToFolder,
   updatePlaybook,
   type PlaybookUpsert,
 } from "@/lib/playbooks";
@@ -181,6 +182,18 @@ export const useDeletePlaybook = () =>
   useToastMutation((playbookId: string) => deletePlaybook(playbookId), {
     success: "Playbook deleted",
   });
+
+export const useMoveRoleToFolder = () =>
+  useToastMutation(
+    ({ roleId, folder }: { roleId: string; folder: string }) =>
+      moveRoleToFolder(roleId, folder),
+  );
+
+export const useMovePlaybookToFolder = () =>
+  useToastMutation(
+    ({ playbookId, folder }: { playbookId: string; folder: string }) =>
+      movePlaybookToFolder(playbookId, folder),
+  );
 
 export const useStartScan = () =>
   useToastMutation((subnet?: string) => startScan(subnet));

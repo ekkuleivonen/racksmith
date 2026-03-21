@@ -1,4 +1,4 @@
-import { apiDelete, apiGet, apiPost, apiPut, wsUrl } from "@/lib/api";
+import { apiDelete, apiGet, apiPatch, apiPost, apiPut, wsUrl } from "@/lib/api";
 import { invalidateResource } from "@/lib/queryClient";
 import type { RoleInput, RoleOutput } from "@/lib/roles";
 
@@ -27,6 +27,7 @@ export type PlaybookSummary = {
   updated_at: string;
   registry_id: string;
   registry_version: number;
+  folder: string;
 };
 
 export type PlaybookDetail = PlaybookSummary & {
@@ -102,6 +103,11 @@ export async function updatePlaybook(
 export async function deletePlaybook(playbookId: string, cascadeRoles = false) {
   const qs = cascadeRoles ? "?cascade_roles=true" : "";
   await apiDelete<void>(`/playbooks/${playbookId}${qs}`);
+  invalidateAfterPlaybookMutation();
+}
+
+export async function movePlaybookToFolder(playbookId: string, folder: string) {
+  await apiPatch<void>(`/playbooks/${playbookId}/folder`, { folder });
   invalidateAfterPlaybookMutation();
 }
 

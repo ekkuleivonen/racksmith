@@ -178,9 +178,22 @@ class SSHManager:
         host = self._require_ssh_host(session, host_id)
         user_id = user_storage_id(session.user)
         logger.info("ssh_terminal_opened", host_id=host_id, user_id=user_id)
-        conn = await asyncssh.connect(
-            **_connect_kwargs(host.ip_address, host.ssh_user, host.ssh_port)
-        )
+        try:
+            conn = await asyncssh.connect(
+                **_connect_kwargs(host.ip_address, host.ssh_user, host.ssh_port)
+            )
+        except (OSError, asyncssh.Error) as exc:
+            logger.warning(
+                "ssh_connect_failed",
+                host_id=host_id,
+                ip=host.ip_address,
+                error=str(exc),
+            )
+            await websocket.send_json(
+                {"type": "error", "message": f"Connection failed: {exc}"}
+            )
+            await websocket.close(code=4502)
+            return
         process = await conn.create_process(term_type="xterm")
 
         async def pump_stream(stream) -> None:

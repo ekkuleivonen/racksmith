@@ -64,7 +64,16 @@ Task FQCN rules — always use fully-qualified collection names for modules:
   snap, modprobe, sysctl (also in ansible.posix), hostname, ini_file, etc.
   ansible.posix contains: acl, at, authorized_key, firewalld, mount, patch,
   seboolean, selinux, synchronize, sysctl — but NOT timezone.
-  NEVER use ansible.posix.timezone — use community.general.timezone instead."""
+  NEVER use ansible.posix.timezone — use community.general.timezone instead.
+
+Free-form module rules (command, shell, raw, script):
+  These modules take their primary argument as a STRING, not a list.
+  CORRECT:   {"ansible.builtin.command": {"cmd": "rpi-eeprom-config --apply boot.conf"}}
+  CORRECT:   {"ansible.builtin.command": {"argv": ["rpi-eeprom-config", "--apply", "boot.conf"]}}
+  WRONG:     {"ansible.builtin.command": ["rpi-eeprom-config", "--apply", "boot.conf"]}
+  A bare list as the module value is INVALID Ansible and will cause a runtime error.
+  Always use the dict form with "cmd" (string) or "argv" (list) for command,
+  and "cmd" (string) for shell/raw/script."""
 
 _JSON_EXAMPLE = """\
 {

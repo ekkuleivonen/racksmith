@@ -10,6 +10,7 @@ from _utils.websocket import require_ws_session, ws_error_handler
 from auth.dependencies import CurrentSession
 from playbooks.managers import playbook_manager
 from playbooks.schemas import (
+    FolderUpdate,
     GeneratePlaybookRequest,
     PlaybookListResponse,
     PlaybookResponse,
@@ -86,6 +87,16 @@ async def update_playbook(
     """Update an existing playbook."""
     playbook = playbook_manager.update_playbook(session, playbook_id, body)
     return PlaybookResponse(playbook=playbook)
+
+
+@router.patch("/{playbook_id}/folder", status_code=204)
+async def move_playbook_to_folder(
+    playbook_id: str,
+    body: FolderUpdate,
+    session: CurrentSession,
+) -> None:
+    """Update the sidebar folder for a playbook."""
+    playbook_manager.move_to_folder(session, playbook_id, body.folder)
 
 
 @router.delete("/{playbook_id}", status_code=204)

@@ -26,6 +26,10 @@ class PlaybookRoleEntry(BaseModel):
 _MAX_DESCRIPTION_LENGTH = 10_000
 
 
+class FolderUpdate(BaseModel):
+    folder: str = Field(default="", max_length=500)
+
+
 class PlaybookUpsert(BaseModel):
     name: str = Field(min_length=1, max_length=160)
     description: str = Field(default="", max_length=_MAX_DESCRIPTION_LENGTH)
@@ -42,6 +46,7 @@ class PlaybookSummary(BaseModel):
     updated_at: str
     registry_id: str = ""
     registry_version: int = 0
+    folder: str = ""
 
 
 class PlaybookDetail(PlaybookSummary):
