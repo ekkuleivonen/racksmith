@@ -99,6 +99,7 @@ async def build_agent_deps_and_prefix(
 
     deps = AgentDeps(session=session)
     if ssh_host is not None:
+        deps.host_id = ssh_host.id
         deps.host_ip = (ssh_host.ip_address or "").strip()
         deps.host_ssh_user = (ssh_host.ssh_user or "").strip()
         deps.host_ssh_port = int(ssh_host.ssh_port or 22)

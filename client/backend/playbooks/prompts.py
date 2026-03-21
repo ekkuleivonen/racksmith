@@ -37,8 +37,8 @@ RULES:
     no niche knobs unless the user asks.
 
 ROLE CREATION RULES (when calling create_role):
-  Input type must be one of: "string", "bool", "secret".
-  NEVER use "list" or "dict" input types.
+  Input type must be one of: "string", "bool", "secret", "list", "dict", "int".
+  Use "list" for collections of strings, "dict" for string-key-to-scalar maps.
   Output type must be one of: "string", "boolean".
   Every set_fact in tasks MUST have a matching entry in outputs.
   Write rich Markdown descriptions (3-8 sentences, not one-liners).
@@ -95,8 +95,8 @@ RULES:
   - Prefer SIMPLICITY: 1-3 required inputs per role, sensible defaults.
 
 ROLE CREATION / UPDATE RULES (when calling create_role or update_role):
-  Input type must be one of: "string", "bool", "secret".
-  NEVER use "list" or "dict" input types.
+  Input type must be one of: "string", "bool", "secret", "list", "dict", "int".
+  Use "list" for collections of strings, "dict" for string-key-to-scalar maps.
   Output type must be one of: "string", "boolean".
   Every set_fact in tasks MUST have a matching entry in outputs.
   Write rich Markdown descriptions (3-8 sentences, not one-liners).

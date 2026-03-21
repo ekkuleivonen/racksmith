@@ -64,6 +64,7 @@ import {
 } from "@/lib/playbooks";
 import type { Host } from "@/lib/hosts";
 import type { Group } from "@/lib/groups";
+import { TagListInput, KeyValueEditor, YamlInput } from "./structured-inputs";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -137,6 +138,9 @@ function normalizeType(t?: string): string {
   if (t === "str") return "string";
   if (t === "bool" || t === "boolean") return "boolean";
   if (t === "secret") return "string";
+  if (t === "list") return "list";
+  if (t === "dict") return "dict";
+  if (t === "int") return "int";
   return t;
 }
 
@@ -549,33 +553,70 @@ function SortableRoleCard({
               const isWired = hasVarTokens(rawStr);
 
               const isBool = field.type === "bool" || field.type === "boolean";
+              const isListType = field.type === "list";
+              const isDictType = field.type === "dict";
               const hasOptions = (field.options?.length ?? 0) > 0;
               const isSelectField = (hasOptions || isBool) && !isWired;
 
-              const fieldNode = (
-                <div
-                  key={field.key}
-                  className={`space-y-1${isSecret ? " cursor-default opacity-50" : ""}`}
-                >
-                  <p className="flex items-center gap-1 text-xs text-zinc-400">
-                    {field.label}
-                    {field.required ? (
-                      <span className="text-red-400">*</span>
-                    ) : null}
-                    {field.description ? (
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Info className="size-3 shrink-0 text-zinc-600 hover:text-zinc-400" />
-                        </TooltipTrigger>
-                        <TooltipContent side="top" className="max-w-64">
-                          {field.description}
-                        </TooltipContent>
-                      </Tooltip>
-                    ) : null}
-                  </p>
+              const isSimpleList =
+                isListType &&
+                (Array.isArray(rawValue)
+                  ? rawValue.every((v) => typeof v !== "object")
+                  : !rawValue || typeof rawValue === "string");
 
-                  {isSelectField ? (
-                    hasOptions ? (
+              const isSimpleDict =
+                isDictType &&
+                (rawValue != null && typeof rawValue === "object" && !Array.isArray(rawValue)
+                  ? Object.values(rawValue as Record<string, unknown>).every(
+                      (v) => typeof v !== "object" || v === null,
+                    )
+                  : !rawValue || typeof rawValue === "string");
+
+              const renderFieldControl = () => {
+                if (isListType && !isWired) {
+                  if (isSimpleList) {
+                    return (
+                      <TagListInput
+                        value={rawValue}
+                        onChange={(v) => setVar(field.key, v)}
+                        placeholder={field.placeholder}
+                        disabled={isSecret}
+                      />
+                    );
+                  }
+                  return (
+                    <YamlInput
+                      value={rawValue}
+                      onChange={(v) => setVar(field.key, v)}
+                      placeholder={field.placeholder}
+                      disabled={isSecret}
+                    />
+                  );
+                }
+
+                if (isDictType && !isWired) {
+                  if (isSimpleDict) {
+                    return (
+                      <KeyValueEditor
+                        value={rawValue}
+                        onChange={(v) => setVar(field.key, v)}
+                        disabled={isSecret}
+                      />
+                    );
+                  }
+                  return (
+                    <YamlInput
+                      value={rawValue}
+                      onChange={(v) => setVar(field.key, v)}
+                      placeholder={field.placeholder}
+                      disabled={isSecret}
+                    />
+                  );
+                }
+
+                if (isSelectField) {
+                  if (hasOptions) {
+                    return (
                       <div className="flex gap-1">
                         <Select
                           value={rawStr}
@@ -601,49 +642,77 @@ function SortableRoleCard({
                           </VarPickerPopover>
                         )}
                       </div>
-                    ) : (
-                      <div className="flex gap-1">
-                        <Select
-                          value={
-                            String(
-                              role.vars[field.key] !== undefined
-                                ? role.vars[field.key] === true
-                                : field.default === true,
-                            )
-                          }
-                          onValueChange={(value) =>
-                            setVar(field.key, value === "true")
-                          }
-                          disabled={isSecret}
-                        >
-                          <SelectTrigger className="w-full">
-                            <SelectValue
-                              placeholder={field.placeholder || "Select..."}
-                            />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="true">true</SelectItem>
-                            <SelectItem value="false">false</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        {!isSecret && (
-                          <VarPickerPopover vars={matched} onSelect={wire}>
-                            <Button type="button" variant="ghost" size="icon" className="h-9 w-9 shrink-0">
-                              <Link2 className="size-3.5" />
-                            </Button>
-                          </VarPickerPopover>
-                        )}
-                      </div>
-                    )
-                  ) : (
-                    <TokenInput
-                      value={rawStr}
-                      onChange={(v) => setVar(field.key, v)}
-                      placeholder={field.placeholder}
-                      disabled={isSecret}
-                      vars={matched}
-                    />
-                  )}
+                    );
+                  }
+                  return (
+                    <div className="flex gap-1">
+                      <Select
+                        value={
+                          String(
+                            role.vars[field.key] !== undefined
+                              ? role.vars[field.key] === true
+                              : field.default === true,
+                          )
+                        }
+                        onValueChange={(value) =>
+                          setVar(field.key, value === "true")
+                        }
+                        disabled={isSecret}
+                      >
+                        <SelectTrigger className="w-full">
+                          <SelectValue
+                            placeholder={field.placeholder || "Select..."}
+                          />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="true">true</SelectItem>
+                          <SelectItem value="false">false</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      {!isSecret && (
+                        <VarPickerPopover vars={matched} onSelect={wire}>
+                          <Button type="button" variant="ghost" size="icon" className="h-9 w-9 shrink-0">
+                            <Link2 className="size-3.5" />
+                          </Button>
+                        </VarPickerPopover>
+                      )}
+                    </div>
+                  );
+                }
+
+                return (
+                  <TokenInput
+                    value={rawStr}
+                    onChange={(v) => setVar(field.key, v)}
+                    placeholder={field.placeholder}
+                    disabled={isSecret}
+                    vars={matched}
+                  />
+                );
+              };
+
+              const fieldNode = (
+                <div
+                  key={field.key}
+                  className={`space-y-1${isSecret ? " cursor-default opacity-50" : ""}${isListType || isDictType ? " md:col-span-2" : ""}`}
+                >
+                  <p className="flex items-center gap-1 text-xs text-zinc-400">
+                    {field.label}
+                    {field.required ? (
+                      <span className="text-red-400">*</span>
+                    ) : null}
+                    {field.description ? (
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Info className="size-3 shrink-0 text-zinc-600 hover:text-zinc-400" />
+                        </TooltipTrigger>
+                        <TooltipContent side="top" className="max-w-64">
+                          {field.description}
+                        </TooltipContent>
+                      </Tooltip>
+                    ) : null}
+                  </p>
+                  {renderFieldControl()}
                 </div>
               );
 

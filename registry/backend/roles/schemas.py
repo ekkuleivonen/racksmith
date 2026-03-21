@@ -13,9 +13,9 @@ class RoleInputSpec(BaseModel):
     key: str = Field(min_length=1, max_length=80)
     label: str = ""
     description: str = ""
-    type: Literal["string", "boolean", "secret", "str", "bool"] = "string"
+    type: Literal["string", "boolean", "secret", "str", "bool", "list", "dict", "int"] = "string"
     placeholder: str = ""
-    default: str | bool | int | None = None
+    default: str | bool | int | list | dict | None = None
     required: bool = False
     options: list[str] = Field(default_factory=list)
     choices: list[str] = Field(default_factory=list)

@@ -1,4 +1,4 @@
-import { Wrench, CheckCircle2, XCircle, Ban, Brain } from "lucide-react";
+import { Wrench, CheckCircle2, XCircle, Ban, Brain, ChevronRight } from "lucide-react";
 import { MarkdownContent } from "@/components/shared/markdown-content";
 import { cn } from "@/lib/utils";
 
@@ -27,27 +27,28 @@ export function AiToolCallBlock({
 }) {
   const hasArgs = args && Object.keys(args).length > 0;
   return (
-    <div
+    <details
       className={cn(
-        "rounded-md border px-3.5 py-2.5 text-[10px] mr-8",
+        "group/tc rounded-md border text-[10px] mr-8",
         toolCallAccentClass(tool),
       )}
     >
-      <div className="flex items-center gap-1.5 text-zinc-300 font-medium">
+      <summary className="flex items-center gap-1.5 text-zinc-300 font-medium px-3 py-2 cursor-pointer select-none list-none [&::-webkit-details-marker]:hidden">
+        <ChevronRight className="size-3 shrink-0 text-zinc-500 transition-transform group-open/tc:rotate-90" />
         <Wrench className="size-3 shrink-0 text-zinc-500" />
         <span className="font-mono truncate">{tool}</span>
-      </div>
+      </summary>
       {hasArgs ? (
         <pre
           className={cn(
-            "mt-1.5 text-zinc-500 font-mono whitespace-pre-wrap break-all",
+            "px-3 pb-2 text-zinc-500 font-mono whitespace-pre-wrap break-all",
             compact ? "max-h-16 overflow-y-auto" : "max-h-40 overflow-y-auto",
           )}
         >
           {JSON.stringify(args, null, 2)}
         </pre>
       ) : null}
-    </div>
+    </details>
   );
 }
 
@@ -63,9 +64,9 @@ export function AiToolResultBlock({
   const ok = (outcome ?? "success") === "success";
   const denied = outcome === "denied";
   return (
-    <div
+    <details
       className={cn(
-        "rounded-md border px-3.5 py-2.5 text-[10px] mr-8",
+        "group/tr rounded-md border text-[10px] mr-8",
         denied
           ? "border-rose-500/35 bg-rose-500/[0.06]"
           : ok
@@ -73,7 +74,8 @@ export function AiToolResultBlock({
             : "border-orange-500/35 bg-orange-500/[0.06]",
       )}
     >
-      <div className="flex items-center gap-1.5 text-zinc-400">
+      <summary className="flex items-center gap-1.5 text-zinc-400 px-3 py-2 cursor-pointer select-none list-none [&::-webkit-details-marker]:hidden">
+        <ChevronRight className="size-3 shrink-0 text-zinc-500 transition-transform group-open/tr:rotate-90" />
         {ok ? (
           <CheckCircle2 className="size-3 shrink-0 text-emerald-500/80" />
         ) : denied ? (
@@ -85,13 +87,13 @@ export function AiToolResultBlock({
         {outcome ? (
           <span className="text-zinc-600 uppercase tracking-wide">{outcome}</span>
         ) : null}
-      </div>
+      </summary>
       {preview ? (
-        <pre className="mt-1.5 text-zinc-500 font-mono whitespace-pre-wrap break-all max-h-32 overflow-y-auto">
+        <pre className="px-3 pb-2 text-zinc-500 font-mono whitespace-pre-wrap break-all max-h-32 overflow-y-auto">
           {preview}
         </pre>
       ) : null}
-    </div>
+    </details>
   );
 }
 

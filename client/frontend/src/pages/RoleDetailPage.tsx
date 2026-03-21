@@ -180,7 +180,11 @@ export function RoleDetailPage() {
                       {inp.type ?? "string"}
                     </TableCell>
                     <TableCell className="text-xs text-zinc-500">
-                      {inp.default != null ? String(inp.default) : "—"}
+                      {inp.default != null
+                        ? typeof inp.default === "object"
+                          ? JSON.stringify(inp.default)
+                          : String(inp.default)
+                        : "—"}
                     </TableCell>
                     <TableCell className="text-xs text-zinc-500">
                       {inp.required ? "Yes" : "No"}

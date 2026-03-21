@@ -18,10 +18,11 @@ Input fields:
   label       – short human-readable label (2-4 words)
   description – helpful sentence explaining what this input controls, any
                 constraints, and example values. Shown as a UI tooltip.
-  type        – MUST be exactly one of: "string", "bool", "secret"
-                (never "str", "boolean", "int", "select", "list", "dict")
+  type        – MUST be exactly one of: "string", "bool", "secret", "list", "dict", "int"
+                (never "str", "boolean", "select")
   placeholder – hint text (use "" if not applicable)
-  default     – default value (string for string/secret, true/false for bool)
+  default     – default value (string for string/secret, true/false for bool,
+                JSON array for list, JSON object for dict, number for int)
   required    – true or false
   options     – list of allowed choices (dropdown); use [] when any value is ok
   secret      – true if prompted at runtime and never stored
@@ -37,7 +38,11 @@ Design for simplicity:
   - Keep required inputs to 1-3.
   - Prefer sensible defaults over configuration.
   - Omit niche inputs — hardcode sensible values in tasks.
-  - NEVER use "list" or "dict" input types. All inputs must be scalar.
+  - Use "list" when the input is naturally a collection of strings
+    (e.g. packages to install, kernel modules, authorized SSH keys).
+  - Use "dict" when the input maps string keys to scalar values
+    (e.g. sysctl settings, environment variables).
+  - Prefer scalar types when a single value suffices.
   - When in doubt, leave it out.
 
 Validation rules:

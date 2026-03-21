@@ -35,6 +35,7 @@ class AgentDeps:
     created_playbook_id: str | None = field(default=None, repr=False)
     updated_playbook_id: str | None = field(default=None, repr=False)
     # When set (e.g. failed-run debug or playbook generate with probe host), run_ssh_command works.
+    host_id: str = ""
     host_ip: str = ""
     host_ssh_user: str = ""
     host_ssh_port: int = 22
@@ -69,6 +70,10 @@ def _summarize_tool_args(tool_name: str, raw_json: str) -> dict[str, Any]:
     if tool_name == "run_ssh_command":
         cmd = str(args.get("command", ""))
         return {"command": cmd[:160] + ("…" if len(cmd) > 160 else "")}
+    if tool_name == "run_playbook":
+        return {"playbook_id": args.get("playbook_id", "")}
+    if tool_name == "run_role":
+        return {"role_id": args.get("role_id", ""), "become": args.get("become", False)}
     return {}
 
 

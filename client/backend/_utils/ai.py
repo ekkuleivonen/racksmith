@@ -2,10 +2,16 @@
 
 from __future__ import annotations
 
+import asyncio
+import json
+from typing import Any
+
 import httpx
+import redis.asyncio as aioredis
 from pydantic_ai import Agent, RunContext
 from pydantic_ai.models.openai import OpenAIModel
 from pydantic_ai.providers.openai import OpenAIProvider
+from racksmith_shared.runs import run_events_channel
 
 import settings
 from _utils.agent_stream import AgentDeps
@@ -171,6 +177,109 @@ async def update_playbook(
 
 
 # ---------------------------------------------------------------------------
+# Run helpers
+# ---------------------------------------------------------------------------
+
+_RUN_TIMEOUT = 300  # 5 minutes
+_OUTPUT_TAIL = 8000
+
+
+async def _wait_for_run(
+    run_id: str,
+    load_run_fn: Any,
+) -> str:
+    """Subscribe to Redis pub/sub, wait for run completion, return formatted output."""
+    channel = run_events_channel(run_id)
+    redis_client = aioredis.from_url(settings.REDIS_URL, decode_responses=True)
+    pubsub = redis_client.pubsub()
+
+    try:
+        await pubsub.subscribe(channel)
+        loop = asyncio.get_event_loop()
+        deadline = loop.time() + _RUN_TIMEOUT
+
+        while True:
+            remaining = deadline - loop.time()
+            if remaining <= 0:
+                return f"Run {run_id} timed out after {_RUN_TIMEOUT}s."
+
+            msg = await pubsub.get_message(
+                ignore_subscribe_messages=True, timeout=min(5.0, remaining)
+            )
+            if msg is None:
+                run = await load_run_fn(run_id)
+                if run and run.status in ("completed", "failed"):
+                    break
+                continue
+            if msg["type"] != "message":
+                continue
+            payload = json.loads(msg["data"])
+            if payload.get("type") == "done":
+                break
+    finally:
+        await pubsub.unsubscribe(channel)
+        await redis_client.aclose()
+
+    run = await load_run_fn(run_id)
+    if run is None:
+        return f"Run {run_id} not found after completion."
+
+    output = run.output or ""
+    if len(output) > _OUTPUT_TAIL:
+        output = "…(truncated)\n" + output[-_OUTPUT_TAIL:]
+
+    return (
+        f"run_id={run.id} status={run.status} exit_code={run.exit_code}\n"
+        f"--- output ---\n{output}"
+    )
+
+
+async def run_playbook(
+    ctx: RunContext[AgentDeps],
+    playbook_id: str,
+    runtime_vars: dict[str, str] | None = None,
+) -> str:
+    """Run a playbook on the attached host and wait for completion. Returns the Ansible output and exit code. A host must be attached to the chat context."""
+    from playbooks.managers import playbook_manager
+    from playbooks.schemas import PlaybookRunRequest, TargetSelection
+
+    deps = ctx.deps
+    if not deps.host_id:
+        return "Cannot run playbook: no host attached to this conversation."
+
+    body = PlaybookRunRequest(
+        targets=TargetSelection(hosts=[deps.host_id]),
+        runtime_vars=runtime_vars or {},
+    )
+    run = await playbook_manager.create_run(deps.session, playbook_id, body)
+    return await _wait_for_run(run.id, playbook_manager.load_playbook_run)
+
+
+async def run_role(
+    ctx: RunContext[AgentDeps],
+    role_id: str,
+    vars: dict[str, str] | None = None,
+    become: bool = False,
+) -> str:
+    """Run a single role on the attached host and wait for completion. Returns the Ansible output and exit code. A host must be attached to the chat context."""
+    from playbooks.schemas import TargetSelection
+    from roles.managers import role_manager
+    from roles.schemas import RoleRunRequest
+
+    deps = ctx.deps
+    if not deps.host_id:
+        return "Cannot run role: no host attached to this conversation."
+
+    body = RoleRunRequest(
+        targets=TargetSelection(hosts=[deps.host_id]),
+        vars=vars or {},
+        become=become,
+    )
+    run = await role_manager.create_run(deps.session, role_id, body)
+    return await _wait_for_run(run.id, role_manager._load_run)
+
+
+# ---------------------------------------------------------------------------
 # Agent definitions
 # ---------------------------------------------------------------------------
 
@@ -192,6 +301,8 @@ playbook_agent: Agent[AgentDeps, str] = Agent(
         get_playbook,
         update_playbook,
         run_ssh_command,
+        run_playbook,
+        run_role,
     ],
 )
 
@@ -211,5 +322,7 @@ debug_run_agent: Agent[AgentDeps, str] = Agent(
         update_role,
         get_playbook,
         update_playbook,
+        run_playbook,
+        run_role,
     ],
 )

@@ -107,7 +107,7 @@ def _request_input_to_role_input(inp: RoleInputSpec | dict) -> RoleInput:
     return RoleInput(
         key=inp.get("key", ""),
         description=description,
-        type={"string": "str", "bool": "bool", "boolean": "bool", "secret": "str"}.get(t, "str"),
+        type={"string": "str", "bool": "bool", "boolean": "bool", "secret": "str", "list": "list", "dict": "dict", "int": "int"}.get(t, "str"),
         default=inp.get("default"),
         required=inp.get("required", False),
         choices=options,
