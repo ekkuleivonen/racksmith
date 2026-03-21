@@ -5,6 +5,7 @@ from __future__ import annotations
 from unittest.mock import patch
 
 import pytest
+import yaml
 
 from core.playbooks import PlaybookData, write_playbook
 from core.playbooks import PlaybookRoleEntry as AnsiblePlaybookRoleEntry
@@ -234,3 +235,75 @@ class TestPlaybookManagerRolesCatalog:
         assert len(result) >= 1
         ids = [r.id for r in result]
         assert "install_packages" in ids
+
+
+class TestPlaybookManagerRequiredRuntimeVars:
+    @staticmethod
+    def _seed_action_role(layout, slug: str, *, inputs: list[dict]) -> None:
+        role_dir = layout.roles_path / slug
+        role_dir.mkdir(parents=True, exist_ok=True)
+        (role_dir / "tasks").mkdir(exist_ok=True)
+        (role_dir / "tasks" / "main.yml").write_text("- debug:\n    msg: ok\n")
+        (role_dir / "action.yaml").write_text(
+            yaml.safe_dump(
+                {
+                    "slug": slug,
+                    "name": slug.replace("_", " ").title(),
+                    "description": "Test role",
+                    "inputs": inputs,
+                }
+            )
+        )
+
+    def test_required_omitted_when_playbook_binds_var(
+        self, with_repo_mock, layout
+    ) -> None:
+        self._seed_action_role(
+            layout,
+            "step_b",
+            inputs=[
+                {
+                    "key": "ssd_root_partition",
+                    "label": "SSD root",
+                    "type": "string",
+                    "required": True,
+                }
+            ],
+        )
+        _seed_playbook(
+            layout,
+            "pb_rtv",
+            roles=[
+                AnsiblePlaybookRoleEntry(
+                    role="step_b",
+                    vars={"ssd_root_partition": "{{ ssd_root_partition }}"},
+                ),
+            ],
+        )
+        req = playbook_manager.get_required_runtime_vars(with_repo_mock, "pb_rtv")
+        keys = [i.key for i in req.inputs]
+        assert "ssd_root_partition" not in keys
+
+    def test_required_included_when_playbook_missing_var(
+        self, with_repo_mock, layout
+    ) -> None:
+        self._seed_action_role(
+            layout,
+            "step_b",
+            inputs=[
+                {
+                    "key": "ssd_root_partition",
+                    "label": "SSD root",
+                    "type": "string",
+                    "required": True,
+                }
+            ],
+        )
+        _seed_playbook(
+            layout,
+            "pb_rtv2",
+            roles=[AnsiblePlaybookRoleEntry(role="step_b")],
+        )
+        req = playbook_manager.get_required_runtime_vars(with_repo_mock, "pb_rtv2")
+        keys = [i.key for i in req.inputs]
+        assert "ssd_root_partition" in keys

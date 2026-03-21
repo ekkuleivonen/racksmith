@@ -39,6 +39,12 @@ def _materialize_workspace(
     """Write all files to a temp dir and return its path."""
     tmpdir = Path(tempfile.mkdtemp(prefix="racksmith_run_"))
 
+    (tmpdir / "ansible.cfg").write_text(
+        "[defaults]\n"
+        "interpreter_python = auto_silent\n",
+        encoding="utf-8",
+    )
+
     (tmpdir / "playbook.yml").write_text(playbook_yaml)
 
     inv_dir = tmpdir / "inventory"

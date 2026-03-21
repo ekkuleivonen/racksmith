@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from collections.abc import AsyncGenerator
 from datetime import UTC, datetime
-from typing import cast
+from typing import Any, cast
 
 from _utils.helpers import generate_unique_id, new_id, now_iso
 from _utils.logging import get_logger
@@ -89,6 +89,18 @@ def _merged_role_vars(role: RoleData, supplied_vars: dict | None) -> dict:
         **_role_default_vars(role),
         **(supplied_vars or {}),
     }
+
+
+def _entry_var_supplies_input(entry_vars: dict[str, Any], key: str) -> bool:
+    """True when the playbook binds this role input (literal, default merge, or Jinja ref)."""
+    if key not in entry_vars:
+        return False
+    v = entry_vars[key]
+    if v is None:
+        return False
+    if isinstance(v, str) and not v.strip():
+        return False
+    return True
 
 
 class PlaybookManager(RunManagerMixin):
@@ -240,11 +252,14 @@ class PlaybookManager(RunManagerMixin):
             role = catalog.get(re.role_id)
             if not role:
                 continue
+            entry_vars = re.vars or {}
             for inp in role.inputs:
                 t = (inp.type or "string").lower()
                 is_secret = bool(inp.secret) or t == "secret"
                 no_default = inp.default is None
                 if not is_secret and not (inp.required and no_default):
+                    continue
+                if _entry_var_supplies_input(entry_vars, inp.key):
                     continue
                 if inp.key in seen_keys:
                     continue

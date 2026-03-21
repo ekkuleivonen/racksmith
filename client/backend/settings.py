@@ -61,7 +61,7 @@ REDIS_RACK_TOPIC: str = env.str("REDIS_RACK_TOPIC", default="racksmith-rack")
 REDIS_REGISTRY_CACHE_PREFIX: str = env.str(
     "REDIS_REGISTRY_CACHE_PREFIX", default="racksmith:registry_cache:"
 )
-REGISTRY_CACHE_TTL: int = env.int("REGISTRY_CACHE_TTL", default=900)
+REGISTRY_CACHE_TTL: int = env.int("REGISTRY_CACHE_TTL", default=30)
 
 # =============================================================================
 # Git branch
