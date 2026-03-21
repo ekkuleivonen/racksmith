@@ -1,19 +1,6 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import {
-  Check,
-  ChevronRight,
-  CircleAlert,
-  Loader2,
-  Loader2 as PushLoader,
-  Package,
-  Play,
-  Sparkles,
-  Square,
-  Star,
-  Wand2,
-  Wrench,
-} from "lucide-react";
+import { Loader2 as PushLoader, Package, Play, Star } from "lucide-react";
 import { toast } from "sonner";
 import { toastApiError } from "@/lib/api";
 import { DetailLoading } from "@/components/shared/detail-states";
@@ -36,13 +23,6 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { usePlaybook, useHosts, useGroups } from "@/hooks/queries";
 import {
@@ -53,12 +33,6 @@ import {
 } from "@/lib/playbooks";
 import { usePushPlaybookToRegistry } from "@/hooks/mutations";
 import { usePinsStore, useRepoKey } from "@/stores/pins";
-import {
-  useAgentStream,
-  type AgentStep,
-} from "@/hooks/use-agent-stream";
-import { invalidateResource } from "@/lib/queryClient";
-import { hostDisplayLabel, isManagedHost } from "@/lib/hosts";
 
 function HeaderEditableTitle({
   value,
@@ -150,109 +124,6 @@ function HeaderEditableDescription({
   );
 }
 
-function ToolLabel({ tool }: { tool: string }) {
-  const labels: Record<string, string> = {
-    list_roles: "Browsing existing roles",
-    get_role_detail: "Inspecting role",
-    create_role: "Creating role",
-    update_role: "Updating role",
-    create_playbook: "Assembling playbook",
-    get_playbook: "Reading playbook",
-    update_playbook: "Updating playbook",
-    run_ssh_command: "SSH command",
-  };
-  return <>{labels[tool] ?? tool}</>;
-}
-
-function AiStepIndicator({
-  step,
-  expanded,
-  onToggle,
-}: {
-  step: AgentStep;
-  expanded: boolean;
-  onToggle: () => void;
-}) {
-  const ref = useRef<HTMLPreElement>(null);
-
-  useEffect(() => {
-    if (ref.current && expanded) {
-      ref.current.scrollTop = ref.current.scrollHeight;
-    }
-  }, [step, expanded]);
-
-  switch (step.type) {
-    case "thinking":
-      return (
-        <div>
-          <button
-            type="button"
-            onClick={onToggle}
-            className="flex items-center gap-1.5 text-xs text-violet-400/80 hover:text-violet-300 transition-colors w-full text-left"
-          >
-            <ChevronRight
-              className={`size-3 shrink-0 transition-transform ${expanded ? "rotate-90" : ""}`}
-            />
-            <Sparkles className="size-3 shrink-0" />
-            <span className="truncate">AI reasoning</span>
-          </button>
-          {expanded && (
-            <pre
-              ref={ref}
-              className="mt-1 ml-[18px] max-h-28 overflow-y-auto rounded bg-zinc-950/80 p-2 text-[11px] leading-relaxed text-zinc-500 whitespace-pre-wrap"
-            >
-              {step.text}
-            </pre>
-          )}
-        </div>
-      );
-    case "tool_call":
-      return (
-        <div className="flex items-center gap-2 text-xs text-zinc-400">
-          <Wrench className="size-3 shrink-0" />
-          <ToolLabel tool={step.tool} />
-          {step.args && "name" in step.args && (
-            <span className="text-zinc-500 truncate">
-              — {String(step.args.name)}
-            </span>
-          )}
-          {step.args && "command" in step.args && step.args.command ? (
-            <code className="text-zinc-500 truncate max-w-[12rem] text-[10px]">
-              {String(step.args.command)}
-            </code>
-          ) : null}
-          <Loader2 className="size-3 animate-spin ml-auto shrink-0" />
-        </div>
-      );
-    case "tool_result":
-      return (
-        <div className="flex items-center gap-2 text-xs text-emerald-400">
-          <Check className="size-3 shrink-0" />
-          <ToolLabel tool={step.tool} />
-          {step.result && (
-            <span className="text-zinc-500 truncate">
-              — {step.result.slice(0, 80)}
-            </span>
-          )}
-        </div>
-      );
-    case "done":
-      return (
-        <div className="flex items-center gap-2 text-xs text-emerald-400">
-          <Check className="size-3" />
-          Playbook updated!
-        </div>
-      );
-    case "error":
-      return (
-        <div className="flex items-center gap-2 text-xs text-red-400">
-          <CircleAlert className="size-3" />
-          {step.message}
-        </div>
-      );
-  }
-}
-
 export function PlaybookDetailPage() {
   const { playbookId = "" } = useParams();
   const navigate = useNavigate();
@@ -264,44 +135,6 @@ export function PlaybookDetailPage() {
   const [cascadeRoles, setCascadeRoles] = useState(false);
   const savedDraftRef = useRef<PlaybookUpsert | null>(null);
 
-  const [showAiPrompt, setShowAiPrompt] = useState(false);
-  const [aiPrompt, setAiPrompt] = useState("");
-  const [aiEditProbeHostId, setAiEditProbeHostId] = useState("");
-  const [expandedSteps, setExpandedSteps] = useState<Set<number>>(new Set());
-  const stepsEndRef = useRef<HTMLDivElement>(null);
-
-  const {
-    generating,
-    steps,
-    error: genError,
-    generate: rawGenerate,
-    cancel,
-  } = useAgentStream({
-    onComplete: (done) => {
-      if (done.playbook_id) {
-        invalidateResource("playbooks");
-        toast.success("Playbook updated by AI");
-      }
-    },
-  });
-
-  const generateEdit = useCallback(
-    (p: string) => {
-      setExpandedSteps(new Set());
-      return rawGenerate(`/ai/playbooks/${playbookId}/edit`, {
-        prompt: p,
-        ...(aiEditProbeHostId.trim()
-          ? { host_id: aiEditProbeHostId.trim() }
-          : {}),
-      });
-    },
-    [rawGenerate, playbookId, aiEditProbeHostId],
-  );
-
-  useEffect(() => {
-    stepsEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
-  }, [steps.length]);
-
   const pushMutation = usePushPlaybookToRegistry();
   const repoKey = useRepoKey();
   const pinPath = `/playbooks/${playbookId}`;
@@ -310,11 +143,6 @@ export function PlaybookDetailPage() {
   const { data: playbook, isLoading: loading } = usePlaybook(playbookId || undefined);
   const { data: hosts } = useHosts();
   const { data: groups } = useGroups();
-
-  const aiProbeHostOptions = useMemo(() => {
-    const list = hosts ?? [];
-    return list.filter(isManagedHost).filter((h) => h.ip_address && h.ssh_user);
-  }, [hosts]);
 
   useEffect(() => {
     if (!playbook) return;
@@ -409,15 +237,6 @@ export function PlaybookDetailPage() {
               >
                 <Star className={`size-3.5 ${isPinned ? "fill-current" : ""}`} />
               </Button>
-              <Button
-                variant={showAiPrompt ? "secondary" : "outline"}
-                size="sm"
-                onClick={() => setShowAiPrompt((v) => !v)}
-                disabled={generating}
-                title="AI edit"
-              >
-                <Wand2 className="size-3.5" />
-              </Button>
               {saving ? (
                 <span className="text-xs text-zinc-500">Saving...</span>
               ) : isDirty() ? (
@@ -459,106 +278,6 @@ export function PlaybookDetailPage() {
           </div>
         </section>
 
-        {showAiPrompt && (
-          <section className="border border-zinc-800 bg-zinc-900/30 p-4 space-y-3">
-            <h2 className="text-sm font-medium text-zinc-200">AI Edit</h2>
-            {aiProbeHostOptions.length > 0 && (
-              <div className="space-y-1">
-                <p className="text-[11px] text-zinc-500">
-                  Optional: probe host for AI (SSH)
-                </p>
-                <Select
-                  value={aiEditProbeHostId || "__none__"}
-                  onValueChange={(v) =>
-                    setAiEditProbeHostId(v === "__none__" ? "" : v)
-                  }
-                  disabled={generating}
-                >
-                  <SelectTrigger className="h-8 text-xs w-full max-w-md">
-                    <SelectValue placeholder="No SSH probing" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__none__" className="text-xs">
-                      No SSH probing
-                    </SelectItem>
-                    {aiProbeHostOptions.map((h) => (
-                      <SelectItem key={h.id} value={h.id} className="text-xs">
-                        {hostDisplayLabel(h)}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-            <Textarea
-              value={aiPrompt}
-              onChange={(e) => setAiPrompt(e.target.value)}
-              placeholder='Describe the changes, e.g. "Add a step to restart Nginx after the config update"'
-              className="text-sm min-h-20"
-              disabled={generating}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey && !generating) {
-                  e.preventDefault();
-                  if (aiPrompt.trim()) {
-                    void generateEdit(aiPrompt.trim());
-                  }
-                }
-              }}
-            />
-            <div className="flex justify-end gap-2">
-              {generating ? (
-                <Button variant="outline" size="sm" onClick={cancel}>
-                  <Square className="size-3.5" />
-                  Stop
-                </Button>
-              ) : (
-                <Button
-                  size="sm"
-                  onClick={() => void generateEdit(aiPrompt.trim())}
-                  disabled={!aiPrompt.trim()}
-                >
-                  <Wand2 className="size-3.5" />
-                  Apply
-                </Button>
-              )}
-            </div>
-
-            {steps.length > 0 && (
-              <div className="max-h-80 overflow-y-auto rounded border border-zinc-800 bg-zinc-950/60 p-3 space-y-1">
-                {steps.map((step, i) => {
-                  const isLast = i === steps.length - 1;
-                  const expanded =
-                    step.type === "thinking"
-                      ? isLast || expandedSteps.has(i)
-                      : false;
-                  return (
-                    <AiStepIndicator
-                      key={i}
-                      step={step}
-                      expanded={expanded}
-                      onToggle={() =>
-                        setExpandedSteps((prev) => {
-                          const next = new Set(prev);
-                          if (next.has(i)) next.delete(i);
-                          else next.add(i);
-                          return next;
-                        })
-                      }
-                    />
-                  );
-                })}
-                <div ref={stepsEndRef} />
-              </div>
-            )}
-
-            {genError && (
-              <div className="rounded border border-red-900/50 bg-red-950/30 p-3 text-xs text-red-400">
-                {genError}
-              </div>
-            )}
-          </section>
-        )}
-
         <section className="border border-zinc-800 bg-zinc-900/30 p-5">
           <HeaderEditableDescription
             value={draft.description}
@@ -567,7 +286,6 @@ export function PlaybookDetailPage() {
           />
         </section>
 
-        <div className={generating ? "opacity-60 pointer-events-none" : ""}>
         <PlaybookEditorForm
           draft={draft}
           roles={roles_catalog}
@@ -577,7 +295,6 @@ export function PlaybookDetailPage() {
           savedPlaybookId={playbookId}
           onChange={setDraft}
         />
-        </div>
         </div>
       </div>
     </PageContainer>

@@ -7,7 +7,7 @@ import { PageContainer } from "@/components/shared/page-container";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { YamlEditorWithAi } from "@/components/roles/yaml-editor-with-ai";
+import { YamlFileView } from "@/components/files/yaml-file-view";
 import {
   Table,
   TableBody,
@@ -32,7 +32,6 @@ export function RoleDetailPage() {
 
   const [editing, setEditing] = useState(false);
   const [yamlText, setYamlText] = useState("");
-  const [generating, setGenerating] = useState(false);
 
   const { data: role, isLoading } = useRoleDetail(roleId);
   const saveMutation = useUpdateRole(roleId!);
@@ -224,44 +223,27 @@ export function RoleDetailPage() {
         )}
 
         <section className="border border-zinc-800 bg-zinc-900/30 p-4 space-y-3">
-          <YamlEditorWithAi
+          <div className="flex items-center justify-between gap-2">
+            <h2 className="text-sm font-medium text-zinc-100">Role YAML</h2>
+            {!editing ? (
+              <Button variant="outline" size="sm" onClick={() => startEditing(role)}>
+                Edit
+              </Button>
+            ) : null}
+          </div>
+          <YamlFileView
             value={editing ? yamlText : role.raw_content}
             onChange={setYamlText}
-            apiEndpoint={`/ai/roles/${roleId}/edit`}
-            buildBody={(prompt) => ({ prompt })}
-            editorHidden={!editing}
-            onBeforeGenerate={() => {
-              setYamlText("");
-              setEditing(true);
-            }}
-            headerActions={
-              !editing ? (
-                <Button variant="outline" size="sm" onClick={() => startEditing(role)}>
-                  Edit
-                </Button>
-              ) : undefined
-            }
-            generateButtonLabel="Edit"
-            placeholder='Describe changes, e.g. "Add a handler to restart the service on config change"'
-            headerTitle="Role YAML"
-            onGeneratingChange={setGenerating}
+            readOnly={!editing}
+            height="420px"
           />
 
           {editing && (
             <div className="flex justify-end gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setEditing(false)}
-                disabled={generating}
-              >
+              <Button variant="outline" size="sm" onClick={() => setEditing(false)}>
                 Cancel
               </Button>
-              <Button
-                size="sm"
-                onClick={handleSave}
-                disabled={saveMutation.isPending || generating}
-              >
+              <Button size="sm" onClick={handleSave} disabled={saveMutation.isPending}>
                 {saveMutation.isPending && <Loader2 className="size-3.5 animate-spin" />}
                 Save
               </Button>

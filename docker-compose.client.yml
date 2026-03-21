@@ -36,6 +36,8 @@ services:
       - "host.docker.internal:host-gateway"
     volumes:
       - ./data/workspace:/app/workspace
+      # Persist user-settings.json (e.g. OPENAI_* from UI); API image defaults DATA_DIR=/data
+      - ./data:/data
     environment:
       REDIS_URL: redis://redis:6379
       # host-gateway: daemon listens on host :8001 (network_mode: host); "daemon" DNS is unreachable from bridge
@@ -73,4 +75,3 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
       - ${HOME}/.docker/config.json:/config.json:ro
     restart: unless-stopped
-

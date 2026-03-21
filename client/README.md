@@ -18,6 +18,8 @@ See [`../docker-compose.client.yml`](../docker-compose.client.yml). Required in 
 - `APP_URL` — URL users open (e.g. `http://localhost:8080`)
 - `DAEMON_SECRET` — same value on **api** and **daemon** (API uses it when calling the daemon)
 
+The API image defaults `DATA_DIR=/data` and Compose mounts host `./data` there so UI settings (`user-settings.json`, e.g. OpenAI key) persist across restarts.
+
 The **daemon** uses `network_mode: host` so ARP scanning sees real interfaces. Its `REDIS_URL` defaults to `redis://127.0.0.1:6379` — ensure Redis is reachable from the host network (e.g. publish Redis port `6379` to the host or adjust `REDIS_URL`).
 
 ## Docs

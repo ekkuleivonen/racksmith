@@ -24,13 +24,15 @@ COPY client/backend/ /app/backend/
 
 RUN groupadd -r -g 10000 racksmith && useradd -r -u 10000 -g racksmith -d /app/backend -s /sbin/nologin racksmith
 
-RUN mkdir -p /app/workspace \
-    && chown -R racksmith:racksmith /app/backend /app/shared /app/workspace
+RUN mkdir -p /app/workspace /data \
+    && chown -R racksmith:racksmith /app/backend /app/shared /app/workspace /data
 
 RUN git config --global --add safe.directory '*'
 
+# DATA_DIR=/data + host mount ./data:/data keeps user-settings.json across container restarts (no extra env in compose).
 ENV REDIS_URL=redis://redis:6379 \
-    REPOS_WORKSPACE=/app/workspace
+    REPOS_WORKSPACE=/app/workspace \
+    DATA_DIR=/data
 
 EXPOSE 8000
 

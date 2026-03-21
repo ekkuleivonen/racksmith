@@ -20,6 +20,7 @@ import {
   ResizablePanelGroup,
 } from "@/components/ui/resizable";
 import { Sidebar } from "@/components/sidebar/sidebar";
+import { RacksmithAiPanel } from "@/components/ai/racksmith-ai-panel";
 import { CommandPalette } from "@/components/command-palette";
 import { useSetupStore } from "@/stores/setup";
 import { useHosts } from "@/hooks/queries";
@@ -267,6 +268,7 @@ export function AppShell({ children }: AppShellProps) {
       </ResizablePanelGroup>
       {publicKeyDialog}
       <CommandPalette />
+      <RacksmithAiPanel />
     </div>
   );
 }

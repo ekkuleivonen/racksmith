@@ -69,9 +69,10 @@ Rough namespaces under `/api/` (see Swagger on the API for the full list):
 
 | Volume / mount | Service | Purpose |
 |----------------|---------|---------|
-| `workspace` | API | Cloned Git repos (`.racksmith/` layout) |
-| `daemon_data` | Daemon | **SSH keys only** (`/data/.ssh`) — not the workspace |
-| `redis_data` | Redis | Persistence (optional; depends on Redis config) |
+| `./data/workspace` | API | Cloned Git repos (`.racksmith/` layout) |
+| `./data` | API | Persisted UI settings (`/data/user-settings.json`; API image uses `DATA_DIR=/data`) |
+| `./data` | Daemon | **SSH keys** (`/data/.ssh`) and daemon state |
+| `./data/redis` | Redis | Persistence (optional; depends on Redis config) |
 
 ### Required environment variables (client stack)
 

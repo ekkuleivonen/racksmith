@@ -82,10 +82,11 @@ export function RacksmithAiPanel() {
       }
       return;
     }
-    if (!activeChatId || !ids.includes(activeChatId)) {
-      setActiveChatId(ids[0]);
-    }
-  }, [repoReady, userId, repoFull, activeChatId]);
+    setActiveChatId((cur) => {
+      if (cur && ids.includes(cur)) return cur;
+      return ids[0] ?? null;
+    });
+  }, [repoReady, userId, repoFull]);
 
   useEffect(() => {
     if (panelOpen && repoReady) {

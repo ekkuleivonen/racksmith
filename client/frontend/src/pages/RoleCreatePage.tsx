@@ -4,7 +4,7 @@ import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { PageContainer } from "@/components/shared/page-container";
-import { YamlEditorWithAi } from "@/components/roles/yaml-editor-with-ai";
+import { YamlFileView } from "@/components/files/yaml-file-view";
 import { useCreateRoleFromYaml } from "@/hooks/mutations";
 
 const EXAMPLE_YAML = `\
@@ -28,7 +28,6 @@ export function RoleCreatePage() {
   const navigate = useNavigate();
 
   const [yaml, setYaml] = useState(EXAMPLE_YAML);
-  const [generating, setGenerating] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const createMutation = useCreateRoleFromYaml();
 
@@ -45,41 +44,32 @@ export function RoleCreatePage() {
 
   return (
     <PageContainer>
-        <section className="border border-zinc-800 bg-zinc-900/30 p-4 space-y-1">
-          <h1 className="text-zinc-100 font-semibold">Create Role</h1>
-          <p className="text-xs text-zinc-500">
-            Define a new Ansible role using YAML. Use the AI wand to generate
-            one from a description, or write it by hand.
-          </p>
-        </section>
+      <section className="border border-zinc-800 bg-zinc-900/30 p-4 space-y-1">
+        <h1 className="text-zinc-100 font-semibold">Create Role</h1>
+        <p className="text-xs text-zinc-500">
+          Define a new Ansible role in YAML. Use the AI button in the sidebar if you want help drafting or editing roles.
+        </p>
+      </section>
 
-        <section className="border border-zinc-800 bg-zinc-900/30 p-4 space-y-3">
-          <YamlEditorWithAi
-            value={yaml}
-            onChange={setYaml}
-            apiEndpoint="/ai/roles/generate"
-            buildBody={(prompt) => ({ prompt })}
-            height="400px"
-            placeholder='Describe the role you need, e.g. "Install and configure Nginx with SSL"'
-            onGeneratingChange={setGenerating}
-          />
+      <section className="border border-zinc-800 bg-zinc-900/30 p-4 space-y-3">
+        <YamlFileView value={yaml} onChange={setYaml} height="400px" />
 
-          {submitError && (
-            <div className="rounded border border-red-900/50 bg-red-950/30 p-3 text-xs text-red-400">
-              {submitError}
-            </div>
-          )}
-
-          <div className="flex justify-end">
-            <Button
-              onClick={handleSubmit}
-              disabled={createMutation.isPending || generating || !yaml.trim()}
-            >
-              {createMutation.isPending && <Loader2 className="size-4 animate-spin" />}
-              Create role
-            </Button>
+        {submitError && (
+          <div className="rounded border border-red-900/50 bg-red-950/30 p-3 text-xs text-red-400">
+            {submitError}
           </div>
-        </section>
+        )}
+
+        <div className="flex justify-end">
+          <Button
+            onClick={handleSubmit}
+            disabled={createMutation.isPending || !yaml.trim()}
+          >
+            {createMutation.isPending && <Loader2 className="size-4 animate-spin" />}
+            Create role
+          </Button>
+        </div>
+      </section>
     </PageContainer>
   );
 }

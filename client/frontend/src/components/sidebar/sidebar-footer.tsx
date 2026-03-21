@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useNavigate, NavLink, useLocation } from "react-router-dom";
-import { GitBranch, KeyRound, Package, RefreshCw, Search, Terminal } from "lucide-react";
+import { GitBranch, KeyRound, Package, RefreshCw, Search, Sparkles, Terminal } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -16,6 +16,7 @@ import {
 import { useSetupStore } from "@/stores/setup";
 import { useGitStatuses, useHosts } from "@/hooks/queries";
 import { useSshStore } from "@/stores/ssh";
+import { useAiChatUiStore } from "@/stores/ai-chat-ui";
 import { hostDisplayLabel, isManagedHost, isReachableHost } from "@/lib/hosts";
 import { cn } from "@/lib/utils";
 
@@ -84,6 +85,8 @@ export function SidebarFooter() {
   const sshPanelOpen = useSshStore((s) => s.panelOpen);
   const openSession = useSshStore((s) => s.openSession);
   const togglePanel = useSshStore((s) => s.togglePanel);
+  const setAiPanelOpen = useAiChatUiStore((s) => s.setPanelOpen);
+  const aiPanelOpen = useAiChatUiStore((s) => s.panelOpen);
 
   const [hostPickerOpen, setHostPickerOpen] = useState(false);
 
@@ -133,6 +136,26 @@ export function SidebarFooter() {
           </TooltipContent>
         </Tooltip>
         <div className="flex-1" />
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="outline"
+              size="icon"
+              className={cn(
+                "size-7 shrink-0",
+                aiPanelOpen && "border-violet-500/50 text-violet-200 bg-violet-500/10",
+              )}
+              disabled={!status?.repo_ready}
+              onClick={() => setAiPanelOpen(true)}
+              aria-label="Open AI chat"
+            >
+              <Sparkles className="size-3" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="top" className="text-xs">
+            AI chat
+          </TooltipContent>
+        </Tooltip>
         <Popover open={hostPickerOpen} onOpenChange={setHostPickerOpen}>
           <Tooltip>
             <TooltipTrigger asChild>
