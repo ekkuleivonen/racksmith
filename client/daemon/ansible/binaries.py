@@ -7,18 +7,30 @@ import sys
 from pathlib import Path
 
 
+def _venv_scripts_dir() -> Path:
+    """Return the ``bin`` (or ``Scripts``) directory for the active venv/prefix."""
+    return Path(sys.prefix) / "bin"
+
+
 def resolve_ansible_cli(name: str) -> str:
     """
     Return a path to an Ansible CLI script (e.g. ``ansible-galaxy``).
 
-    Prefer the directory next to ``sys.executable`` so supervisor/Docker runs work
-    without relying on PATH (ansible-core installs scripts into the venv ``bin``).
+    ``sys.prefix`` points to the venv root when running inside one
+    (e.g. ``/app/daemon/.venv``), so ``sys.prefix / "bin"`` is where pip/uv
+    install console-script entry points like ``ansible-galaxy``.
+
+    ``sys.executable`` is unreliable for this because Python resolves the
+    symlink (via ``/proc/self/exe``), landing in ``/usr/local/bin`` instead
+    of ``.venv/bin``.
     """
-    bin_dir = Path(sys.executable).resolve().parent
-    candidate = bin_dir / name
+    candidate = _venv_scripts_dir() / name
     if candidate.is_file():
         return str(candidate)
+
     found = shutil.which(name)
     if found:
         return found
-    raise FileNotFoundError(f"{name} not found (expected at {candidate} or on PATH)")
+    raise FileNotFoundError(
+        f"{name} not found (tried {candidate} and PATH)"
+    )
