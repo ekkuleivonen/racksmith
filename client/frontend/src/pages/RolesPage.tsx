@@ -18,15 +18,9 @@ import { FacetDropdown } from "@/components/shared/facet-dropdown";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { useRegistryRoles, useRegistryFacets, useRoles } from "@/hooks/queries";
 import { usePushToRegistry } from "@/hooks/mutations";
-import { usePinsStore } from "@/stores/pins";
-import { useSetupStore } from "@/stores/setup";
+import { usePinsStore, useRepoKey } from "@/stores/pins";
 import type { RoleSummary } from "@/lib/roles";
 import type { FacetItem, RegistryRole } from "@/lib/registry";
-
-function useRepoKey() {
-  const status = useSetupStore((s) => s.status);
-  return status ? `${status.user.login}/${status.repo?.full_name ?? ""}` : "";
-}
 
 function PinButton({ path, label }: { path: string; label: string }) {
   const repoKey = useRepoKey();

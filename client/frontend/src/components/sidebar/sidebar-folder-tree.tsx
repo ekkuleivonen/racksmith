@@ -14,6 +14,8 @@ import {
   Folder,
   FolderOpen,
   FolderPlus,
+  GripVertical,
+  Star,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -37,6 +39,8 @@ export type SidebarFolderTreeProps<T> = {
   itemLabel: (item: T) => string;
   itemFolder: (item: T) => string;
   onMoveToFolder: (itemKey: string, folder: string) => void;
+  onToggleStar?: (itemPath: string, itemLabel: string) => void;
+  isStarred?: (itemPath: string) => boolean;
   storageKey: string;
 };
 
@@ -63,6 +67,7 @@ function buildTree<T>(
   items: T[],
   itemFolder: (item: T) => string,
   itemLabel: (item: T) => string,
+  emptyFolders: string[] = [],
 ): FolderNode<T> {
   const root: FolderNode<T> = { name: "", path: "", children: [], items: [] };
   const folders = new Map<string, FolderNode<T>>();
@@ -82,6 +87,10 @@ function buildTree<T>(
     parent.children.push(node);
     folders.set(folderPath, node);
     return node;
+  }
+
+  for (const f of emptyFolders) {
+    ensureFolder(f);
   }
 
   for (const item of items) {
@@ -109,16 +118,21 @@ function DraggableItem<T>({
   itemKey,
   itemPath,
   itemLabel,
+  onToggleStar,
+  isStarred,
 }: {
   item: T;
   itemKey: (item: T) => string;
   itemPath: (item: T) => string;
   itemLabel: (item: T) => string;
+  onToggleStar?: (itemPath: string, itemLabel: string) => void;
+  isStarred?: (itemPath: string) => boolean;
 }) {
   const { pathname } = useLocation();
   const key = itemKey(item);
   const path = itemPath(item);
   const label = itemLabel(item);
+  const starred = isStarred?.(path) ?? false;
 
   const {
     attributes,
@@ -127,17 +141,25 @@ function DraggableItem<T>({
     isDragging,
   } = useDraggable({ id: key, data: { key, label } });
 
-  return (
+  const inner = (
     <div
       ref={setNodeRef}
-      {...listeners}
-      {...attributes}
+      className="group/item flex items-center"
       style={{ opacity: isDragging ? 0.3 : undefined }}
     >
+      <button
+        type="button"
+        className="shrink-0 cursor-grab opacity-0 group-hover/item:opacity-100 text-zinc-600 hover:text-zinc-400 transition-opacity touch-none"
+        aria-label="Drag to reorder"
+        {...listeners}
+        {...attributes}
+      >
+        <GripVertical className="size-3" />
+      </button>
       <NavLink
         to={path}
         className={cn(
-          "flex items-center gap-1.5 rounded py-0.5 px-1.5 text-[11px] no-underline truncate",
+          "flex-1 flex items-center gap-1.5 rounded py-0.5 px-1.5 text-[11px] no-underline truncate min-w-0",
           pathname === path
             ? "bg-zinc-700 text-zinc-100"
             : "text-zinc-400 hover:bg-zinc-800/50 hover:text-zinc-300",
@@ -146,6 +168,22 @@ function DraggableItem<T>({
         <span className="truncate">{label}</span>
       </NavLink>
     </div>
+  );
+
+  if (!onToggleStar) return inner;
+
+  return (
+    <ContextMenu>
+      <ContextMenuTrigger asChild>
+        {inner}
+      </ContextMenuTrigger>
+      <ContextMenuContent>
+        <ContextMenuItem onClick={() => onToggleStar(path, label)}>
+          <Star className={cn("size-3.5", starred && "fill-yellow-400 text-yellow-400")} />
+          {starred ? "Unstar" : "Star"}
+        </ContextMenuItem>
+      </ContextMenuContent>
+    </ContextMenu>
   );
 }
 
@@ -156,6 +194,8 @@ function DroppableFolder<T>({
   itemKey,
   itemPath,
   itemLabel,
+  onToggleStar,
+  isStarred,
   depth,
 }: {
   node: FolderNode<T>;
@@ -164,6 +204,8 @@ function DroppableFolder<T>({
   itemKey: (item: T) => string;
   itemPath: (item: T) => string;
   itemLabel: (item: T) => string;
+  onToggleStar?: (itemPath: string, itemLabel: string) => void;
+  isStarred?: (itemPath: string) => boolean;
   depth: number;
 }) {
   const isOpen = expanded[node.path] ?? true;
@@ -213,6 +255,8 @@ function DroppableFolder<T>({
               itemKey={itemKey}
               itemPath={itemPath}
               itemLabel={itemLabel}
+              onToggleStar={onToggleStar}
+              isStarred={isStarred}
               depth={depth + 1}
             />
           ))}
@@ -223,6 +267,8 @@ function DroppableFolder<T>({
                 itemKey={itemKey}
                 itemPath={itemPath}
                 itemLabel={itemLabel}
+                onToggleStar={onToggleStar}
+                isStarred={isStarred}
               />
             </div>
           ))}
@@ -271,15 +317,27 @@ export function SidebarFolderTree<T>({
   itemLabel,
   itemFolder,
   onMoveToFolder,
+  onToggleStar,
+  isStarred,
   storageKey,
 }: SidebarFolderTreeProps<T>) {
   const [expanded, setExpanded] = useState(() => loadExpanded(storageKey));
   const [draggingLabel, setDraggingLabel] = useState<string | null>(null);
   const [creatingFolder, setCreatingFolder] = useState(false);
+  const [emptyFolders, setEmptyFolders] = useState<string[]>([]);
+
+  const activeEmptyFolders = useMemo(() => {
+    const used = new Set<string>();
+    for (const item of items) {
+      const f = itemFolder(item).replace(/^\/|\/$/g, "");
+      if (f) used.add(f);
+    }
+    return emptyFolders.filter((f) => !used.has(f));
+  }, [items, itemFolder, emptyFolders]);
 
   const tree = useMemo(
-    () => buildTree(items, itemFolder, itemLabel),
-    [items, itemFolder, itemLabel],
+    () => buildTree(items, itemFolder, itemLabel, activeEmptyFolders),
+    [items, itemFolder, itemLabel, activeEmptyFolders],
   );
 
   const toggleExpanded = useCallback(
@@ -324,6 +382,7 @@ export function SidebarFolderTree<T>({
   const handleNewFolderCommit = useCallback(
     (name: string) => {
       setCreatingFolder(false);
+      setEmptyFolders((prev) => (prev.includes(name) ? prev : [...prev, name]));
       setExpanded((prev) => {
         const next = { ...prev, [name]: true };
         saveExpanded(storageKey, next);
@@ -332,6 +391,7 @@ export function SidebarFolderTree<T>({
     },
     [storageKey],
   );
+
 
   if (items.length === 0) return null;
 
@@ -355,6 +415,8 @@ export function SidebarFolderTree<T>({
                 itemKey={itemKey}
                 itemPath={itemPath}
                 itemLabel={itemLabel}
+                onToggleStar={onToggleStar}
+                isStarred={isStarred}
                 depth={0}
               />
             ))}
@@ -365,6 +427,8 @@ export function SidebarFolderTree<T>({
                 itemKey={itemKey}
                 itemPath={itemPath}
                 itemLabel={itemLabel}
+                onToggleStar={onToggleStar}
+                isStarred={isStarred}
               />
             ))}
             {creatingFolder && (

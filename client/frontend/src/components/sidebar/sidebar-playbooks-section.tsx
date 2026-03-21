@@ -1,18 +1,12 @@
 import { NavLink, useLocation } from "react-router-dom";
-import { Layers, Plus, X } from "lucide-react";
+import { Layers, Plus, Star, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { usePlaybooks } from "@/hooks/queries";
 import { useMovePlaybookToFolder } from "@/hooks/mutations";
-import { usePinsStore, type PinEntry } from "@/stores/pins";
-import { useSetupStore } from "@/stores/setup";
+import { usePinsStore, useRepoKey, type PinEntry } from "@/stores/pins";
 import { SidebarFolderTree } from "./sidebar-folder-tree";
 
 const EMPTY_PINS: PinEntry[] = [];
-
-function useRepoKey() {
-  const status = useSetupStore((s) => s.status);
-  return status ? `${status.user.login}/${status.repo?.full_name ?? ""}` : "";
-}
 
 export function SidebarPlaybooksSection() {
   const { data: playbooks = [] } = usePlaybooks();
@@ -63,6 +57,7 @@ export function SidebarPlaybooksSection() {
                     : "text-zinc-400 hover:bg-zinc-800/50 hover:text-zinc-300",
                 )}
               >
+                <Star className="size-2.5 shrink-0 fill-yellow-400/80 text-yellow-400/80" />
                 <span className="truncate">{pin.label}</span>
               </NavLink>
               <button
@@ -87,6 +82,8 @@ export function SidebarPlaybooksSection() {
         onMoveToFolder={(playbookId, folder) =>
           moveMutation.mutate({ playbookId, folder })
         }
+        onToggleStar={(path, label) => togglePin(repoKey, path, label)}
+        isStarred={(path) => allPins.some((p) => p.path === path)}
         storageKey="playbooks"
       />
 

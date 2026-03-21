@@ -7,16 +7,10 @@ import { toastApiError } from "@/lib/api";
 import { EntityListPage } from "@/components/shared/entity-list-page";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { useRegistryPlaybooks, usePlaybooks } from "@/hooks/queries";
-import { usePinsStore } from "@/stores/pins";
-import { useSetupStore } from "@/stores/setup";
+import { usePinsStore, useRepoKey } from "@/stores/pins";
 import type { PlaybookSummary } from "@/lib/playbooks";
 import { listPlaybooks } from "@/lib/playbooks";
 import type { RegistryPlaybook } from "@/lib/registry";
-
-function useRepoKey() {
-  const status = useSetupStore((s) => s.status);
-  return status ? `${status.user.login}/${status.repo?.full_name ?? ""}` : "";
-}
 
 function PinButton({ path, label }: { path: string; label: string }) {
   const repoKey = useRepoKey();

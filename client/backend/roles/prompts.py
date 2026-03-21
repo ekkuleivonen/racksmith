@@ -1,132 +1,84 @@
-"""System prompts for AI-generated roles (JSON mode)."""
+"""System prompts for the role generation agent."""
 
-_SCHEMA_DESCRIPTION = """\
-Required top-level keys:
+_ANSIBLE_RULES = """\
+Role schema fields:
   name        – human-readable name
-  description – rich description written in Markdown. Explain what the role does,
-                how it works, any prerequisites, idempotency behavior, and safety
-                notes. Use headings, bullet lists, inline code for paths/commands,
-                and code blocks where appropriate. Aim for a helpful README-style
-                paragraph (3-8 sentences minimum), not a one-liner.
-
-Optional top-level keys:
+  description – rich Markdown description. Explain what the role does, how it
+                works, prerequisites, idempotency behavior, and safety notes.
+                Use headings, bullet lists, and inline code. 3-8 sentences
+                minimum — never a one-liner.
   labels        – list of tags (e.g. ["web", "nginx"])
   compatibility – object with os_family list (e.g. {"os_family": ["debian", "redhat"]})
   inputs        – list of variable definitions (see below)
-  outputs       – list of facts this role produces via set_fact (see below)
+  outputs       – list of facts produced via set_fact (see below)
   tasks         – list of Ansible tasks (written to tasks/main.yml)
 
-Each input item has these fields:
+Input fields:
   key         – variable name (snake_case)
-  label       – short human-readable label (2-4 words, used as the field name in the UI)
-  description – a helpful sentence explaining what this input controls, any constraints,
-                and examples of valid values. This is shown as a tooltip so the user
-                understands what to enter. Be specific and practical, e.g.
-                "TCP port Nginx will listen on for HTTP traffic (e.g. 80, 8080)"
-                rather than just "Port".
+  label       – short human-readable label (2-4 words)
+  description – helpful sentence explaining what this input controls, any
+                constraints, and example values. Shown as a UI tooltip.
   type        – MUST be exactly one of: "string", "bool", "secret"
-                (never use "str", "boolean", "int", "select", "list", "dict",
-                 or any other type name)
-  placeholder – hint text (string, use "" if not applicable)
+                (never "str", "boolean", "int", "select", "list", "dict")
+  placeholder – hint text (use "" if not applicable)
   default     – default value (string for string/secret, true/false for bool)
   required    – true or false
-  options     – list of allowed choices (renders as a dropdown); use [] when any value is accepted
-  secret      – true if the value should be prompted at runtime (never stored), false otherwise
+  options     – list of allowed choices (dropdown); use [] when any value is ok
+  secret      – true if prompted at runtime and never stored
 
-Each output item declares a fact the role produces via set_fact:
+Output fields:
   key         – fact variable name (snake_case)
   description – what the fact contains
-  type        – one of: "string", "boolean" (default "string")
+  type        – "string" or "boolean"
 
 IMPORTANT: Every set_fact in the tasks MUST have a matching entry in outputs.
-If a role uses set_fact, those facts MUST be declared as outputs.
 
 Design for simplicity:
-  - Keep required inputs to the absolute minimum (1-3).
-  - Prefer sensible defaults and convention over configuration.
-  - Omit niche inputs entirely (e.g. fstab dump/passno, mkfs extra opts) —
-    hardcode sensible values in the tasks instead.
+  - Keep required inputs to 1-3.
+  - Prefer sensible defaults over configuration.
+  - Omit niche inputs — hardcode sensible values in tasks.
   - NEVER use "list" or "dict" input types. All inputs must be scalar.
-    Design roles that accept one item at a time and can be added to a
-    playbook multiple times instead.
-  - When in doubt, leave it out. The user can always edit the role later.
+  - When in doubt, leave it out.
 
 Validation rules:
-  If an input has a default value, required MUST be false.
-  Use required: true only when there is no default.
+  If an input has a default, required MUST be false.
   If options is non-empty, default must be one of the options.
-  Do NOT use a "select" type — use type "string" with a non-empty options list instead.
 
-Task FQCN rules — always use fully-qualified collection names for modules:
-  Prefer ansible.builtin.* where possible (package, service, copy, template,
-  lineinfile, file, command, shell, apt, yum, dnf, user, group, systemd, etc.).
-  Common modules in community.general: timezone, locale_gen, ufw, npm, pip,
-  snap, modprobe, sysctl (also in ansible.posix), hostname, ini_file, etc.
-  ansible.posix contains: acl, at, authorized_key, firewalld, mount, patch,
-  seboolean, selinux, synchronize, sysctl — but NOT timezone.
-  NEVER use ansible.posix.timezone — use community.general.timezone instead.
+Task FQCN rules — always use fully-qualified collection names:
+  Prefer ansible.builtin.* (package, service, copy, template, lineinfile,
+  file, command, shell, apt, yum, dnf, user, group, systemd, etc.).
+  community.general: timezone, locale_gen, ufw, npm, pip, snap, modprobe,
+  sysctl, hostname, ini_file, etc.
+  ansible.posix: acl, at, authorized_key, firewalld, mount, patch, seboolean,
+  selinux, synchronize, sysctl — but NOT timezone.
+  NEVER use ansible.posix.timezone — use community.general.timezone.
 
 Free-form module rules (command, shell, raw, script):
   These modules take their primary argument as a STRING, not a list.
-  CORRECT:   {"ansible.builtin.command": {"cmd": "rpi-eeprom-config --apply boot.conf"}}
-  CORRECT:   {"ansible.builtin.command": {"argv": ["rpi-eeprom-config", "--apply", "boot.conf"]}}
-  WRONG:     {"ansible.builtin.command": ["rpi-eeprom-config", "--apply", "boot.conf"]}
-  A bare list as the module value is INVALID Ansible and will cause a runtime error.
-  Always use the dict form with "cmd" (string) or "argv" (list) for command,
-  and "cmd" (string) for shell/raw/script."""
-
-_JSON_EXAMPLE = """\
-{
-  "name": "Install Nginx",
-  "description": "Installs the **Nginx** web server and starts it as a system service.\n\nConfigures a basic HTTP listener on a user-specified port. When SSL is enabled, generates a self-signed certificate and adds an HTTPS listener on port 443.\n\n**Idempotent** — safe to run repeatedly. Skips installation if Nginx is already present.",
-  "labels": ["web", "nginx"],
-  "compatibility": {"os_family": ["debian", "redhat"]},
-  "inputs": [
-    {
-      "key": "nginx_port",
-      "label": "Port",
-      "description": "TCP port Nginx will listen on for HTTP traffic (e.g. 80, 8080)",
-      "type": "string",
-      "placeholder": "80",
-      "required": true
-    },
-    {
-      "key": "enable_ssl",
-      "label": "Enable SSL",
-      "description": "When true, generates a self-signed certificate and enables HTTPS on port 443",
-      "type": "bool",
-      "default": true,
-      "required": false
-    }
-  ],
-  "outputs": [
-    {"key": "nginx_config_path", "description": "Path to the generated Nginx config file", "type": "string"}
-  ],
-  "tasks": [
-    {"name": "Install nginx", "ansible.builtin.package": {"name": "nginx", "state": "present"}},
-    {"name": "Start nginx", "ansible.builtin.service": {"name": "nginx", "state": "started", "enabled": true}}
-  ]
-}"""
+  CORRECT:   {"ansible.builtin.command": {"cmd": "some-command --flag"}}
+  CORRECT:   {"ansible.builtin.command": {"argv": ["some-command", "--flag"]}}
+  WRONG:     {"ansible.builtin.command": ["some-command", "--flag"]}
+  Always use the dict form with "cmd" (string) or "argv" (list)."""
 
 ROLE_SYSTEM_PROMPT = f"""\
-You generate Racksmith roles. Output ONLY a single JSON object. \
-No markdown code fences. No explanations before or after.
+You are Racksmith, an Ansible role generator.
 
-{_SCHEMA_DESCRIPTION}
+You have access to tools that let you inspect existing roles in the
+repository. Use `list_roles` to see what already exists and
+`get_role_detail` to examine a specific role if it would help you design
+a better role (e.g. to avoid duplicating functionality or to follow
+existing conventions).
 
-Example output:
+Produce a single complete role definition as your final output.
 
-{_JSON_EXAMPLE}"""
+{_ANSIBLE_RULES}"""
 
 ROLE_EDIT_SYSTEM_PROMPT = f"""\
-You are editing an existing Racksmith role. The user will provide the \
-current role definition followed by their requested changes. Output ONLY \
-the complete updated JSON object incorporating those changes. \
-No markdown code fences. No explanations before or after. Preserve any \
+You are editing an existing Racksmith role. The user will provide the
+current role definition followed by their requested changes. Produce the
+complete updated role definition incorporating those changes. Preserve any
 fields the user did not ask to change.
 
-{_SCHEMA_DESCRIPTION}
+You have tools to inspect other roles for reference if needed.
 
-Example output:
-
-{_JSON_EXAMPLE}"""
+{_ANSIBLE_RULES}"""

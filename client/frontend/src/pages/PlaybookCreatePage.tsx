@@ -9,6 +9,7 @@ import {
   Sparkles,
   Square,
   Wand2,
+  Wrench,
 } from "lucide-react";
 import { toast } from "sonner";
 import { toastApiError } from "@/lib/api";
@@ -22,9 +23,9 @@ import type { RoleCatalogEntry, PlaybookUpsert } from "@/lib/playbooks";
 import { createPlaybook, listPlaybooks } from "@/lib/playbooks";
 import { useHosts, useGroups } from "@/hooks/queries";
 import {
-  usePlaybookGenerate,
-  type GenerationStep,
-} from "@/hooks/use-playbook-generate";
+  useAgentStream,
+  type AgentStep,
+} from "@/hooks/use-agent-stream";
 
 const EMPTY_DRAFT: PlaybookUpsert = {
   name: "",
@@ -32,6 +33,16 @@ const EMPTY_DRAFT: PlaybookUpsert = {
   roles: [],
   become: false,
 };
+
+function ToolLabel({ tool }: { tool: string }) {
+  const labels: Record<string, string> = {
+    list_roles: "Browsing existing roles",
+    get_role_detail: "Inspecting role",
+    create_role: "Creating role",
+    create_playbook: "Assembling playbook",
+  };
+  return <>{labels[tool] ?? tool}</>;
+}
 
 function ThinkingBlock({
   text,
@@ -82,64 +93,43 @@ function StepIndicator({
   expanded,
   onToggle,
 }: {
-  step: GenerationStep;
+  step: AgentStep;
   expanded: boolean;
   onToggle: () => void;
 }) {
-  switch (step.step) {
-    case "planning":
-      return (
-        <div className="flex items-center gap-2 text-xs text-zinc-400">
-          <Loader2 className="size-3 animate-spin" />
-          Planning playbook...
-        </div>
-      );
+  switch (step.type) {
     case "thinking":
       return (
         <ThinkingBlock
           text={step.text}
-          label="Planning..."
+          label="AI reasoning"
           expanded={expanded}
           onToggle={onToggle}
         />
       );
-    case "planned":
-      return (
-        <div className="flex items-center gap-2 text-xs text-emerald-400">
-          <Check className="size-3" />
-          Planned &ldquo;{step.plan_name}&rdquo; &mdash; {step.total_new} role
-          {step.total_new !== 1 ? "s" : ""} to create
-          {step.total_reuse > 0 && `, ${step.total_reuse} reused`}
-        </div>
-      );
-    case "thinking_role":
-      return (
-        <ThinkingBlock
-          text={step.text}
-          label={`${step.name} (${step.index}/${step.total})`}
-          expanded={expanded}
-          onToggle={onToggle}
-        />
-      );
-    case "role_created":
-      return (
-        <div className="flex items-center gap-2 text-xs text-emerald-400">
-          <Check className="size-3" />
-          Created role {step.index}/{step.total}: {step.name}
-        </div>
-      );
-    case "role_failed":
-      return (
-        <div className="flex items-center gap-2 text-xs text-red-400">
-          <CircleAlert className="size-3" />
-          Failed role {step.index}/{step.total}: {step.name}
-        </div>
-      );
-    case "assembling":
+    case "tool_call":
       return (
         <div className="flex items-center gap-2 text-xs text-zinc-400">
-          <Loader2 className="size-3 animate-spin" />
-          Assembling playbook...
+          <Wrench className="size-3 shrink-0" />
+          <ToolLabel tool={step.tool} />
+          {step.args && "name" in step.args && (
+            <span className="text-zinc-500 truncate">
+              — {String(step.args.name)}
+            </span>
+          )}
+          <Loader2 className="size-3 animate-spin ml-auto shrink-0" />
+        </div>
+      );
+    case "tool_result":
+      return (
+        <div className="flex items-center gap-2 text-xs text-emerald-400">
+          <Check className="size-3 shrink-0" />
+          <ToolLabel tool={step.tool} />
+          {step.result && (
+            <span className="text-zinc-500 truncate">
+              — {step.result.slice(0, 80)}
+            </span>
+          )}
         </div>
       );
     case "done":
@@ -179,10 +169,12 @@ export function PlaybookCreatePage() {
     error: genError,
     generate: rawGenerate,
     cancel,
-  } = usePlaybookGenerate({
-    onComplete: (playbookId) => {
-      toast.success("Playbook generated");
-      setCompletedId(playbookId);
+  } = useAgentStream({
+    onComplete: (done) => {
+      if (done.playbook_id) {
+        toast.success("Playbook generated");
+        setCompletedId(done.playbook_id);
+      }
     },
   });
 
@@ -190,7 +182,7 @@ export function PlaybookCreatePage() {
     (p: string) => {
       setCompletedId(null);
       setExpandedSteps(new Set());
-      return rawGenerate(p);
+      return rawGenerate("/playbooks/generate", { prompt: p });
     },
     [rawGenerate],
   );
@@ -283,12 +275,11 @@ export function PlaybookCreatePage() {
             {steps.length > 0 && (
               <div className="max-h-80 overflow-y-auto rounded border border-zinc-800 bg-zinc-950/60 p-3 space-y-1">
                 {steps.map((step, i) => {
-                  const isThinking =
-                    step.step === "thinking" || step.step === "thinking_role";
                   const isLast = i === steps.length - 1;
-                  const expanded = isThinking
-                    ? isLast || expandedSteps.has(i)
-                    : false;
+                  const expanded =
+                    step.type === "thinking"
+                      ? isLast || expandedSteps.has(i)
+                      : false;
                   return (
                     <StepIndicator
                       key={i}

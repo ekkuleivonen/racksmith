@@ -172,13 +172,15 @@ def write_playbook(layout: AnsibleLayout, playbook: PlaybookData) -> Path:
 
     atomic_yaml_dump([play], path)
 
-    # Racksmith metadata goes to .racksmith.yml (only description)
     meta = read_meta(layout)
+    existing_pb_meta = get_playbook_meta(meta, playbook.id)
     pb_meta: dict = {}
     if playbook.description:
         pb_meta["description"] = playbook.description
     if playbook.folder:
         pb_meta["folder"] = playbook.folder
+    elif existing_pb_meta.get("folder"):
+        pb_meta["folder"] = existing_pb_meta["folder"]
     set_playbook_meta(meta, playbook.id, pb_meta)
     write_meta(layout, meta)
 

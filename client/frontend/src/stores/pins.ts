@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { useSetupStore } from "./setup";
 
 const STORAGE_KEY = "racksmith-pins";
 
@@ -60,3 +61,8 @@ export const usePinsStore = create<PinsState & PinsActions>((set, get) => ({
 
   getPins: (repoKey) => get().pins[repoKey] ?? EMPTY_PINS,
 }));
+
+export function useRepoKey() {
+  const status = useSetupStore((s) => s.status);
+  return status ? `${status.user.login}/${status.repo?.full_name ?? ""}` : "";
+}

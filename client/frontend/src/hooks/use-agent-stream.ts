@@ -1,67 +1,57 @@
 import { useCallback, useRef, useState } from "react";
 import { apiStreamPost } from "@/lib/api";
 
-export type GenerationStep =
-  | { step: "planning"; session_id: string }
-  | { step: "thinking"; text: string }
-  | {
-      step: "planned";
-      session_id: string;
-      plan_name: string;
-      plan_description: string;
-      total_new: number;
-      total_reuse: number;
-    }
-  | {
-      step: "thinking_role";
-      index: number;
-      total: number;
-      name: string;
-      text: string;
-    }
-  | {
-      step: "role_created";
-      index: number;
-      total: number;
-      name: string;
-      role_id: string;
-    }
-  | {
-      step: "role_failed";
-      index: number;
-      total: number;
-      name: string;
-      error: string;
-    }
-  | { step: "assembling" }
-  | { step: "done"; playbook_id: string }
-  | { step: "error"; message: string };
+export type AgentStepThinking = { type: "thinking"; text: string };
+export type AgentStepToolCall = {
+  type: "tool_call";
+  tool: string;
+  args: Record<string, unknown>;
+};
+export type AgentStepToolResult = {
+  type: "tool_result";
+  tool: string;
+  result: string;
+};
+export type AgentStepDone = {
+  type: "done";
+  yaml?: string;
+  playbook_id?: string;
+  message?: string;
+};
+export type AgentStepError = { type: "error"; message: string };
 
-type UsePlaybookGenerateOptions = {
-  onComplete?: (playbookId: string) => void;
+export type AgentStep =
+  | AgentStepThinking
+  | AgentStepToolCall
+  | AgentStepToolResult
+  | AgentStepDone
+  | AgentStepError;
+
+type UseAgentStreamOptions = {
+  onComplete?: (result: AgentStepDone) => void;
 };
 
-export function usePlaybookGenerate(options: UsePlaybookGenerateOptions = {}) {
+export function useAgentStream(options: UseAgentStreamOptions = {}) {
+  const [thinking, setThinking] = useState("");
+  const [steps, setSteps] = useState<AgentStep[]>([]);
+  const [result, setResult] = useState<AgentStepDone | null>(null);
   const [generating, setGenerating] = useState(false);
-  const [steps, setSteps] = useState<GenerationStep[]>([]);
   const [error, setError] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
   const generate = useCallback(
-    async (prompt: string) => {
+    async (path: string, body: unknown) => {
       setGenerating(true);
       setError(null);
+      setThinking("");
       setSteps([]);
+      setResult(null);
 
       const controller = new AbortController();
       abortRef.current = controller;
 
       try {
-        const res = await apiStreamPost(
-          "/playbooks/generate",
-          { prompt },
-          controller.signal,
-        );
+        const res = await apiStreamPost(path, body, controller.signal);
         const reader = res.body!.getReader();
         const decoder = new TextDecoder();
         let buffer = "";
@@ -79,15 +69,13 @@ export function usePlaybookGenerate(options: UsePlaybookGenerateOptions = {}) {
             const payload = line.slice(6);
             if (payload === "[DONE]") break;
             try {
-              const event = JSON.parse(payload) as GenerationStep;
+              const event = JSON.parse(payload) as AgentStep;
 
-              if (
-                event.step === "thinking" ||
-                event.step === "thinking_role"
-              ) {
+              if (event.type === "thinking") {
+                setThinking((prev) => prev + event.text);
                 setSteps((prev) => {
                   const last = prev[prev.length - 1];
-                  if (last?.step === event.step) {
+                  if (last?.type === "thinking") {
                     return [
                       ...prev.slice(0, -1),
                       { ...last, text: last.text + event.text },
@@ -95,12 +83,15 @@ export function usePlaybookGenerate(options: UsePlaybookGenerateOptions = {}) {
                   }
                   return [...prev, event];
                 });
+              } else if (event.type === "done") {
+                setResult(event);
+                setSteps((prev) => [...prev, event]);
+                options.onComplete?.(event);
+              } else if (event.type === "error") {
+                setError(event.message);
+                setSteps((prev) => [...prev, event]);
               } else {
                 setSteps((prev) => [...prev, event]);
-              }
-
-              if (event.step === "done") {
-                options.onComplete?.(event.playbook_id);
               }
             } catch {
               // skip malformed events
@@ -114,7 +105,10 @@ export function usePlaybookGenerate(options: UsePlaybookGenerateOptions = {}) {
         const message =
           err instanceof Error ? err.message : "Generation failed";
         setError(message);
-        setSteps((prev) => [...prev, { step: "error", message }]);
+        setSteps((prev) => [
+          ...prev,
+          { type: "error", message } as AgentStepError,
+        ]);
       } finally {
         setGenerating(false);
         abortRef.current = null;
@@ -127,5 +121,5 @@ export function usePlaybookGenerate(options: UsePlaybookGenerateOptions = {}) {
     abortRef.current?.abort();
   }, []);
 
-  return { generating, steps, error, generate, cancel };
+  return { thinking, steps, result, generating, error, generate, cancel };
 }

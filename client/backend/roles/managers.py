@@ -403,32 +403,18 @@ class RoleManager(RunManagerMixin):
             return str(exc)
         return None
 
-    @staticmethod
-    async def _result_to_sse(data: dict) -> AsyncGenerator[str]:
-        """Convert a validated dict to YAML and yield SSE lines."""
-        import asyncio
-
-        yaml_text = yaml.dump(data, default_flow_style=False, sort_keys=False)
-        for line in yaml_text.splitlines(keepends=True):
-            yield f"data: {json.dumps(line)}\n\n"
-            await asyncio.sleep(0.03)
-        yield "data: [DONE]\n\n"
-
-    async def generate_with_validation(self, prompt: str) -> AsyncGenerator[str]:
-        from _utils.ai import get_model, role_agent, stream_thinking
-        from playbooks.prompts import ROLE_THINKING_INSTRUCTIONS
+    async def generate_with_validation(self, session: SessionData, prompt: str) -> AsyncGenerator[str]:
+        from _utils.agent_stream import AgentDeps, stream_agent
+        from _utils.ai import role_agent
         from roles.prompts import ROLE_SYSTEM_PROMPT
 
-        async for delta in stream_thinking(prompt, ROLE_THINKING_INSTRUCTIONS):
-            yield f"data: {json.dumps({'thinking': delta})}\n\n"
-
-        result = await role_agent.run(prompt, model=get_model(), instructions=ROLE_SYSTEM_PROMPT)
-        async for event in self._result_to_sse(result.output.model_dump(exclude_defaults=True)):
+        deps = AgentDeps(session=session)
+        async for event in stream_agent(role_agent, prompt, deps, instructions=ROLE_SYSTEM_PROMPT):
             yield event
 
-    async def edit_with_validation(self, existing_yaml: str, prompt: str) -> AsyncGenerator[str]:
-        from _utils.ai import get_model, role_agent, stream_thinking
-        from playbooks.prompts import ROLE_THINKING_INSTRUCTIONS
+    async def edit_with_validation(self, session: SessionData, existing_yaml: str, prompt: str) -> AsyncGenerator[str]:
+        from _utils.agent_stream import AgentDeps, stream_agent
+        from _utils.ai import role_agent
         from roles.prompts import ROLE_EDIT_SYSTEM_PROMPT
 
         try:
@@ -441,12 +427,8 @@ class RoleManager(RunManagerMixin):
             f"Here is the current role definition:\n\n{existing_json}\n\n"
             f"Requested changes:\n{prompt}"
         )
-
-        async for delta in stream_thinking(user_prompt, ROLE_THINKING_INSTRUCTIONS):
-            yield f"data: {json.dumps({'thinking': delta})}\n\n"
-
-        result = await role_agent.run(user_prompt, model=get_model(), instructions=ROLE_EDIT_SYSTEM_PROMPT)
-        async for event in self._result_to_sse(result.output.model_dump(exclude_defaults=True)):
+        deps = AgentDeps(session=session)
+        async for event in stream_agent(role_agent, user_prompt, deps, instructions=ROLE_EDIT_SYSTEM_PROMPT):
             yield event
 
 role_manager = RoleManager()

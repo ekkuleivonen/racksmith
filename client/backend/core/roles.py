@@ -314,9 +314,14 @@ def write_role(
         tasks_content = "---\n# Add your Ansible tasks here\n"
     (role_dir / TASKS_MAIN).write_text(tasks_content, encoding="utf-8")
 
+    meta = read_meta(layout)
+    existing_role_meta = get_role_meta(meta, dir_name)
+
     role_meta: dict[str, Any] = {}
     if role.folder:
         role_meta["folder"] = role.folder
+    elif existing_role_meta.get("folder"):
+        role_meta["folder"] = existing_role_meta["folder"]
     if role.outputs:
         role_meta["outputs"] = [
             o.model_dump(exclude_defaults=True) | {"key": o.key}
@@ -336,7 +341,6 @@ def write_role(
     if inputs_meta:
         role_meta["inputs"] = inputs_meta
 
-    meta = read_meta(layout)
     set_role_meta(meta, dir_name, role_meta)
     write_meta(layout, meta)
 

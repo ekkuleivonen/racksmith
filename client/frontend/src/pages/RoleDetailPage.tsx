@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { Info, Loader2, Trash2, Upload } from "lucide-react";
+import { Info, Loader2, Star, Trash2, Upload } from "lucide-react";
 import { DetailLoading, DetailNotFound } from "@/components/shared/detail-states";
 import { MarkdownContent } from "@/components/shared/markdown-content";
 import { PageContainer } from "@/components/shared/page-container";
@@ -23,6 +23,7 @@ import {
 } from "@/components/ui/tooltip";
 import { useRoleDetail } from "@/hooks/queries";
 import { useDeleteRole, usePushToRegistry, useUpdateRole } from "@/hooks/mutations";
+import { usePinsStore, useRepoKey } from "@/stores/pins";
 import type { RoleDetail, RoleInput, RoleOutput } from "@/lib/roles";
 
 export function RoleDetailPage() {
@@ -64,6 +65,11 @@ export function RoleDetailPage() {
     });
   }
 
+  const repoKey = useRepoKey();
+  const pinPath = `/roles/${roleId}`;
+  const isPinned = usePinsStore((s) => (s.pins[repoKey] ?? []).some((p) => p.path === pinPath));
+  const togglePin = usePinsStore((s) => s.togglePin);
+
   if (!roleId) return <DetailNotFound title="Invalid role" description="The role ID is missing or invalid." backPath="/roles" backLabel="Back to roles" />;
   if (isLoading || !role) return <DetailLoading message="Loading role..." />;
 
@@ -86,6 +92,14 @@ export function RoleDetailPage() {
               </p>
             </div>
             <div className="flex gap-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => togglePin(repoKey, pinPath, role.name)}
+                className={isPinned ? "text-yellow-400 hover:text-yellow-300" : "text-zinc-500 hover:text-zinc-300"}
+              >
+                <Star className={`size-3.5 ${isPinned ? "fill-current" : ""}`} />
+              </Button>
               <Button
                 variant="outline"
                 size="sm"

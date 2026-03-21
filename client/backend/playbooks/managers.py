@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import uuid
 from collections.abc import AsyncGenerator
 from datetime import UTC, datetime
 from typing import cast
@@ -39,9 +38,6 @@ from core.run import validate_become_password
 from hosts.managers import host_manager
 from playbooks.schemas import (
     PlaybookDetail,
-    PlaybookPlan,
-    PlaybookPlanRoleCreate,
-    PlaybookPlanRoleReuse,
     PlaybookRoleEntry,
     PlaybookRun,
     PlaybookRunRequest,
@@ -245,135 +241,14 @@ class PlaybookManager(RunManagerMixin):
         session: SessionData,
         prompt: str,
     ) -> AsyncGenerator[str]:
-        """Plan a playbook via LLM, create missing roles sequentially, assemble and save."""
-        from _utils.ai import get_model, planner_agent, role_agent, stream_thinking
-        from playbooks.prompts import (
-            PLANNER_THINKING_INSTRUCTIONS,
-            ROLE_THINKING_INSTRUCTIONS,
-            build_planner_system_prompt,
-        )
-        from roles.managers import role_manager
-        from roles.prompts import ROLE_SYSTEM_PROMPT
+        """Generate a playbook via an LLM agent that creates roles and assembles them."""
+        from _utils.agent_stream import AgentDeps, stream_agent
+        from _utils.ai import playbook_agent
+        from playbooks.prompts import PLAYBOOK_SYSTEM_PROMPT
 
-        def _sse(payload: dict) -> str:
-            return f"data: {json.dumps(payload)}\n\n"
-
-        generation_id = uuid.uuid4().hex
-
-        catalog = self.roles_catalog(session)
-        catalog_by_id = {r.id: r for r in catalog}
-        system_prompt = build_planner_system_prompt(catalog)
-
-        yield _sse({"step": "planning", "session_id": generation_id})
-
-        # Stream planner thinking
-        thinking_prompt = (
-            f"The user wants a playbook for:\n{prompt}\n\n"
-            f"There are {len(catalog)} existing roles in the catalog."
-        )
-        async for delta in stream_thinking(thinking_prompt, PLANNER_THINKING_INSTRUCTIONS):
-            yield _sse({"step": "thinking", "text": delta})
-
-        model = get_model()
-        result = await planner_agent.run(prompt, model=model, instructions=system_prompt)
-        plan: PlaybookPlan = result.output
-
-        roles_to_create = [
-            (i, r) for i, r in enumerate(plan.roles) if isinstance(r, PlaybookPlanRoleCreate)
-        ]
-        reuse_count = sum(1 for r in plan.roles if isinstance(r, PlaybookPlanRoleReuse))
-
-        yield _sse({
-            "step": "planned",
-            "session_id": generation_id,
-            "plan_name": plan.name,
-            "plan_description": plan.description,
-            "total_new": len(roles_to_create),
-            "total_reuse": reuse_count,
-        })
-
-        # -- Create new roles sequentially (so each gets its own thinking stream) --
-        created_roles: dict[str, str] = {}
-
-        for plan_idx, entry in roles_to_create:
-            try:
-                # Stream role thinking
-                role_thinking_prompt = (
-                    f"Creating role \"{entry.name}\": {entry.description}\n\n"
-                    f"Generation instructions: {entry.generation_prompt}"
-                )
-                async for delta in stream_thinking(role_thinking_prompt, ROLE_THINKING_INSTRUCTIONS):
-                    yield _sse({
-                        "step": "thinking_role",
-                        "index": plan_idx + 1,
-                        "total": len(plan.roles),
-                        "name": entry.name,
-                        "text": delta,
-                    })
-
-                inputs_json = json.dumps(
-                    [inp.model_dump(exclude_defaults=True) | {"key": inp.key} for inp in entry.expected_inputs]
-                ) if entry.expected_inputs else "[]"
-                outputs_json = json.dumps(
-                    [out.model_dump(exclude_defaults=True) | {"key": out.key} for out in entry.expected_outputs]
-                ) if entry.expected_outputs else "[]"
-
-                sub_prompt = (
-                    f"{entry.generation_prompt}\n\n"
-                    f"The role MUST be named: {entry.name}\n"
-                    f"Description: {entry.description}\n\n"
-                    f"The role MUST declare these inputs:\n{inputs_json}\n\n"
-                    f"The role MUST produce these outputs via set_fact:\n{outputs_json}"
-                )
-
-                sub_result = await role_agent.run(sub_prompt, model=get_model(), instructions=ROLE_SYSTEM_PROMPT)
-                role_data = sub_result.output
-                summary = role_manager.create_role(session, role_data)
-                created_roles[entry.name] = summary.id
-                yield _sse({
-                    "step": "role_created",
-                    "index": plan_idx + 1,
-                    "total": len(plan.roles),
-                    "name": entry.name,
-                    "role_id": summary.id,
-                })
-            except Exception as exc:
-                logger.error("role_subagent_failed", role_name=entry.name, error=str(exc))
-                yield _sse({
-                    "step": "role_failed",
-                    "index": plan_idx + 1,
-                    "total": len(plan.roles),
-                    "name": entry.name,
-                    "error": str(exc),
-                })
-
-        # -- Assemble PlaybookUpsert --
-        playbook_roles: list[PlaybookRoleEntry] = []
-        for plan_entry in plan.roles:
-            if isinstance(plan_entry, PlaybookPlanRoleReuse):
-                if plan_entry.role_id not in catalog_by_id:
-                    logger.warning("plan_reuse_unknown_role", role_id=plan_entry.role_id)
-                    continue
-                playbook_roles.append(PlaybookRoleEntry(role_id=plan_entry.role_id, vars=plan_entry.vars))
-            elif isinstance(plan_entry, PlaybookPlanRoleCreate):
-                created_id = created_roles.get(plan_entry.name)
-                if not created_id:
-                    logger.warning("plan_create_missing_role", role_name=plan_entry.name)
-                    continue
-                playbook_roles.append(PlaybookRoleEntry(role_id=created_id, vars=plan_entry.vars))
-
-        upsert = PlaybookUpsert(
-            name=plan.name,
-            description=plan.description,
-            become=plan.become,
-            roles=playbook_roles,
-        )
-
-        yield _sse({"step": "assembling"})
-
-        detail = self.create_playbook(session, upsert)
-        yield _sse({"step": "done", "playbook_id": detail.id})
-        yield "data: [DONE]\n\n"
+        deps = AgentDeps(session=session)
+        async for event in stream_agent(playbook_agent, prompt, deps, instructions=PLAYBOOK_SYSTEM_PROMPT):
+            yield event
 
     def delete_playbook(
         self, session: SessionData, playbook_id: str, *, cascade_roles: bool = False

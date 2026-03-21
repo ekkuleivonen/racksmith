@@ -1,15 +1,103 @@
 import { useEffect, useRef, useState } from "react";
 import {
+  Check,
   ChevronRight,
   Loader2,
   Sparkles,
   Square,
   Wand2,
+  Wrench,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { YamlFileView } from "@/components/files/yaml-file-view";
-import { useStreamingYaml } from "@/hooks/use-streaming-yaml";
+import {
+  useAgentStream,
+  type AgentStep,
+} from "@/hooks/use-agent-stream";
+
+function ToolLabel({ tool }: { tool: string }) {
+  const labels: Record<string, string> = {
+    list_roles: "Browsing existing roles",
+    get_role_detail: "Inspecting role",
+    create_role: "Creating role",
+    create_playbook: "Assembling playbook",
+  };
+  return <>{labels[tool] ?? tool}</>;
+}
+
+function AgentStepIndicator({
+  step,
+  expanded,
+  onToggle,
+}: {
+  step: AgentStep;
+  expanded: boolean;
+  onToggle: () => void;
+}) {
+  const ref = useRef<HTMLPreElement>(null);
+
+  useEffect(() => {
+    if (ref.current && expanded) {
+      ref.current.scrollTop = ref.current.scrollHeight;
+    }
+  }, [step, expanded]);
+
+  switch (step.type) {
+    case "thinking":
+      return (
+        <div>
+          <button
+            type="button"
+            onClick={onToggle}
+            className="flex items-center gap-1.5 text-xs text-violet-400/80 hover:text-violet-300 transition-colors w-full text-left"
+          >
+            <ChevronRight
+              className={`size-3 shrink-0 transition-transform ${expanded ? "rotate-90" : ""}`}
+            />
+            <Sparkles className="size-3 shrink-0" />
+            <span className="truncate">AI reasoning</span>
+          </button>
+          {expanded && (
+            <pre
+              ref={ref}
+              className="mt-1 ml-[18px] max-h-28 overflow-y-auto rounded bg-zinc-950/80 p-2 text-[11px] leading-relaxed text-zinc-500 whitespace-pre-wrap"
+            >
+              {step.text}
+            </pre>
+          )}
+        </div>
+      );
+    case "tool_call":
+      return (
+        <div className="flex items-center gap-2 text-xs text-zinc-400">
+          <Wrench className="size-3 shrink-0" />
+          <ToolLabel tool={step.tool} />
+          {step.args && "name" in step.args && (
+            <span className="text-zinc-500">
+              — {String(step.args.name)}
+            </span>
+          )}
+          <Loader2 className="size-3 animate-spin ml-auto" />
+        </div>
+      );
+    case "tool_result":
+      return (
+        <div className="flex items-center gap-2 text-xs text-emerald-400">
+          <Check className="size-3 shrink-0" />
+          <ToolLabel tool={step.tool} />
+        </div>
+      );
+    case "done":
+      return null;
+    case "error":
+      return (
+        <div className="flex items-center gap-2 text-xs text-red-400">
+          {step.message}
+        </div>
+      );
+  }
+}
 
 export interface YamlEditorWithAiProps {
   value: string;
@@ -20,13 +108,9 @@ export interface YamlEditorWithAiProps {
   placeholder?: string;
   generateButtonLabel?: string;
   headerTitle?: string;
-  /** Optional actions to render next to the Wand button (e.g. Edit button) */
   headerActions?: React.ReactNode;
-  /** When true, show read-only pre instead of YamlFileView (e.g. before user has clicked Edit) */
   editorHidden?: boolean;
-  /** Called before generate starts - use to e.g. switch to editing mode */
   onBeforeGenerate?: () => void;
-  /** Called when generating state changes - use to e.g. disable submit button */
   onGeneratingChange?: (generating: boolean) => void;
 }
 
@@ -46,19 +130,16 @@ export function YamlEditorWithAi({
 }: YamlEditorWithAiProps) {
   const [showPrompt, setShowPrompt] = useState(false);
   const [prompt, setPrompt] = useState("");
-  const [thinkingExpanded, setThinkingExpanded] = useState(true);
+  const [expandedSteps, setExpandedSteps] = useState<Set<number>>(new Set());
 
-  const { yaml, thinking, generating, error, generate, cancel } =
-    useStreamingYaml({
-      onComplete: (formatted) => onChange(formatted),
+  const { thinking, steps, result, generating, error, generate, cancel } =
+    useAgentStream({
+      onComplete: (done) => {
+        if (done.yaml) {
+          onChange(done.yaml);
+        }
+      },
     });
-
-  const thinkingRef = useRef<HTMLPreElement>(null);
-  useEffect(() => {
-    if (thinkingRef.current && thinkingExpanded) {
-      thinkingRef.current.scrollTop = thinkingRef.current.scrollHeight;
-    }
-  }, [thinking, thinkingExpanded]);
 
   useEffect(() => {
     onGeneratingChange?.(generating);
@@ -66,14 +147,18 @@ export function YamlEditorWithAi({
 
   async function handleGenerate() {
     if (!prompt.trim()) return;
-    setThinkingExpanded(true);
+    setExpandedSteps(new Set());
     const body = buildBody(prompt.trim());
     onBeforeGenerate?.();
     await generate(apiEndpoint, body);
   }
 
-  const isThinkingPhase = generating && thinking && !yaml;
-  const displayValue = generating ? yaml : value;
+  const isThinkingPhase = generating && thinking && !result;
+  const displayValue = result?.yaml ?? value;
+
+  const visibleSteps = steps.filter(
+    (s) => s.type !== "done",
+  );
 
   return (
     <div className="space-y-3">
@@ -133,29 +218,30 @@ export function YamlEditorWithAi({
         </div>
       )}
 
-      {thinking && (
-        <div>
-          <button
-            type="button"
-            onClick={() => setThinkingExpanded((v) => !v)}
-            className="flex items-center gap-1.5 text-xs text-violet-400/80 hover:text-violet-300 transition-colors w-full text-left"
-          >
-            <ChevronRight
-              className={`size-3 shrink-0 transition-transform ${thinkingExpanded ? "rotate-90" : ""}`}
-            />
-            <Sparkles className="size-3 shrink-0" />
-            <span>
-              {isThinkingPhase ? "Thinking..." : "AI reasoning"}
-            </span>
-          </button>
-          {thinkingExpanded && (
-            <pre
-              ref={thinkingRef}
-              className="mt-1 ml-[18px] max-h-28 overflow-y-auto rounded bg-zinc-950/80 p-2 text-[11px] leading-relaxed text-zinc-500 whitespace-pre-wrap"
-            >
-              {thinking}
-            </pre>
-          )}
+      {visibleSteps.length > 0 && (
+        <div className="max-h-48 overflow-y-auto rounded border border-zinc-800 bg-zinc-950/60 p-3 space-y-1">
+          {visibleSteps.map((step, i) => {
+            const isLast = i === visibleSteps.length - 1;
+            const expanded =
+              step.type === "thinking"
+                ? isLast || expandedSteps.has(i)
+                : false;
+            return (
+              <AgentStepIndicator
+                key={i}
+                step={step}
+                expanded={expanded}
+                onToggle={() =>
+                  setExpandedSteps((prev) => {
+                    const next = new Set(prev);
+                    if (next.has(i)) next.delete(i);
+                    else next.add(i);
+                    return next;
+                  })
+                }
+              />
+            );
+          })}
         </div>
       )}
 

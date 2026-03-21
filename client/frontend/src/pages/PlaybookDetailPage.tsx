@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { Loader2 as PushLoader, Package, Play } from "lucide-react";
+import { Loader2 as PushLoader, Package, Play, Star } from "lucide-react";
 import { toast } from "sonner";
 import { toastApiError } from "@/lib/api";
 import { DetailLoading } from "@/components/shared/detail-states";
@@ -32,6 +32,7 @@ import {
   type PlaybookUpsert,
 } from "@/lib/playbooks";
 import { usePushPlaybookToRegistry } from "@/hooks/mutations";
+import { usePinsStore, useRepoKey } from "@/stores/pins";
 
 function HeaderEditableTitle({
   value,
@@ -135,6 +136,10 @@ export function PlaybookDetailPage() {
   const savedDraftRef = useRef<PlaybookUpsert | null>(null);
 
   const pushMutation = usePushPlaybookToRegistry();
+  const repoKey = useRepoKey();
+  const pinPath = `/playbooks/${playbookId}`;
+  const isPinned = usePinsStore((s) => (s.pins[repoKey] ?? []).some((p) => p.path === pinPath));
+  const togglePin = usePinsStore((s) => s.togglePin);
   const { data: playbook, isLoading: loading } = usePlaybook(playbookId || undefined);
   const { data: hosts } = useHosts();
   const { data: groups } = useGroups();
@@ -217,6 +222,14 @@ export function PlaybookDetailPage() {
               />
             </div>
             <div className="flex flex-wrap items-center gap-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => togglePin(repoKey, pinPath, draft.name || playbookId)}
+                className={isPinned ? "text-yellow-400 hover:text-yellow-300" : "text-zinc-500 hover:text-zinc-300"}
+              >
+                <Star className={`size-3.5 ${isPinned ? "fill-current" : ""}`} />
+              </Button>
               {saving ? (
                 <span className="text-xs text-zinc-500">Saving...</span>
               ) : isDirty() ? (

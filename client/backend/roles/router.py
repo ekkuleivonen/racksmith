@@ -48,13 +48,13 @@ roles_router = APIRouter()
 @roles_router.post("/generate")
 async def generate_role(
     body: GenerateRequest,
-    _session: CurrentSession,
+    session: CurrentSession,
 ) -> StreamingResponse:
     """Generate an Ansible role from a natural-language prompt via AI."""
     if not settings.OPENAI_API_KEY:
         raise HTTPException(status_code=503, detail="AI generation is not configured (OPENAI_API_KEY missing)")
     return StreamingResponse(
-        role_manager.generate_with_validation(body.prompt),
+        role_manager.generate_with_validation(session, body.prompt),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
@@ -63,13 +63,13 @@ async def generate_role(
 @roles_router.post("/edit-generate")
 async def edit_generate_role(
     body: EditGenerateRequest,
-    _session: CurrentSession,
+    session: CurrentSession,
 ) -> StreamingResponse:
     """Edit an existing role YAML via AI from a natural-language prompt."""
     if not settings.OPENAI_API_KEY:
         raise HTTPException(status_code=503, detail="AI generation is not configured (OPENAI_API_KEY missing)")
     return StreamingResponse(
-        role_manager.edit_with_validation(body.existing_yaml, body.prompt),
+        role_manager.edit_with_validation(session, body.existing_yaml, body.prompt),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
