@@ -89,7 +89,7 @@ class TestHostManagerCreateHost:
 
     @pytest.mark.asyncio
     async def test_create_managed_host_without_probe(self, with_repo_mock):
-        with patch("hosts.managers.probe_ssh_target", new_callable=AsyncMock) as probe:
+        with patch("hosts.managers.daemon_post", new_callable=AsyncMock) as probe:
             probe.side_effect = Exception("skip probe")
             data = HostCreate(
                 name="Web1",
@@ -157,7 +157,7 @@ all:
 class TestHostVars:
     @pytest.mark.asyncio
     async def test_create_host_with_vars(self, with_repo_mock):
-        with patch("hosts.managers.probe_ssh_target", new_callable=AsyncMock) as probe:
+        with patch("hosts.managers.daemon_post", new_callable=AsyncMock) as probe:
             probe.side_effect = Exception("skip probe")
             data = HostCreate(
                 name="Web1",

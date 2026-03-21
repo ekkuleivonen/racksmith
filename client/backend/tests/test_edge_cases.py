@@ -212,9 +212,7 @@ def _playbook_download_response(
 
 
 class TestRepushFixed:
-    """push_role/push_playbook use a single upsert endpoint (PUT /roles, PUT /playbooks).
-    Registry handles create-or-update. Client stores UUID as registry_id.
-    """
+    """push_role/push_playbook POST to /roles and /playbooks; client stores UUID as registry_id."""
 
     @respx.mock
     @pytest.mark.asyncio
@@ -223,7 +221,7 @@ class TestRepushFixed:
 
         role_resp = _role_response(id=ROLE_UUID_A)
 
-        upsert_route = respx.put(f"{REGISTRY_URL}/roles").mock(
+        upsert_route = respx.post(f"{REGISTRY_URL}/roles").mock(
             return_value=httpx.Response(200, json=role_resp),
         )
 
@@ -253,7 +251,7 @@ class TestRepushFixed:
 
         pb_resp = _playbook_response()
 
-        upsert_route = respx.put(f"{REGISTRY_URL}/playbooks").mock(
+        upsert_route = respx.post(f"{REGISTRY_URL}/playbooks").mock(
             return_value=httpx.Response(200, json=pb_resp),
         )
 
@@ -406,7 +404,7 @@ class TestPushPlaybookUsesRegistryId:
             captured_body.update(json.loads(request.content))
             return httpx.Response(201, json=_playbook_response())
 
-        respx.put(f"{REGISTRY_URL}/playbooks").mock(side_effect=_capture_upsert)
+        respx.post(f"{REGISTRY_URL}/playbooks").mock(side_effect=_capture_upsert)
 
         with _settings_and_repo_patches(repo_path)():
             await registry_manager.push_playbook(mock_session, "test_pb")
@@ -623,10 +621,10 @@ class TestPushUpsertErrors:
     @respx.mock
     @pytest.mark.asyncio
     async def test_push_role_raises_on_500(self, mock_session, layout, repo_path):
-        """Registry returning 500 on upsert should raise."""
+        """Registry returning 500 on push should raise."""
         _seed_role(layout, "my_role")
 
-        respx.put(f"{REGISTRY_URL}/roles").mock(
+        respx.post(f"{REGISTRY_URL}/roles").mock(
             return_value=httpx.Response(500, json={"detail": "Internal error"}),
         )
 
@@ -638,7 +636,7 @@ class TestPushUpsertErrors:
     @respx.mock
     @pytest.mark.asyncio
     async def test_push_playbook_raises_on_500(self, mock_session, layout, repo_path):
-        """Registry returning 500 on upsert should raise."""
+        """Registry returning 500 on push should raise."""
         _seed_role(layout, "my_role")
         _mark_role_as_published(layout, "my_role", registry_id=ROLE_UUID_A)
         _seed_playbook(
@@ -647,7 +645,7 @@ class TestPushUpsertErrors:
             roles=[PlaybookRoleEntry(role="my_role", vars={})],
         )
 
-        respx.put(f"{REGISTRY_URL}/playbooks").mock(
+        respx.post(f"{REGISTRY_URL}/playbooks").mock(
             return_value=httpx.Response(500, json={"detail": "Internal error"}),
         )
 
