@@ -1,20 +1,8 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { Loader2, MessageSquarePlus, Plus, Send, Sparkles, X } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Loader2, Minus, Plus, Send, Sparkles, X } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
 import { useSetupStore } from "@/stores/setup";
 import { useAiChatUiStore } from "@/stores/ai-chat-ui";
 import {
@@ -27,11 +15,38 @@ import {
   getAiChatMessages,
   streamAiChatTurn,
   type ChatStreamContext,
+  type ChatUiMessage,
 } from "@/lib/ai-chat";
-import { useHosts, usePlaybooks, useRoles } from "@/hooks/queries";
+import { useHosts, usePlaybooks, useRoles, useRackEntries } from "@/hooks/queries";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { toastApiError } from "@/lib/api";
+import { MarkdownContent } from "@/components/shared/markdown-content";
+import { AiMentionComposer, type MentionCandidate } from "./ai-mention-composer";
+import {
+  AiContextChips,
+  AiThinkingBlock,
+  AiToolCallBlock,
+  AiToolResultBlock,
+  type LiveStreamBlock,
+} from "./ai-chat-blocks";
+
+/** Compact prose overrides for chat bubbles (base styles from ``MarkdownContent``). */
+const assistantMarkdownClassName = cn(
+  "text-zinc-300",
+  "[&_p]:text-[11px] [&_p]:leading-relaxed [&_p]:my-1",
+  "[&_ul]:my-1 [&_ol]:my-1 [&_ul]:pl-4 [&_ol]:pl-4",
+  "[&_li]:text-[11px] [&_li]:leading-relaxed [&_li]:my-0.5",
+  "[&_h1]:text-sm [&_h1]:mt-2 [&_h1]:mb-1",
+  "[&_h2]:text-xs [&_h2]:mt-2 [&_h2]:mb-1",
+  "[&_h3]:text-xs [&_h3]:mt-1.5 [&_h3]:mb-0.5",
+  "[&_strong]:text-zinc-100",
+  "[&_:not(pre)>code]:text-[10px]",
+  "[&_pre]:my-1.5 [&_pre]:p-2",
+  "[&_pre_code]:text-[10px]",
+  "[&_blockquote]:text-zinc-400",
+  "[&_table]:text-[10px]",
+);
 
 function useRepoScope() {
   const status = useSetupStore((s) => s.status);
@@ -40,9 +55,55 @@ function useRepoScope() {
   return { userId, repoFull, repoReady: Boolean(status?.repo_ready && userId && repoFull) };
 }
 
-export function RacksmithAiPanel() {
+function MessageRow({ m }: { m: ChatUiMessage }) {
+  switch (m.kind) {
+    case "user":
+      return (
+        <div className="rounded-md px-2.5 py-1.5 text-[11px] whitespace-pre-wrap break-words bg-zinc-800 text-zinc-100 ml-8">
+          {m.text}
+        </div>
+      );
+    case "assistant":
+      return (
+        <div className="rounded-md px-2.5 py-1.5 mr-8 border border-zinc-800 bg-zinc-900 min-w-0">
+          <MarkdownContent className={assistantMarkdownClassName}>
+            {m.text}
+          </MarkdownContent>
+        </div>
+      );
+    case "thinking":
+      return m.text ? <AiThinkingBlock text={m.text} /> : null;
+    case "tool_call":
+      return m.tool ? (
+        <AiToolCallBlock tool={m.tool} args={m.args ?? undefined} />
+      ) : null;
+    case "tool_result":
+      return m.tool ? (
+        <AiToolResultBlock
+          tool={m.tool}
+          preview={m.result_preview ?? m.text ?? ""}
+          outcome={m.outcome}
+        />
+      ) : null;
+    case "system":
+      return (
+        <div className="mx-4 rounded-md border border-zinc-700/40 bg-zinc-900/50 px-2 py-1 text-[10px] text-zinc-500 font-mono">
+          {m.text}
+        </div>
+      );
+    default:
+      return (
+        <div className="mx-4 rounded-md border border-zinc-800 px-2 py-1 text-[10px] text-zinc-500">
+          {m.text}
+        </div>
+      );
+  }
+}
+
+export function AiBottomPanel() {
   const panelOpen = useAiChatUiStore((s) => s.panelOpen);
   const setPanelOpen = useAiChatUiStore((s) => s.setPanelOpen);
+  const disengageDock = useAiChatUiStore((s) => s.disengageDock);
   const { userId, repoFull, repoReady } = useRepoScope();
   const queryClient = useQueryClient();
 
@@ -50,12 +111,14 @@ export function RacksmithAiPanel() {
   const [activeChatId, setActiveChatId] = useState<string | null>(null);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
-  const [liveSteps, setLiveSteps] = useState<string[]>([]);
+  const [liveBlocks, setLiveBlocks] = useState<LiveStreamBlock[]>([]);
   const [context, setContext] = useState<ChatStreamContext>({});
+  const scrollEndRef = useRef<HTMLDivElement | null>(null);
 
   const { data: hosts = [] } = useHosts();
   const { data: playbooks = [] } = usePlaybooks();
   const { data: roles = [] } = useRoles();
+  const { data: rackEntries = [] } = useRackEntries();
 
   useEffect(() => {
     if (!panelOpen || !repoReady) return;
@@ -133,14 +196,8 @@ export function RacksmithAiPanel() {
     if (activeChatId === chatId) {
       setActiveChatId(next[0] ?? null);
     }
-    if (next.length === 0 && repoReady) {
-      try {
-        const { chat_id } = await createAiChat();
-        persistOpenIds([chat_id]);
-        setActiveChatId(chat_id);
-      } catch {
-        /* ignore */
-      }
+    if (next.length === 0) {
+      disengageDock();
     }
   };
 
@@ -149,7 +206,7 @@ export function RacksmithAiPanel() {
     if (!text || !activeChatId || sending) return;
     setInput("");
     setSending(true);
-    setLiveSteps([]);
+    setLiveBlocks([]);
     const controller = new AbortController();
     try {
       const res = await streamAiChatTurn(
@@ -171,9 +228,37 @@ export function RacksmithAiPanel() {
           const payload = line.slice(6);
           if (payload === "[DONE]") continue;
           try {
-            const ev = JSON.parse(payload) as { type?: string; text?: string; message?: string };
+            const ev = JSON.parse(payload) as {
+              type?: string;
+              text?: string;
+              message?: string;
+              tool?: string;
+              args?: Record<string, unknown>;
+              result?: string;
+            };
             if (ev.type === "thinking" && ev.text) {
-              setLiveSteps((s) => [...s, ev.text!]);
+              setLiveBlocks((s) => {
+                const last = s[s.length - 1];
+                if (last?.kind === "thinking") {
+                  return [
+                    ...s.slice(0, -1),
+                    { kind: "thinking", text: last.text + ev.text! },
+                  ];
+                }
+                return [...s, { kind: "thinking", text: ev.text! }];
+              });
+            }
+            if (ev.type === "tool_call" && ev.tool) {
+              setLiveBlocks((s) => [
+                ...s,
+                { kind: "call", tool: ev.tool!, args: ev.args },
+              ]);
+            }
+            if (ev.type === "tool_result" && ev.tool) {
+              setLiveBlocks((s) => [
+                ...s,
+                { kind: "result", tool: ev.tool!, result: ev.result ?? "" },
+              ]);
             }
             if (ev.type === "error" && ev.message) {
               toast.error(ev.message);
@@ -184,7 +269,7 @@ export function RacksmithAiPanel() {
         }
       }
       await queryClient.invalidateQueries({ queryKey: ["ai-chat-messages", activeChatId] });
-      setLiveSteps([]);
+      setLiveBlocks([]);
     } catch (e) {
       if (e instanceof DOMException && e.name === "AbortError") return;
       toastApiError(e, "Send failed");
@@ -193,214 +278,229 @@ export function RacksmithAiPanel() {
     }
   };
 
+  useEffect(() => {
+    scrollEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+  }, [messagesQuery.data?.items?.length, liveBlocks.length]);
+
   const items = messagesQuery.data?.items ?? [];
 
-  const contextSummary = useMemo(() => {
-    const parts: string[] = [];
-    if (context.hosts?.length) parts.push(`${context.hosts.length} host(s)`);
-    if (context.playbooks?.length) parts.push(`${context.playbooks.length} playbook(s)`);
-    if (context.roles?.length) parts.push(`${context.roles.length} role(s)`);
-    return parts.length ? parts.join(", ") : "None";
-  }, [context]);
+  const mentionCandidates = useMemo(
+    () => [
+      ...hosts.map((h) => ({ type: "host" as const, id: h.id, label: h.name ?? h.id })),
+      ...playbooks.map((p) => ({ type: "playbook" as const, id: p.id, label: p.name })),
+      ...roles.map((r) => ({ type: "role" as const, id: r.id, label: r.name })),
+      ...rackEntries.map((re) => ({ type: "rack" as const, id: re.rack.id, label: re.rack.name })),
+    ],
+    [hosts, playbooks, roles, rackEntries],
+  );
+
+  const labelByTypeId = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const c of mentionCandidates) {
+      m.set(`${c.type}:${c.id}`, c.label);
+    }
+    return m;
+  }, [mentionCandidates]);
+
+  const resolveLabel = useCallback(
+    (type: MentionCandidate["type"], id: string) =>
+      labelByTypeId.get(`${type}:${id}`) ?? id.slice(0, 12),
+    [labelByTypeId],
+  );
+
+  const handleRemoveContext = useCallback((type: MentionCandidate["type"], id: string) => {
+    setContext((c) => {
+      const key =
+        type === "host"
+          ? "hosts"
+          : type === "playbook"
+            ? "playbooks"
+            : type === "role"
+              ? "roles"
+              : "racks";
+      const cur = new Set(c[key] ?? []);
+      cur.delete(id);
+      const next = [...cur];
+      const copy = { ...c };
+      if (next.length === 0) {
+        delete copy[key];
+      } else {
+        copy[key] = next;
+      }
+      return copy;
+    });
+  }, []);
+
+  const handleMentionSelect = useCallback(
+    (item: { type: "host" | "playbook" | "role" | "rack"; id: string }) => {
+      setContext((c) => {
+        const key =
+          item.type === "host"
+            ? "hosts"
+            : item.type === "playbook"
+              ? "playbooks"
+              : item.type === "role"
+                ? "roles"
+                : "racks";
+        const cur = new Set(c[key] ?? []);
+        cur.add(item.id);
+        return { ...c, [key]: [...cur] };
+      });
+    },
+    [],
+  );
+
+  if (!repoReady) {
+    return (
+      <div className="h-full flex items-center justify-center bg-[#09090b]">
+        <p className="text-xs text-zinc-500">Select a repository to use AI chat.</p>
+      </div>
+    );
+  }
 
   return (
-    <Dialog open={panelOpen} onOpenChange={setPanelOpen}>
-      <DialogContent
-        showCloseButton
-        className={cn(
-          "!top-0 !left-auto !right-0 !bottom-0 !translate-x-0 !translate-y-0",
-          "h-[100dvh] max-h-[100dvh] w-full max-w-md rounded-none sm:max-w-md",
-          "flex flex-col gap-0 p-0 overflow-hidden border-l border-zinc-800 bg-zinc-950",
-        )}
-      >
-        <DialogHeader className="px-3 py-2 border-b border-zinc-800 shrink-0">
-          <DialogTitle className="flex items-center gap-2 text-sm font-medium text-zinc-100">
-            <Sparkles className="size-4 text-violet-400" />
-            Racksmith AI
-          </DialogTitle>
-        </DialogHeader>
-
-        {!repoReady ? (
-          <p className="p-4 text-xs text-zinc-500">Select a repository to use AI chat.</p>
-        ) : (
-          <>
-            <div className="flex items-center gap-1 px-2 py-1.5 border-b border-zinc-800 overflow-x-auto shrink-0">
-              {openChatIds.map((id) => (
-                <div
-                  key={id}
-                  className={cn(
-                    "flex items-center gap-0.5 shrink-0 rounded border px-1.5 py-0.5 text-[10px]",
-                    activeChatId === id
-                      ? "border-violet-500/50 bg-violet-500/10 text-zinc-100"
-                      : "border-zinc-700 text-zinc-400",
-                  )}
-                >
-                  <button
-                    type="button"
-                    className="max-w-[72px] truncate"
-                    onClick={() => setActiveChatId(id)}
-                    title={id}
-                  >
-                    {id.slice(0, 8)}…
-                  </button>
-                  <button
-                    type="button"
-                    className="text-zinc-500 hover:text-zinc-200 p-0.5"
-                    aria-label="Close chat"
-                    onClick={() => void handleCloseChat(id)}
-                  >
-                    <X className="size-3" />
-                  </button>
-                </div>
-              ))}
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-sm"
-                className="shrink-0 size-7"
-                onClick={() => void handleNewChat()}
-                aria-label="New chat"
+    <div className="h-full flex flex-col bg-[#09090b] shadow-[0_-6px_16px_rgba(0,0,0,0.5)]">
+      <div className="flex items-center border-b border-zinc-800/60 shrink-0">
+        <Sparkles className="size-3 text-violet-400 mx-2 shrink-0" />
+        <div className="flex-1 flex items-center min-w-0 overflow-x-auto scrollbar-hide">
+          {openChatIds.map((id) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => setActiveChatId(id)}
+              className={cn(
+                "group flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-medium tracking-wide border-r border-zinc-800/60 shrink-0 transition-colors",
+                activeChatId === id
+                  ? "bg-zinc-900 text-zinc-200"
+                  : "text-zinc-500 hover:text-zinc-300 hover:bg-zinc-900/50",
+              )}
+            >
+              <span className="truncate max-w-[100px]">{id.slice(0, 8)}…</span>
+              <span
+                role="button"
+                tabIndex={0}
+                className="size-3.5 flex items-center justify-center rounded-sm opacity-0 group-hover:opacity-100 hover:bg-zinc-700 transition-opacity"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  void handleCloseChat(id);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.stopPropagation();
+                    void handleCloseChat(id);
+                  }
+                }}
               >
-                <Plus className="size-3.5" />
-              </Button>
-            </div>
+                <X className="size-2.5" />
+              </span>
+            </button>
+          ))}
+          <button
+            type="button"
+            className="flex items-center justify-center px-2 py-1.5 text-zinc-500 hover:text-zinc-300 transition-colors shrink-0"
+            aria-label="New chat"
+            onClick={() => void handleNewChat()}
+          >
+            <Plus className="size-3" />
+          </button>
+        </div>
+        <Button
+          size="icon"
+          variant="ghost"
+          className="h-6 w-6 text-zinc-500 hover:text-zinc-300 shrink-0"
+          aria-label="Minimize AI panel"
+          onClick={() => setPanelOpen(false)}
+        >
+          <Minus className="size-3" />
+        </Button>
+        <Button
+          size="icon"
+          variant="ghost"
+          className="h-6 w-6 text-zinc-500 hover:text-zinc-300 mr-1 shrink-0"
+          aria-label="Close AI dock"
+          onClick={disengageDock}
+        >
+          <X className="size-3" />
+        </Button>
+      </div>
 
-            <ScrollArea className="flex-1 min-h-0 px-3">
-              <div className="space-y-3 py-3 pr-2">
-                {messagesQuery.isLoading && (
-                  <div className="flex justify-center py-8 text-zinc-500">
-                    <Loader2 className="size-5 animate-spin" />
-                  </div>
-                )}
-                {items.map((m, i) => (
+      <div className="flex-1 min-h-0 flex flex-col">
+        <ScrollArea className="flex-1 min-h-0 px-3">
+          <div className="space-y-2 py-2 pr-2">
+            {messagesQuery.isLoading && (
+              <div className="flex justify-center py-6 text-zinc-500">
+                <Loader2 className="size-4 animate-spin" />
+              </div>
+            )}
+            {items.map((m, i) => (
+              <MessageRow key={`${i}-${m.kind}-${m.tool ?? ""}`} m={m} />
+            ))}
+            {liveBlocks.map((b, i) => {
+              if (b.kind === "thinking") {
+                return (
                   <div
-                    key={`${i}-${m.kind}`}
-                    className={cn(
-                      "rounded-md px-2.5 py-2 text-xs whitespace-pre-wrap break-words",
-                      m.kind === "user"
-                        ? "bg-zinc-800 text-zinc-100 ml-4"
-                        : "bg-zinc-900 text-zinc-300 mr-4 border border-zinc-800",
-                    )}
+                    key={`lb-${i}`}
+                    className="mr-8 rounded-md border border-violet-500/20 bg-violet-500/5 px-2.5 py-1.5 text-[10px] text-zinc-500 whitespace-pre-wrap"
                   >
-                    {m.text}
+                    {b.text}
                   </div>
-                ))}
-                {liveSteps.length > 0 && (
-                  <div className="mr-4 rounded-md border border-violet-500/20 bg-violet-500/5 px-2.5 py-2 text-[11px] text-zinc-500 whitespace-pre-wrap">
-                    {liveSteps.join("")}
-                  </div>
-                )}
-              </div>
-            </ScrollArea>
-
-            <div className="border-t border-zinc-800 p-2 space-y-2 shrink-0">
-              <div className="flex items-center gap-2">
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button type="button" variant="outline" size="sm" className="h-7 text-[10px]">
-                      <MessageSquarePlus className="size-3 mr-1" />
-                      Context
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-72 p-2 space-y-2" align="start">
-                    <p className="text-[10px] text-zinc-500">Attach ids sent with each message.</p>
-                    <div className="max-h-32 overflow-y-auto space-y-1">
-                      <p className="text-[10px] font-medium text-zinc-400">Hosts</p>
-                      {hosts.slice(0, 40).map((h) => (
-                        <label key={h.id} className="flex items-center gap-2 text-[11px] cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={Boolean(context.hosts?.includes(h.id))}
-                            onChange={(e) => {
-                              setContext((c) => {
-                                const cur = new Set(c.hosts ?? []);
-                                if (e.target.checked) cur.add(h.id);
-                                else cur.delete(h.id);
-                                return { ...c, hosts: [...cur] };
-                              });
-                            }}
-                          />
-                          <span className="truncate">{h.name ?? h.id}</span>
-                        </label>
-                      ))}
-                    </div>
-                    <div className="max-h-32 overflow-y-auto space-y-1">
-                      <p className="text-[10px] font-medium text-zinc-400">Playbooks</p>
-                      {playbooks.slice(0, 40).map((p) => (
-                        <label key={p.id} className="flex items-center gap-2 text-[11px] cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={Boolean(context.playbooks?.includes(p.id))}
-                            onChange={(e) => {
-                              setContext((c) => {
-                                const cur = new Set(c.playbooks ?? []);
-                                if (e.target.checked) cur.add(p.id);
-                                else cur.delete(p.id);
-                                return { ...c, playbooks: [...cur] };
-                              });
-                            }}
-                          />
-                          <span className="truncate">{p.name}</span>
-                        </label>
-                      ))}
-                    </div>
-                    <div className="max-h-32 overflow-y-auto space-y-1">
-                      <p className="text-[10px] font-medium text-zinc-400">Roles</p>
-                      {roles.slice(0, 40).map((r) => (
-                        <label key={r.id} className="flex items-center gap-2 text-[11px] cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={Boolean(context.roles?.includes(r.id))}
-                            onChange={(e) => {
-                              setContext((c) => {
-                                const cur = new Set(c.roles ?? []);
-                                if (e.target.checked) cur.add(r.id);
-                                else cur.delete(r.id);
-                                return { ...c, roles: [...cur] };
-                              });
-                            }}
-                          />
-                          <span className="truncate">{r.name}</span>
-                        </label>
-                      ))}
-                    </div>
-                  </PopoverContent>
-                </Popover>
-                <span className="text-[10px] text-zinc-500 truncate">{contextSummary}</span>
-              </div>
-              <div className="flex gap-2 items-end">
-                <Textarea
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  placeholder="Ask about playbooks, roles, hosts…"
-                  className="min-h-[72px] max-h-[160px] text-xs resize-y bg-zinc-900 border-zinc-800"
-                  disabled={sending || !activeChatId}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && !e.shiftKey) {
-                      e.preventDefault();
-                      void handleSend();
-                    }
-                  }}
+                );
+              }
+              if (b.kind === "call") {
+                return (
+                  <AiToolCallBlock
+                    key={`lb-${i}`}
+                    tool={b.tool}
+                    args={b.args}
+                    compact
+                  />
+                );
+              }
+              return (
+                <AiToolResultBlock
+                  key={`lb-${i}`}
+                  tool={b.tool}
+                  preview={b.result}
+                  outcome="success"
                 />
-                <Button
-                  type="button"
-                  size="icon"
-                  className="shrink-0"
-                  disabled={sending || !input.trim() || !activeChatId}
-                  onClick={() => void handleSend()}
-                  aria-label="Send"
-                >
-                  {sending ? (
-                    <Loader2 className="size-4 animate-spin" />
-                  ) : (
-                    <Send className="size-4" />
-                  )}
-                </Button>
-              </div>
-            </div>
-          </>
-        )}
-      </DialogContent>
-    </Dialog>
+              );
+            })}
+            <div ref={scrollEndRef} />
+          </div>
+        </ScrollArea>
+
+        <div className="border-t border-zinc-800/60 px-2 pt-1.5 pb-1 flex flex-col gap-1.5 shrink-0">
+          <AiContextChips
+            context={context}
+            resolveLabel={resolveLabel}
+            onRemove={handleRemoveContext}
+          />
+          <div className="flex gap-1.5 items-end">
+            <AiMentionComposer
+              value={input}
+              onChange={setInput}
+              onSend={handleSend}
+              disabled={sending || !activeChatId}
+              candidates={mentionCandidates}
+              onMentionSelect={handleMentionSelect}
+            />
+            <Button
+              type="button"
+              size="icon"
+              className="shrink-0 size-7"
+              disabled={sending || !input.trim() || !activeChatId}
+              onClick={() => void handleSend()}
+              aria-label="Send"
+            >
+              {sending ? (
+                <Loader2 className="size-3.5 animate-spin" />
+              ) : (
+                <Send className="size-3.5" />
+              )}
+            </Button>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }

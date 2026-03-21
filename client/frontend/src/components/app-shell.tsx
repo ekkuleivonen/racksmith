@@ -1,9 +1,11 @@
 import { type ReactNode, useCallback, useEffect, useMemo } from "react";
 import { usePanelRef } from "react-resizable-panels";
-import { ChevronUp, Copy, RefreshCw, Terminal, X } from "lucide-react";
+import { ChevronUp, Copy, RefreshCw, Sparkles, Terminal, X } from "lucide-react";
 import { toast } from "sonner";
 import { SshBottomPanel } from "@/components/canvas/ssh-bottom-panel";
+import { AiBottomPanel } from "@/components/ai/racksmith-ai-panel";
 import { useSshStore } from "@/stores/ssh";
+import { useAiChatUiStore } from "@/stores/ai-chat-ui";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -20,7 +22,6 @@ import {
   ResizablePanelGroup,
 } from "@/components/ui/resizable";
 import { Sidebar } from "@/components/sidebar/sidebar";
-import { RacksmithAiPanel } from "@/components/ai/racksmith-ai-panel";
 import { CommandPalette } from "@/components/command-palette";
 import { useSetupStore } from "@/stores/setup";
 import { useHosts } from "@/hooks/queries";
@@ -134,53 +135,99 @@ function useAppShellState() {
   return { loading, publicKeyDialog };
 }
 
-function SshMinimizedBar() {
-  const tabs = useSshStore((s) => s.tabs);
-  const activeTabId = useSshStore((s) => s.activeTabId);
+function BottomMinimizedBar() {
+  const sshTabs = useSshStore((s) => s.tabs);
+  const sshActiveTabId = useSshStore((s) => s.activeTabId);
   const setActiveTab = useSshStore((s) => s.setActiveTab);
   const closeAllSessions = useSshStore((s) => s.closeAllSessions);
+  const sshPanelOpen = useSshStore((s) => s.panelOpen);
 
-  const expand = useCallback((tabId?: string) => {
+  const aiPanelOpen = useAiChatUiStore((s) => s.panelOpen);
+  const aiDockEngaged = useAiChatUiStore((s) => s.dockEngaged);
+  const setAiPanelOpen = useAiChatUiStore((s) => s.setPanelOpen);
+  const disengageDock = useAiChatUiStore((s) => s.disengageDock);
+
+  const hasSshMinimized = sshTabs.length > 0 && !sshPanelOpen;
+  const hasAiMinimized = aiDockEngaged && !aiPanelOpen;
+
+  if (!hasSshMinimized && !hasAiMinimized) return null;
+
+  const expandSsh = (tabId?: string) => {
     if (tabId) setActiveTab(tabId);
     useSshStore.setState({ panelOpen: true });
-  }, [setActiveTab]);
+  };
 
   return (
     <div className="flex items-center h-8 bg-[#09090b] border-t border-zinc-800/60 px-2 gap-1 shrink-0">
-      <Terminal className="size-3 text-zinc-500 mr-1" />
-      <div className="flex-1 flex items-center gap-1 min-w-0 overflow-x-auto scrollbar-hide">
-        {tabs.map((tab) => (
+      {hasSshMinimized && (
+        <>
+          <Terminal className="size-3 text-zinc-500 mr-1 shrink-0" />
+          <div className="flex items-center gap-1 min-w-0 overflow-x-auto scrollbar-hide">
+            {sshTabs.map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => expandSsh(tab.id)}
+                className={cn(
+                  "px-2 py-0.5 text-[10px] rounded-sm transition-colors truncate max-w-[120px] shrink-0",
+                  tab.id === sshActiveTabId
+                    ? "bg-zinc-800 text-zinc-200"
+                    : "text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/50",
+                )}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
           <button
-            key={tab.id}
             type="button"
-            onClick={() => expand(tab.id)}
-            className={cn(
-              "px-2 py-0.5 text-[10px] rounded-sm transition-colors truncate max-w-[120px] shrink-0",
-              tab.id === activeTabId
-                ? "bg-zinc-800 text-zinc-200"
-                : "text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/50",
-            )}
+            className="size-5 flex items-center justify-center text-zinc-500 hover:text-zinc-300 transition-colors shrink-0"
+            onClick={() => expandSsh()}
+            aria-label="Expand SSH panel"
           >
-            {tab.label}
+            <ChevronUp className="size-3" />
           </button>
-        ))}
-      </div>
-      <button
-        type="button"
-        className="size-5 flex items-center justify-center text-zinc-500 hover:text-zinc-300 transition-colors shrink-0"
-        onClick={() => expand()}
-        aria-label="Expand SSH panel"
-      >
-        <ChevronUp className="size-3" />
-      </button>
-      <button
-        type="button"
-        className="size-5 flex items-center justify-center text-zinc-500 hover:text-zinc-300 transition-colors shrink-0"
-        onClick={closeAllSessions}
-        aria-label="Close all SSH sessions"
-      >
-        <X className="size-3" />
-      </button>
+          <button
+            type="button"
+            className="size-5 flex items-center justify-center text-zinc-500 hover:text-zinc-300 transition-colors shrink-0"
+            onClick={closeAllSessions}
+            aria-label="Close all SSH sessions"
+          >
+            <X className="size-3" />
+          </button>
+        </>
+      )}
+      {hasSshMinimized && hasAiMinimized && (
+        <div className="w-px h-4 bg-zinc-800 mx-1 shrink-0" />
+      )}
+      {hasAiMinimized && (
+        <>
+          <Sparkles className="size-3 text-violet-400 mr-1 shrink-0" />
+          <button
+            type="button"
+            onClick={() => setAiPanelOpen(true)}
+            className="px-2 py-0.5 text-[10px] text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/50 rounded-sm transition-colors shrink-0"
+          >
+            AI Chat
+          </button>
+          <button
+            type="button"
+            className="size-5 flex items-center justify-center text-zinc-500 hover:text-zinc-300 transition-colors shrink-0"
+            onClick={() => setAiPanelOpen(true)}
+            aria-label="Expand AI panel"
+          >
+            <ChevronUp className="size-3" />
+          </button>
+          <button
+            type="button"
+            className="size-5 flex items-center justify-center text-zinc-500 hover:text-zinc-300 transition-colors shrink-0"
+            onClick={disengageDock}
+            aria-label="Close AI dock"
+          >
+            <X className="size-3" />
+          </button>
+        </>
+      )}
     </div>
   );
 }
@@ -194,20 +241,27 @@ export function AppShell({ children }: AppShellProps) {
   const { loading, publicKeyDialog } = useAppShellState();
   const sshPanelOpen = useSshStore((s) => s.panelOpen);
   const sshTabs = useSshStore((s) => s.tabs);
-  const hasTabs = sshTabs.length > 0;
+  const hasSsh = sshTabs.length > 0;
 
-  const sshPanelRef = usePanelRef();
+  const aiPanelOpen = useAiChatUiStore((s) => s.panelOpen);
+  const aiDockEngaged = useAiChatUiStore((s) => s.dockEngaged);
+  const hasAi = aiDockEngaged;
+
+  const hasBottomDock = hasSsh || hasAi;
+  const bottomExpanded = (hasSsh && sshPanelOpen) || (hasAi && aiPanelOpen);
+
+  const bottomPanelRef = usePanelRef();
 
   useEffect(() => {
-    if (!hasTabs) return;
-    const panel = sshPanelRef.current;
+    if (!hasBottomDock) return;
+    const panel = bottomPanelRef.current;
     if (!panel) return;
-    if (sshPanelOpen) {
+    if (bottomExpanded) {
       panel.expand();
     } else {
       panel.collapse();
     }
-  }, [sshPanelOpen, hasTabs, sshPanelRef]);
+  }, [bottomExpanded, hasBottomDock, bottomPanelRef]);
 
   if (loading) {
     return (
@@ -221,7 +275,27 @@ export function AppShell({ children }: AppShellProps) {
     <main className="h-full flex-1 min-w-0 flex flex-col">{children}</main>
   );
 
-  const mainArea = hasTabs ? (
+  const sshActive = hasSsh && sshPanelOpen;
+  const aiActive = hasAi && aiPanelOpen;
+
+  const bottomPaneContent =
+    sshActive && aiActive ? (
+      <ResizablePanelGroup orientation="horizontal">
+        <ResizablePanel defaultSize={50} minSize={20}>
+          <SshBottomPanel />
+        </ResizablePanel>
+        <ResizableHandle className="bg-zinc-700/50 hover:bg-zinc-600/50 transition-colors" />
+        <ResizablePanel defaultSize={50} minSize={20}>
+          <AiBottomPanel />
+        </ResizablePanel>
+      </ResizablePanelGroup>
+    ) : sshActive ? (
+      <SshBottomPanel />
+    ) : aiActive ? (
+      <AiBottomPanel />
+    ) : null;
+
+  const mainArea = hasBottomDock ? (
     <div className="h-full flex flex-col">
       <ResizablePanelGroup orientation="vertical" className="flex-1 min-h-0">
         <ResizablePanel defaultSize={60} minSize={15}>
@@ -229,22 +303,26 @@ export function AppShell({ children }: AppShellProps) {
         </ResizablePanel>
         <ResizableHandle className="bg-zinc-700/50 hover:bg-zinc-600/50 transition-colors" />
         <ResizablePanel
-          panelRef={sshPanelRef}
+          panelRef={bottomPanelRef}
           defaultSize={40}
           minSize={10}
           collapsible
           collapsedSize={0}
           onResize={(size) => {
             const collapsed = size.asPercentage === 0;
-            const storeOpen = useSshStore.getState().panelOpen;
-            if (collapsed && storeOpen) useSshStore.setState({ panelOpen: false });
-            else if (!collapsed && !storeOpen) useSshStore.setState({ panelOpen: true });
+            if (collapsed) {
+              if (useSshStore.getState().panelOpen) useSshStore.setState({ panelOpen: false });
+              if (useAiChatUiStore.getState().panelOpen) useAiChatUiStore.setState({ panelOpen: false });
+            } else {
+              if (hasSsh && !useSshStore.getState().panelOpen) useSshStore.setState({ panelOpen: true });
+              if (hasAi && !useAiChatUiStore.getState().panelOpen) useAiChatUiStore.setState({ panelOpen: true });
+            }
           }}
         >
-          <SshBottomPanel />
+          {bottomPaneContent}
         </ResizablePanel>
       </ResizablePanelGroup>
-      {!sshPanelOpen && <SshMinimizedBar />}
+      <BottomMinimizedBar />
     </div>
   ) : (
     mainContent
@@ -268,7 +346,6 @@ export function AppShell({ children }: AppShellProps) {
       </ResizablePanelGroup>
       {publicKeyDialog}
       <CommandPalette />
-      <RacksmithAiPanel />
     </div>
   );
 }

@@ -85,7 +85,7 @@ export function SidebarFooter() {
   const sshPanelOpen = useSshStore((s) => s.panelOpen);
   const openSession = useSshStore((s) => s.openSession);
   const togglePanel = useSshStore((s) => s.togglePanel);
-  const setAiPanelOpen = useAiChatUiStore((s) => s.setPanelOpen);
+  const engageAiDock = useAiChatUiStore((s) => s.engageDock);
   const aiPanelOpen = useAiChatUiStore((s) => s.panelOpen);
 
   const [hostPickerOpen, setHostPickerOpen] = useState(false);
@@ -146,7 +146,7 @@ export function SidebarFooter() {
                 aiPanelOpen && "border-violet-500/50 text-violet-200 bg-violet-500/10",
               )}
               disabled={!status?.repo_ready}
-              onClick={() => setAiPanelOpen(true)}
+              onClick={engageAiDock}
               aria-label="Open AI chat"
             >
               <Sparkles className="size-3" />

@@ -49,7 +49,7 @@ async def get_chat_messages(chat_id: str, session: CurrentSession) -> ChatMessag
     if raw is None:
         raise HTTPException(status_code=404, detail="Chat not found")
     rows = model_messages_to_ui(raw)
-    return ChatMessagesResponse(items=[ChatUiMessage(kind=r["kind"], text=r["text"]) for r in rows])
+    return ChatMessagesResponse(items=[ChatUiMessage.model_validate(r) for r in rows])
 
 
 @router.delete("/chats/{chat_id}", status_code=204)

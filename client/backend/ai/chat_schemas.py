@@ -11,9 +11,24 @@ class ChatCreateResponse(BaseModel):
     chat_id: str
 
 
+UiKind = Literal[
+    "user",
+    "assistant",
+    "tool_call",
+    "tool_result",
+    "thinking",
+    "system",
+    "other",
+]
+
+
 class ChatUiMessage(BaseModel):
-    kind: Literal["user", "assistant", "tool", "system", "other"]
-    text: str
+    kind: UiKind
+    text: str = ""
+    tool: str | None = None
+    args: dict[str, Any] | None = None
+    result_preview: str | None = None
+    outcome: str | None = None
 
 
 class ChatMessagesResponse(BaseModel):

@@ -1,6 +1,22 @@
 import { apiDelete, apiGet, apiPost, apiStreamPost } from "@/lib/api";
 
-export type ChatUiMessage = { kind: string; text: string };
+export type ChatUiMessageKind =
+  | "user"
+  | "assistant"
+  | "tool_call"
+  | "tool_result"
+  | "thinking"
+  | "system"
+  | "other";
+
+export type ChatUiMessage = {
+  kind: ChatUiMessageKind;
+  text: string;
+  tool?: string | null;
+  args?: Record<string, unknown> | null;
+  result_preview?: string | null;
+  outcome?: string | null;
+};
 
 export type ChatStreamContext = {
   hosts?: string[];
