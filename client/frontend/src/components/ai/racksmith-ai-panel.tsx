@@ -426,7 +426,7 @@ export function AiBottomPanel() {
 
       <div className="flex-1 min-h-0 flex flex-col">
         <ScrollArea className="flex-1 min-h-0 px-3">
-          <div className="space-y-2 py-2 pr-2">
+          <div className="space-y-4 py-3 pr-2">
             {messagesQuery.isLoading && (
               <div className="flex justify-center py-6 text-zinc-500">
                 <Loader2 className="size-4 animate-spin" />

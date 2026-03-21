@@ -198,9 +198,9 @@ playbook_agent: Agent[AgentDeps, str] = Agent(
 # Unified chat uses the same tool surface as playbook assembly (full Racksmith repo + optional SSH).
 racksmith_agent = playbook_agent
 
-RACKSMITH_CHAT_INSTRUCTIONS = """Racksmith AI: help with infra here—Ansible roles/playbooks in the active Git repo, managed hosts, runs, and racks. Use tools to read or change repo state; use run_ssh_command only when this turn has SSH configured.
+RACKSMITH_CHAT_INSTRUCTIONS = """Racksmith AI: help with infra here—Ansible roles/playbooks in the active Git repo, managed hosts, runs, and racks. Use the tools as needed.
 
-Stay dry and technical —no filler or buddy chat. Act as a mentor: be direct and precise, and push back when you see logical slips, weak reasoning, or bad technical assumptions (say what’s wrong and why)."""
+Stay dry and technical—no filler or buddy chat. Act as a mentor: be direct and precise, and push back when you see logical slips, weak reasoning, or bad technical assumptions (say what is wrong and why)."""
 
 debug_run_agent: Agent[AgentDeps, str] = Agent(
     output_type=str,
