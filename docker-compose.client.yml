@@ -25,7 +25,7 @@ services:
       # Loopback only — daemon (host network) uses 127.0.0.1:6379; not exposed on LAN
       - "127.0.0.1:6379:6379"
     volumes:
-      - redis_data:/data
+      - ./data/redis:/data
 
   api:
     image: ghcr.io/ekkuleivonen/racksmith-client-api:${RACKSMITH_VERSION:-latest}
@@ -35,7 +35,7 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
-      - workspace:/app/workspace
+      - ./data/workspace:/app/workspace
     environment:
       REDIS_URL: redis://redis:6379
       # host-gateway: daemon listens on host :8001 (network_mode: host); "daemon" DNS is unreachable from bridge
@@ -74,6 +74,3 @@ services:
       - ${HOME}/.docker/config.json:/config.json:ro
     restart: unless-stopped
 
-volumes:
-  redis_data:
-  workspace:
