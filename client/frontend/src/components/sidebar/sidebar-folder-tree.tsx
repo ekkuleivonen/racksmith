@@ -120,6 +120,7 @@ function DraggableItem<T>({
   itemLabel,
   onToggleStar,
   isStarred,
+  onNewFolder,
 }: {
   item: T;
   itemKey: (item: T) => string;
@@ -127,6 +128,7 @@ function DraggableItem<T>({
   itemLabel: (item: T) => string;
   onToggleStar?: (itemPath: string, itemLabel: string) => void;
   isStarred?: (itemPath: string) => boolean;
+  onNewFolder?: () => void;
 }) {
   const { pathname } = useLocation();
   const key = itemKey(item);
@@ -170,7 +172,7 @@ function DraggableItem<T>({
     </div>
   );
 
-  if (!onToggleStar) return inner;
+  if (!onToggleStar && !onNewFolder) return inner;
 
   return (
     <ContextMenu>
@@ -178,10 +180,18 @@ function DraggableItem<T>({
         {inner}
       </ContextMenuTrigger>
       <ContextMenuContent>
-        <ContextMenuItem onClick={() => onToggleStar(path, label)}>
-          <Star className={cn("size-3.5", starred && "fill-yellow-400 text-yellow-400")} />
-          {starred ? "Unstar" : "Star"}
-        </ContextMenuItem>
+        {onToggleStar && (
+          <ContextMenuItem onClick={() => onToggleStar(path, label)}>
+            <Star className={cn("size-3.5", starred && "fill-yellow-400 text-yellow-400")} />
+            {starred ? "Unstar" : "Star"}
+          </ContextMenuItem>
+        )}
+        {onNewFolder && (
+          <ContextMenuItem onClick={onNewFolder}>
+            <FolderPlus className="size-3.5" />
+            New folder
+          </ContextMenuItem>
+        )}
       </ContextMenuContent>
     </ContextMenu>
   );
@@ -196,6 +206,7 @@ function DroppableFolder<T>({
   itemLabel,
   onToggleStar,
   isStarred,
+  onNewFolder,
   depth,
 }: {
   node: FolderNode<T>;
@@ -206,6 +217,7 @@ function DroppableFolder<T>({
   itemLabel: (item: T) => string;
   onToggleStar?: (itemPath: string, itemLabel: string) => void;
   isStarred?: (itemPath: string) => boolean;
+  onNewFolder?: () => void;
   depth: number;
 }) {
   const isOpen = expanded[node.path] ?? true;
@@ -257,6 +269,7 @@ function DroppableFolder<T>({
               itemLabel={itemLabel}
               onToggleStar={onToggleStar}
               isStarred={isStarred}
+              onNewFolder={onNewFolder}
               depth={depth + 1}
             />
           ))}
@@ -269,6 +282,7 @@ function DroppableFolder<T>({
                 itemLabel={itemLabel}
                 onToggleStar={onToggleStar}
                 isStarred={isStarred}
+                onNewFolder={onNewFolder}
               />
             </div>
           ))}
@@ -417,6 +431,7 @@ export function SidebarFolderTree<T>({
                 itemLabel={itemLabel}
                 onToggleStar={onToggleStar}
                 isStarred={isStarred}
+                onNewFolder={() => setCreatingFolder(true)}
                 depth={0}
               />
             ))}
@@ -429,6 +444,7 @@ export function SidebarFolderTree<T>({
                 itemLabel={itemLabel}
                 onToggleStar={onToggleStar}
                 isStarred={isStarred}
+                onNewFolder={() => setCreatingFolder(true)}
               />
             ))}
             {creatingFolder && (

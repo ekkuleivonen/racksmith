@@ -106,3 +106,7 @@ class PlaybookRunResponse(BaseModel):
 
 class GeneratePlaybookRequest(BaseModel):
     prompt: str = Field(min_length=1)
+
+
+class EditGeneratePlaybookRequest(BaseModel):
+    prompt: str = Field(min_length=1)

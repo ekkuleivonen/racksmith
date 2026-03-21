@@ -40,6 +40,8 @@ function ToolLabel({ tool }: { tool: string }) {
     get_role_detail: "Inspecting role",
     create_role: "Creating role",
     create_playbook: "Assembling playbook",
+    get_playbook: "Reading playbook",
+    update_playbook: "Updating playbook",
   };
   return <>{labels[tool] ?? tool}</>;
 }

@@ -75,6 +75,44 @@ async def create_playbook(ctx: RunContext[AgentDeps], playbook: PlaybookUpsert) 
     )
 
 
+async def get_playbook(ctx: RunContext[AgentDeps], playbook_id: str) -> str:
+    """Get the current definition of a playbook by its ID, including name, description, become flag, and the list of role entries with their vars."""
+    from playbooks.managers import playbook_manager
+
+    try:
+        detail = playbook_manager.get_playbook(ctx.deps.session, playbook_id)
+    except FileNotFoundError:
+        return f"Playbook '{playbook_id}' not found."
+    import json
+
+    return json.dumps(
+        {
+            "id": detail.id,
+            "name": detail.name,
+            "description": detail.description,
+            "become": detail.become,
+            "roles": [re.model_dump() for re in detail.role_entries],
+        },
+        indent=2,
+    )
+
+
+async def update_playbook(
+    ctx: RunContext[AgentDeps], playbook_id: str, playbook: PlaybookUpsert
+) -> str:
+    """Update an existing playbook. Provide the playbook_id and the full updated playbook definition (name, description, roles, become). All role_ids referenced must already exist."""
+    from playbooks.managers import playbook_manager
+
+    detail = playbook_manager.update_playbook(
+        ctx.deps.session, playbook_id, playbook
+    )
+    ctx.deps.updated_playbook_id = detail.id
+    return (
+        f"Updated playbook '{detail.name}' (id: {detail.id}) "
+        f"with {len(detail.roles)} role(s)."
+    )
+
+
 # ---------------------------------------------------------------------------
 # Agent definitions
 # ---------------------------------------------------------------------------
@@ -88,5 +126,12 @@ role_agent: Agent[AgentDeps, RoleCreate] = Agent(
 playbook_agent: Agent[AgentDeps, str] = Agent(
     output_type=str,
     retries=2,
-    tools=[list_roles, get_role_detail, create_role, create_playbook],
+    tools=[
+        list_roles,
+        get_role_detail,
+        create_role,
+        create_playbook,
+        get_playbook,
+        update_playbook,
+    ],
 )

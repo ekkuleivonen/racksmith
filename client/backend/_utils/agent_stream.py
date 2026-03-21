@@ -32,6 +32,7 @@ class AgentDeps:
 
     session: SessionData
     created_playbook_id: str | None = field(default=None, repr=False)
+    updated_playbook_id: str | None = field(default=None, repr=False)
 
 
 def _sse(payload: dict[str, Any]) -> str:
@@ -50,7 +51,7 @@ def _summarize_tool_args(tool_name: str, raw_json: str) -> dict[str, Any]:
             "name": role.get("name", ""),
             "description": (role.get("description") or "")[:200],
         }
-    if tool_name == "create_playbook":
+    if tool_name in ("create_playbook", "update_playbook"):
         pb = args.get("playbook", args)
         return {
             "name": pb.get("name", ""),
@@ -58,6 +59,8 @@ def _summarize_tool_args(tool_name: str, raw_json: str) -> dict[str, Any]:
         }
     if tool_name == "get_role_detail":
         return {"role_id": args.get("role_id", "")}
+    if tool_name == "get_playbook":
+        return {"playbook_id": args.get("playbook_id", "")}
     return {}
 
 
@@ -164,6 +167,9 @@ async def stream_agent(
 
             if deps.created_playbook_id:
                 done["playbook_id"] = deps.created_playbook_id
+
+            if deps.updated_playbook_id:
+                done["playbook_id"] = deps.updated_playbook_id
 
             if isinstance(result_output, str) and result_output:
                 done["message"] = result_output

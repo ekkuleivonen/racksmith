@@ -10,6 +10,7 @@ from _utils.websocket import require_ws_session, ws_error_handler
 from auth.dependencies import CurrentSession
 from playbooks.managers import playbook_manager
 from playbooks.schemas import (
+    EditGeneratePlaybookRequest,
     FolderUpdate,
     GeneratePlaybookRequest,
     PlaybookListResponse,
@@ -67,6 +68,25 @@ async def resolve_targets(
 ) -> ResolveTargetsResponse:
     """Resolve target patterns to concrete host lists."""
     return playbook_manager.resolve_targets(session, body.targets)
+
+
+@router.post("/{playbook_id}/edit-generate")
+async def edit_generate_playbook(
+    playbook_id: str,
+    body: EditGeneratePlaybookRequest,
+    session: CurrentSession,
+) -> StreamingResponse:
+    """Edit a playbook from a natural-language prompt via AI."""
+    if not settings.OPENAI_API_KEY:
+        raise HTTPException(
+            status_code=503,
+            detail="AI generation is not configured (OPENAI_API_KEY missing)",
+        )
+    return StreamingResponse(
+        playbook_manager.edit_generate_playbook(session, playbook_id, body.prompt),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 @router.get("/{playbook_id}", response_model=PlaybookResponse)

@@ -250,6 +250,53 @@ class PlaybookManager(RunManagerMixin):
         async for event in stream_agent(playbook_agent, prompt, deps, instructions=PLAYBOOK_SYSTEM_PROMPT):
             yield event
 
+    async def edit_generate_playbook(
+        self,
+        session: SessionData,
+        playbook_id: str,
+        prompt: str,
+    ) -> AsyncGenerator[str]:
+        """Edit a playbook via an LLM agent using natural-language instructions."""
+        from _utils.agent_stream import AgentDeps, stream_agent
+        from _utils.ai import playbook_agent
+        from playbooks.prompts import PLAYBOOK_EDIT_SYSTEM_PROMPT
+
+        deps = AgentDeps(session=session)
+        detail = self.get_playbook(session, playbook_id)
+        catalog_by_id = {r.id: r for r in detail.roles_catalog}
+
+        enriched_roles: list[dict] = []
+        for re in detail.role_entries:
+            entry: dict = {"role_id": re.role_id, "vars": re.vars}
+            cat = catalog_by_id.get(re.role_id)
+            if cat:
+                entry["role_name"] = cat.name
+                entry["role_description"] = cat.description[:200]
+                entry["inputs"] = [
+                    f"{i.key}({i.type})" for i in cat.inputs
+                ]
+            enriched_roles.append(entry)
+
+        existing_json = json.dumps(
+            {
+                "name": detail.name,
+                "description": detail.description,
+                "become": detail.become,
+                "roles": enriched_roles,
+            },
+            indent=2,
+        )
+        user_prompt = (
+            f"Playbook ID: {playbook_id}\n\n"
+            f"Current playbook:\n{existing_json}\n\n"
+            f"Requested changes:\n{prompt}"
+        )
+        async for event in stream_agent(
+            playbook_agent, user_prompt, deps,
+            instructions=PLAYBOOK_EDIT_SYSTEM_PROMPT,
+        ):
+            yield event
+
     def delete_playbook(
         self, session: SessionData, playbook_id: str, *, cascade_roles: bool = False
     ) -> None:
