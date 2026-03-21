@@ -1,13 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Loader2, Minus, Plus, Send, Sparkles, X } from "lucide-react";
+import { Loader2, Minus, Plus, Sparkles, X } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
 import { useSetupStore } from "@/stores/setup";
 import { useAiChatUiStore } from "@/stores/ai-chat-ui";
 import {
@@ -405,8 +400,8 @@ export function AiBottomPanel() {
       </div>
 
       <div className="flex-1 min-h-0 flex flex-col">
-        <ScrollArea className="flex-1 min-h-0 px-4">
-          <div className="space-y-4 py-3 pr-3">
+        <ScrollArea className="flex-1 min-h-0 px-6">
+          <div className="space-y-4 py-3 pr-4">
             {messagesQuery.isLoading && (
               <div className="flex justify-center py-6 text-zinc-500">
                 <Loader2 className="size-4 animate-spin" />
@@ -449,41 +444,19 @@ export function AiBottomPanel() {
           </div>
         </ScrollArea>
 
-        <div className="border-t border-zinc-800/60 px-3 pt-2.5 pb-3 shrink-0">
-          <div className="flex gap-2 items-end">
-            <AiChatComposer
-              value={input}
-              onChange={setInput}
-              onSend={handleSend}
-              disabled={sending || !activeChatId}
-              candidates={mentionCandidates}
-              attachments={attachments}
-              onAttach={handleAttach}
-              onDetachLast={handleDetachLast}
-              onDetach={handleDetach}
-            />
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  type="button"
-                  size="icon"
-                  className="shrink-0 size-8 rounded-lg"
-                  disabled={sending || !input.trim() || !activeChatId}
-                  onClick={() => void handleSend()}
-                  aria-label="Send message"
-                >
-                  {sending ? (
-                    <Loader2 className="size-3.5 animate-spin" />
-                  ) : (
-                    <Send className="size-3.5" />
-                  )}
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="top" className="text-xs">
-                Send (Enter)
-              </TooltipContent>
-            </Tooltip>
-          </div>
+        <div className="border-t border-zinc-800/60 px-4 pt-2.5 pb-3 shrink-0">
+          <AiChatComposer
+            value={input}
+            onChange={setInput}
+            onSend={handleSend}
+            disabled={sending || !activeChatId}
+            sending={sending}
+            candidates={mentionCandidates}
+            attachments={attachments}
+            onAttach={handleAttach}
+            onDetachLast={handleDetachLast}
+            onDetach={handleDetach}
+          />
         </div>
       </div>
     </div>

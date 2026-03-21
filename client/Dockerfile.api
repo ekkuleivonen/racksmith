@@ -10,6 +10,7 @@ WORKDIR /app/backend
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     curl \
+    gosu \
     && rm -rf /var/lib/apt/lists/*
 
 # Shared library (editable dep: ../shared from /app/backend)
@@ -29,17 +30,17 @@ RUN mkdir -p /app/workspace /data \
 
 RUN git config --global --add safe.directory '*'
 
-# DATA_DIR=/data + host mount ./data:/data keeps user-settings.json across container restarts (no extra env in compose).
+COPY client/entrypoint-api.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
 ENV REDIS_URL=redis://redis:6379 \
     REPOS_WORKSPACE=/app/workspace \
     DATA_DIR=/data
 
 EXPOSE 8000
 
-USER racksmith
-
 HEALTHCHECK --interval=10s --timeout=5s --start-period=15s --retries=3 \
     CMD curl -f http://127.0.0.1:8000/health || exit 1
 
-# Call venv directly — `uv run` re-syncs and can install dev dependency-groups on every start
+ENTRYPOINT ["/entrypoint.sh"]
 CMD ["/app/backend/.venv/bin/uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]

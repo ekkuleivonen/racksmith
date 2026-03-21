@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Loader2, Send } from "lucide-react";
 import {
   Command,
   CommandEmpty,
@@ -24,6 +25,7 @@ type Props = {
   onChange: (val: string) => void;
   onSend: () => void;
   disabled: boolean;
+  sending: boolean;
   candidates: MentionCandidate[];
   attachments: MentionCandidate[];
   onAttach: (item: MentionCandidate) => void;
@@ -52,6 +54,7 @@ export function AiChatComposer({
   onChange,
   onSend,
   disabled,
+  sending,
   candidates,
   attachments,
   onAttach,
@@ -126,7 +129,6 @@ export function AiChatComposer({
       const item = candidates.find((c) => `${c.type}:${c.id}` === itemValue);
       if (!item) return;
       onAttach(item);
-      // Strip the @query fragment from the textarea — don't insert a token
       const before = value.slice(0, mentionStart);
       const after = value.slice(mentionStart + 1 + mentionQuery.length);
       onChange((before + after).replace(/\s+$/, before || after ? " " : ""));
@@ -156,13 +158,14 @@ export function AiChatComposer({
   }, [mentionOpen]);
 
   const hasChips = attachments.length > 0;
+  const canSend = !sending && !disabled && value.trim().length > 0;
 
   return (
     <Popover open={mentionOpen && filtered.length > 0}>
       <PopoverAnchor asChild>
         <div
           className={cn(
-            "flex-1 min-w-0 rounded-lg border border-zinc-800 bg-zinc-950/80 transition-colors",
+            "relative min-w-0 border border-zinc-800 bg-zinc-950/80 transition-colors",
             "focus-within:border-zinc-700",
           )}
         >
@@ -202,9 +205,9 @@ export function AiChatComposer({
             onKeyDown={handleKeyDown}
             placeholder="Ask about playbooks, roles, hosts… (@ to mention)"
             className={cn(
-              "w-full bg-transparent text-[11px] text-zinc-200 placeholder:text-zinc-600",
+              "w-full bg-transparent text-[12px] text-zinc-200 placeholder:text-zinc-600",
               "resize-none outline-none border-0",
-              "min-h-[40px] max-h-[120px] px-2.5 py-2",
+              "min-h-[44px] max-h-[120px] pl-3 pr-10 py-2.5",
               hasChips && "pt-1.5",
             )}
             disabled={disabled}
@@ -215,6 +218,25 @@ export function AiChatComposer({
               ta.style.height = `${Math.min(ta.scrollHeight, 120)}px`;
             }}
           />
+          <button
+            type="button"
+            className={cn(
+              "absolute right-2 bottom-2 size-7 flex items-center justify-center",
+              "rounded transition-colors",
+              canSend
+                ? "bg-zinc-100 text-zinc-900 hover:bg-white"
+                : "text-zinc-600 cursor-default",
+            )}
+            disabled={!canSend}
+            onClick={() => void onSend()}
+            aria-label="Send (Enter)"
+          >
+            {sending ? (
+              <Loader2 className="size-3.5 animate-spin" />
+            ) : (
+              <Send className="size-3.5" />
+            )}
+          </button>
         </div>
       </PopoverAnchor>
       <PopoverContent

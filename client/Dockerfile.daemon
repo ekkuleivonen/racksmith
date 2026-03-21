@@ -39,6 +39,9 @@ RUN groupadd -r -g 10000 racksmith && useradd -r -u 10000 -g racksmith -d /app/d
 RUN mkdir -p /data/.ssh \
     && chown -R racksmith:racksmith /app/daemon /app/shared /data
 
+COPY client/entrypoint-daemon.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
 ENV REDIS_URL=redis://redis:6379 \
     DATA_DIR=/data
 
@@ -47,4 +50,5 @@ EXPOSE 8001
 HEALTHCHECK --interval=10s --timeout=5s --start-period=30s --retries=3 \
     CMD curl -f http://127.0.0.1:8001/health || exit 1
 
+ENTRYPOINT ["/entrypoint.sh"]
 CMD ["/usr/bin/supervisord", "-c", "/etc/supervisord.conf"]

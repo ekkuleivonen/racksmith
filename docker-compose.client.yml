@@ -36,7 +36,6 @@ services:
       - "host.docker.internal:host-gateway"
     volumes:
       - ./data/workspace:/app/workspace
-      # Persist user-settings.json (e.g. OPENAI_* from UI); API image defaults DATA_DIR=/data
       - ./data:/data
     environment:
       REDIS_URL: redis://redis:6379
