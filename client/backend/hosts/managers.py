@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from ipaddress import IPv4Address, IPv4Network
 
+import httpx
+
 from _utils.exceptions import NotFoundError
 from _utils.helpers import generate_unique_id
 from _utils.logging import get_logger
@@ -448,9 +450,18 @@ class HostManager:
                 "ssh_user": host.ssh_user,
                 "ssh_port": host.ssh_port,
             }, timeout=30.0)
+        except httpx.HTTPStatusError as exc:
+            detail = ""
+            if exc.response is not None:
+                try:
+                    detail = exc.response.json().get("detail", exc.response.text)
+                except Exception:
+                    detail = exc.response.text
+            logger.warning("ssh_probe_failed", host_id=host_id, error=type(exc).__name__)
+            raise ValueError(detail or f"SSH probe failed ({exc.response.status_code})") from exc
         except Exception as exc:
             logger.warning("ssh_probe_failed", host_id=host_id, error=type(exc).__name__)
-            raise
+            raise ValueError(f"SSH probe failed: {exc}") from exc
         os_family = _os_to_family(probe.get("os", "")) or host.os_family
         layout = get_layout(session)
         cidrs = _meta_subnet_cidrs(layout)

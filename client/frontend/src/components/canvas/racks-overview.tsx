@@ -35,7 +35,7 @@ export function RacksOverview({ filters, selectedHostId, onSelectHost }: RacksOv
   const rackDataMap = useMemo(() => {
     const map = new Map<string, { filteredHosts: RackLayoutHost[]; rackHostIds: string[] }>();
     for (const { rack, hosts } of rackEntries) {
-      const layoutHosts: RackLayoutHost[] = hosts;
+      const layoutHosts: RackLayoutHost[] = hosts ?? [];
       const unmanagedHosts = layoutHosts.filter((h) => !h.managed);
       const managedHosts = layoutHosts.filter((h) => h.managed);
       const filteredManaged = hasFilters

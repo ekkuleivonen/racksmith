@@ -22,7 +22,7 @@ router = APIRouter()
 
 @router.get(
     "",
-    response_model=PaginatedResponse[RackSummary] | PaginatedResponse[RackLayout],
+    response_model=PaginatedResponse[RackLayout] | PaginatedResponse[RackSummary],
 )
 async def list_racks(
     session: CurrentSession,
