@@ -471,7 +471,7 @@ export function RackDetailPage() {
   if (!rack) return <DetailNotFound title="Rack not found" description="This rack does not exist in the active repo anymore." backPath="/racks/create" backLabel="Create a rack" />;
 
   return (
-    <PageContainer>
+    <PageContainer maxWidth="max-w-7xl">
         <section className="border border-zinc-800 bg-zinc-900/30 p-4 space-y-3">
           <div className="flex items-center justify-between gap-3">
             <div className="space-y-1">

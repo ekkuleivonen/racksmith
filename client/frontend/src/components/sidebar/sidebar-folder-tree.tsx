@@ -220,41 +220,64 @@ function DroppableFolder<T>({
   onNewFolder?: () => void;
   depth: number;
 }) {
-  const isOpen = expanded[node.path] ?? true;
-  const { setNodeRef, isOver } = useDroppable({
+  const isOpen = expanded[node.path] ?? false;
+  const { setNodeRef: setDropRef, isOver } = useDroppable({
     id: `folder:${node.path}`,
     data: { folder: node.path },
+  });
+  const {
+    attributes,
+    listeners,
+    setNodeRef: setDragRef,
+    isDragging,
+  } = useDraggable({
+    id: `dragfolder:${node.path}`,
+    data: { folderPath: node.path, label: node.name },
   });
   const hasContent = node.children.length > 0 || node.items.length > 0;
 
   return (
-    <div>
-      <button
-        ref={setNodeRef}
-        type="button"
-        onClick={() => onToggle(node.path)}
-        className={cn(
-          "flex w-full items-center gap-1 rounded py-0.5 px-1.5 text-[11px] text-zinc-500 hover:bg-zinc-800/50 hover:text-zinc-300 transition-colors",
-          isOver && "bg-zinc-700/60 ring-1 ring-zinc-500",
-        )}
-        style={{ paddingLeft: depth * 8 + 6 }}
-      >
-        {hasContent ? (
-          isOpen ? (
-            <ChevronDown className="size-3 shrink-0" />
+    <div style={{ opacity: isDragging ? 0.3 : undefined }}>
+      <div className="group/folder flex items-center">
+        <button
+          type="button"
+          className="shrink-0 cursor-grab opacity-0 group-hover/folder:opacity-100 text-zinc-600 hover:text-zinc-400 transition-opacity touch-none"
+          aria-label="Drag folder"
+          {...listeners}
+          {...attributes}
+        >
+          <GripVertical className="size-3" />
+        </button>
+        <button
+          ref={(el) => {
+            setDropRef(el);
+            setDragRef(el);
+          }}
+          type="button"
+          onClick={() => onToggle(node.path)}
+          className={cn(
+            "flex flex-1 items-center gap-1 rounded py-0.5 px-1.5 text-[11px] text-zinc-500 hover:bg-zinc-800/50 hover:text-zinc-300 transition-colors min-w-0",
+            isOver && "bg-zinc-700/60 ring-1 ring-zinc-500",
+          )}
+          style={{ paddingLeft: depth * 8 }}
+        >
+          {hasContent ? (
+            isOpen ? (
+              <ChevronDown className="size-3 shrink-0" />
+            ) : (
+              <ChevronRight className="size-3 shrink-0" />
+            )
           ) : (
-            <ChevronRight className="size-3 shrink-0" />
-          )
-        ) : (
-          <span className="size-3 shrink-0" />
-        )}
-        {isOpen ? (
-          <FolderOpen className="size-3 shrink-0 text-zinc-500" />
-        ) : (
-          <Folder className="size-3 shrink-0 text-zinc-500" />
-        )}
-        <span className="truncate">{node.name}</span>
-      </button>
+            <span className="size-3 shrink-0" />
+          )}
+          {isOpen ? (
+            <FolderOpen className="size-3 shrink-0 text-zinc-500" />
+          ) : (
+            <Folder className="size-3 shrink-0 text-zinc-500" />
+          )}
+          <span className="truncate">{node.name}</span>
+        </button>
+      </div>
 
       {isOpen && (
         <div className="pl-2">
@@ -357,7 +380,7 @@ export function SidebarFolderTree<T>({
   const toggleExpanded = useCallback(
     (path: string) => {
       setExpanded((prev) => {
-        const next = { ...prev, [path]: !(prev[path] ?? true) };
+        const next = { ...prev, [path]: !(prev[path] ?? false) };
         saveExpanded(storageKey, next);
         return next;
       });
@@ -374,23 +397,83 @@ export function SidebarFolderTree<T>({
     setDraggingLabel((event.active.data.current?.label as string) ?? null);
   }, []);
 
+  const collectItemsUnderFolder = useCallback(
+    (folderPath: string): { key: string; folder: string }[] => {
+      const prefix = folderPath + "/";
+      const result: { key: string; folder: string }[] = [];
+      for (const item of items) {
+        const f = itemFolder(item).replace(/^\/|\/$/g, "");
+        if (f === folderPath || f.startsWith(prefix)) {
+          result.push({ key: itemKey(item), folder: f });
+        }
+      }
+      return result;
+    },
+    [items, itemKey, itemFolder],
+  );
+
   const handleDragEnd = useCallback(
     (event: DragEndEvent) => {
       setDraggingLabel(null);
       const { active, over } = event;
       if (!over) return;
-      const key = active.id as string;
+      const activeId = active.id as string;
       const targetFolder = over.data.current?.folder as string | undefined;
       if (targetFolder === undefined) return;
 
-      const currentItem = items.find((i) => itemKey(i) === key);
+      if (activeId.startsWith("dragfolder:")) {
+        const srcFolder = activeId.slice("dragfolder:".length);
+        const srcName = srcFolder.split("/").pop() ?? srcFolder;
+        const newFolderPath = targetFolder ? `${targetFolder}/${srcName}` : srcName;
+
+        if (newFolderPath === srcFolder) return;
+        // Prevent dropping into self or descendant
+        if (newFolderPath === srcFolder || newFolderPath.startsWith(srcFolder + "/")) return;
+
+        const childItems = collectItemsUnderFolder(srcFolder);
+        for (const child of childItems) {
+          const relativePath = child.folder.slice(srcFolder.length);
+          const newItemFolder = newFolderPath + relativePath;
+          onMoveToFolder(child.key, newItemFolder);
+        }
+
+        // Move phantom empty folders too
+        setEmptyFolders((prev) => {
+          const prefix = srcFolder + "/";
+          return prev.map((f) => {
+            if (f === srcFolder) return newFolderPath;
+            if (f.startsWith(prefix)) return newFolderPath + f.slice(srcFolder.length);
+            return f;
+          });
+        });
+
+        // Update expanded state for the renamed folder paths
+        setExpanded((prev) => {
+          const next = { ...prev };
+          const prefix = srcFolder + "/";
+          for (const key of Object.keys(next)) {
+            if (key === srcFolder || key.startsWith(prefix)) {
+              const newKey = key === srcFolder ? newFolderPath : newFolderPath + key.slice(srcFolder.length);
+              next[newKey] = next[key];
+              delete next[key];
+            }
+          }
+          saveExpanded(storageKey, next);
+          return next;
+        });
+
+        return;
+      }
+
+      // Regular item drag
+      const currentItem = items.find((i) => itemKey(i) === activeId);
       if (!currentItem) return;
       const currentFolder = itemFolder(currentItem).replace(/^\/|\/$/g, "");
       if (targetFolder === currentFolder) return;
 
-      onMoveToFolder(key, targetFolder);
+      onMoveToFolder(activeId, targetFolder);
     },
-    [items, itemKey, itemFolder, onMoveToFolder],
+    [items, itemKey, itemFolder, onMoveToFolder, collectItemsUnderFolder, storageKey],
   );
 
   const handleNewFolderCommit = useCallback(

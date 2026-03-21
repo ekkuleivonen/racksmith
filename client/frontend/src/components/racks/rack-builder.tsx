@@ -174,10 +174,9 @@ export function RackBuilder({
   }, [unplacedHosts, unassignedSearch]);
 
   return (
-    <div className="flex-1 min-h-0 overflow-auto p-4">
       <div
         className={cn(
-          "max-w-7xl mx-auto grid grid-cols-1 gap-4",
+          "grid grid-cols-1 gap-4",
           showLeftPanel ? "xl:grid-cols-[330px_1fr_320px]" : "xl:grid-cols-[1fr_320px]"
         )}
       >
@@ -416,7 +415,6 @@ export function RackBuilder({
           ) : null}
         </div>
       </div>
-    </div>
   );
 }
 
