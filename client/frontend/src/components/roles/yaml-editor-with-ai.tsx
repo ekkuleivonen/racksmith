@@ -21,6 +21,7 @@ function ToolLabel({ tool }: { tool: string }) {
     list_roles: "Browsing existing roles",
     get_role_detail: "Inspecting role",
     create_role: "Creating role",
+    update_role: "Updating role",
     create_playbook: "Assembling playbook",
     get_playbook: "Reading playbook",
     update_playbook: "Updating playbook",

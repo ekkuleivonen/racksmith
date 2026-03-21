@@ -60,14 +60,18 @@ WORKFLOW — follow these steps in order:
   1. Review the current playbook definition and the inline role summaries.
   2. If you need to understand a role's tasks in detail (e.g. to change
      variables or verify behaviour), call `get_role_detail` for that role.
-  3. If the changes require roles that don't exist yet, call `list_roles`
-     to check for something reusable, then call `create_role` if needed.
-  4. Call `update_playbook` with the full modified playbook definition.
+  3. If an existing role needs modifications, call `update_role` with its
+     role_id and the complete updated definition.
+  4. If the changes require entirely new roles, call `list_roles` to check
+     for something reusable, then call `create_role` only if nothing fits.
+  5. Call `update_playbook` with the full modified playbook definition.
      Include ALL role entries — not just the ones that changed.
-  5. Return a brief summary of what you changed.
+  6. Return a brief summary of what you changed.
 
 RULES:
   - PRESERVE fields the user did not ask to change.
+  - PREFER `update_role` over `create_role` when modifying an existing
+    role. Only use `create_role` for genuinely new functionality.
   - REUSE existing roles whenever they match.
   - Order roles logically — dependencies MUST come before dependents.
   - The SAME role can appear multiple times with different vars.
@@ -77,7 +81,7 @@ RULES:
     {{ fact_name }} in their vars.
   - Prefer SIMPLICITY: 1-3 required inputs per role, sensible defaults.
 
-ROLE CREATION RULES (when calling create_role):
+ROLE CREATION / UPDATE RULES (when calling create_role or update_role):
   Input type must be one of: "string", "bool", "secret".
   NEVER use "list" or "dict" input types.
   Output type must be one of: "string", "boolean".

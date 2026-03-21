@@ -45,7 +45,7 @@ def _summarize_tool_args(tool_name: str, raw_json: str) -> dict[str, Any]:
         args = json.loads(raw_json)
     except Exception:
         return {}
-    if tool_name == "create_role":
+    if tool_name in ("create_role", "update_role"):
         role = args.get("role", args)
         return {
             "name": role.get("name", ""),

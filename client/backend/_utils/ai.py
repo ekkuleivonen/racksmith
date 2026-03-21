@@ -63,6 +63,23 @@ async def create_role(ctx: RunContext[AgentDeps], role: RoleCreate) -> str:
     return f"Created role '{summary.name}' (id: {summary.id})"
 
 
+async def update_role(ctx: RunContext[AgentDeps], role_id: str, role: RoleCreate) -> str:
+    """Update an existing role in-place. Provide the role_id and the complete updated role definition. Use this instead of create_role when modifying an existing role."""
+    import yaml as _yaml
+
+    from roles.managers import role_manager
+    from roles.schemas import RoleUpdate
+
+    yaml_text = _yaml.safe_dump(
+        role.model_dump(exclude_defaults=True),
+        sort_keys=False,
+    )
+    detail = role_manager.update_role(
+        ctx.deps.session, role_id, RoleUpdate(yaml_text=yaml_text)
+    )
+    return f"Updated role '{detail.name}' (id: {detail.id})"
+
+
 async def create_playbook(ctx: RunContext[AgentDeps], playbook: PlaybookUpsert) -> str:
     """Assemble and save a playbook from existing roles. Each entry in the roles list must reference a role_id that already exists. Use vars to pass input values to each role. Roles execute in the order listed."""
     from playbooks.managers import playbook_manager
@@ -120,7 +137,7 @@ async def update_playbook(
 role_agent: Agent[AgentDeps, RoleCreate] = Agent(
     output_type=RoleCreate,
     retries=2,
-    tools=[list_roles, get_role_detail],
+    tools=[list_roles, get_role_detail, update_role],
 )
 
 playbook_agent: Agent[AgentDeps, str] = Agent(
@@ -130,6 +147,7 @@ playbook_agent: Agent[AgentDeps, str] = Agent(
         list_roles,
         get_role_detail,
         create_role,
+        update_role,
         create_playbook,
         get_playbook,
         update_playbook,

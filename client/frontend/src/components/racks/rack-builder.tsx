@@ -52,6 +52,8 @@ type RackBuilderProps = {
   unplacedHosts?: Array<{ id: string; name: string; hostname?: string; ip_address?: string }>;
   onPlaceUnplacedHost?: (hostId: string, position: MovePosition) => void;
   onUnplaceHost?: (hostId: string) => void;
+  onDeleteItem?: (itemId: string) => void;
+  onUpdateItemName?: (itemId: string, name: string) => void;
 };
 
 export function RackBuilder({
@@ -84,6 +86,8 @@ export function RackBuilder({
   unplacedHosts = [],
   onPlaceUnplacedHost,
   onUnplaceHost,
+  onDeleteItem,
+  onUpdateItemName,
 }: RackBuilderProps) {
   const showFrameEditorInRightPanel = showFrameControls && !!frameEditorSlot;
   const canvasItems = useMemo(
@@ -330,6 +334,14 @@ export function RackBuilder({
             </>
           ) : !selectedItem ? (
             <p className="text-xs text-zinc-500">Select a zone on the rack or click an item.</p>
+          ) : !selectedItem.managed ? (
+            <UnmanagedItemPanel
+              key={selectedItem.id}
+              item={selectedItem}
+              saving={saving}
+              onUpdateName={onUpdateItemName ? (name) => onUpdateItemName(selectedItem.id, name) : undefined}
+              onDelete={onDeleteItem ? () => onDeleteItem(selectedItem.id) : undefined}
+            />
           ) : (
             <>
               <div className="space-y-1">
@@ -405,5 +417,61 @@ export function RackBuilder({
         </div>
       </div>
     </div>
+  );
+}
+
+function UnmanagedItemPanel({
+  item,
+  saving,
+  onUpdateName,
+  onDelete,
+}: {
+  item: RackLayoutHost;
+  saving: boolean;
+  onUpdateName?: (name: string) => void;
+  onDelete?: () => void;
+}) {
+  const [nameDraft, setNameDraft] = useState(item.name ?? "");
+
+  const commitName = () => {
+    const trimmed = nameDraft.trim();
+    if (trimmed !== (item.name ?? "") && onUpdateName) {
+      onUpdateName(trimmed);
+    }
+  };
+
+  return (
+    <>
+      <div className="space-y-1">
+        <Badge variant="outline" className="text-[10px]">Visual element</Badge>
+        <p className="text-[11px] text-zinc-500">
+          {item.position_u_height}U × {item.position_col_count} col
+          {item.position_col_count > 1 ? "s" : ""} · Row {item.position_u_start}
+        </p>
+      </div>
+      <Separator />
+      {onUpdateName ? (
+        <div className="space-y-1">
+          <p className="text-xs text-zinc-400">Name</p>
+          <Input
+            className="h-8 text-xs"
+            value={nameDraft}
+            onChange={(e) => setNameDraft(e.target.value)}
+            onBlur={commitName}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") commitName();
+            }}
+            placeholder="e.g. Patch panel, PDU, shelf"
+          />
+        </div>
+      ) : (
+        <p className="text-sm text-zinc-100">{item.name || "Unnamed element"}</p>
+      )}
+      {onDelete ? (
+        <Button size="sm" variant="outline" disabled={saving} onClick={onDelete}>
+          Remove from rack
+        </Button>
+      ) : null}
+    </>
   );
 }

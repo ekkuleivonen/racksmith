@@ -20,6 +20,7 @@ import {
 } from "@/lib/racks";
 import {
   createHost,
+  deleteHost,
   getHost,
   isManagedHost,
   updateHost,
@@ -254,11 +255,20 @@ export function RackDetailPage() {
       },
     ) => {
       if (!rack) return;
-      setSaving(true);
       try {
-        const frameSaved = await ensureFrameDraftSaved();
-        if (!frameSaved) return;
         const { host } = await getHost(hostId);
+        const optimistic = hostToRackLayoutHost({
+          ...host,
+          placement: {
+            rack: rackIdParam,
+            u_start: position.position_u_start,
+            u_height: position.position_u_height,
+            col_start: position.position_col_start,
+            col_count: position.position_col_count,
+          },
+        });
+        setLayoutHosts((prev) => [...prev, optimistic]);
+
         await updateHost(hostId, {
           name: host.name ?? "",
           ip_address: host.ip_address ?? "",
@@ -276,36 +286,71 @@ export function RackDetailPage() {
             col_count: position.position_col_count,
           },
         });
-        await loadRack();
         toast.success("Host placed on rack");
       } catch (error) {
+        await loadRack();
         toastApiError(error, "Failed to place host");
-      } finally {
-        setSaving(false);
       }
     },
-    [ensureFrameDraftSaved, loadRack, rack, rackIdParam],
+    [loadRack, rack, rackIdParam],
   );
 
   const handleUnplaceHost = useCallback(
     async (hostId: string) => {
       const existing = layoutHosts.find((h) => h.id === hostId);
       if (!existing || !rack) return;
-      setSaving(true);
+
+      setLayoutHosts((prev) => prev.filter((h) => h.id !== hostId));
+      if (selectedItemId === hostId) setSelectedItemId(null);
+
       try {
-        const frameSaved = await ensureFrameDraftSaved();
-        if (!frameSaved) return;
         const input = layoutHostToHostInput(existing, rackIdParam);
         await updateHost(hostId, { ...input, placement: null });
-        await loadRack();
         toast.success("Host unplaced");
       } catch (error) {
+        await loadRack();
         toastApiError(error, "Failed to unplace node");
-      } finally {
-        setSaving(false);
       }
     },
-    [ensureFrameDraftSaved, layoutHosts, loadRack, rack, rackIdParam],
+    [layoutHosts, loadRack, rack, rackIdParam, selectedItemId],
+  );
+
+  const handleDeleteItem = useCallback(
+    async (itemId: string) => {
+      if (!rack) return;
+
+      setLayoutHosts((prev) => prev.filter((h) => h.id !== itemId));
+      if (selectedItemId === itemId) setSelectedItemId(null);
+
+      try {
+        await deleteHost(itemId);
+        toast.success("Item removed");
+      } catch (error) {
+        await loadRack();
+        toastApiError(error, "Failed to remove item");
+      }
+    },
+    [loadRack, rack, selectedItemId],
+  );
+
+  const handleUpdateUnmanagedName = useCallback(
+    async (itemId: string, name: string) => {
+      const existing = layoutHosts.find((h) => h.id === itemId);
+      if (!existing || !rack) return;
+
+      setLayoutHosts((prev) =>
+        prev.map((h) => (h.id === itemId ? { ...h, name } : h)),
+      );
+
+      try {
+        const input = layoutHostToHostInput(existing, rackIdParam);
+        await updateHost(itemId, { ...input, name });
+      } catch (error) {
+        await loadRack();
+        toastApiError(error, "Failed to update item");
+      }
+    },
+    [layoutHosts, loadRack, rack, rackIdParam],
   );
 
   const onSelectZone = useCallback(
@@ -334,10 +379,11 @@ export function RackDetailPage() {
       const existing = layoutHosts.find((n) => n.id === itemId);
       if (!existing) return;
 
-      setSaving(true);
+      setLayoutHosts((prev) =>
+        prev.map((h) => (h.id === itemId ? { ...h, ...position } : h)),
+      );
+
       try {
-        const frameSaved = await ensureFrameDraftSaved();
-        if (!frameSaved) return;
         const input = layoutHostToHostInput(existing, rackIdParam);
         await updateHost(itemId, {
           ...input,
@@ -349,14 +395,12 @@ export function RackDetailPage() {
             col_count: position.position_col_count,
           },
         });
-        await loadRack();
       } catch (error) {
+        await loadRack();
         toastApiError(error, "Failed to update item");
-      } finally {
-        setSaving(false);
       }
     },
-    [ensureFrameDraftSaved, layoutHosts, loadRack, rack, rackIdParam],
+    [layoutHosts, loadRack, rack, rackIdParam],
   );
 
   const persistRackFrame = useCallback(
@@ -659,6 +703,8 @@ export function RackDetailPage() {
           }))}
           onPlaceUnplacedHost={handlePlaceUnplacedHost}
           onUnplaceHost={handleUnplaceHost}
+          onDeleteItem={(itemId) => void handleDeleteItem(itemId)}
+          onUpdateItemName={(itemId, name) => void handleUpdateUnmanagedName(itemId, name)}
         />
     </PageContainer>
   );

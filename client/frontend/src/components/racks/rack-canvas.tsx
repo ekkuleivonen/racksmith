@@ -552,8 +552,8 @@ export function RackCanvas({
             const leftPct = (pos.position_col_start / cols) * 100;
             const widthPct = (pos.position_col_count / cols) * 100;
             const canResize =
-              !isUnmanaged && !isPending && !!onResizeItem && (height > RESIZE_HANDLE_MIN || widthPct > 4);
-            const canDrag = !isUnmanaged && !isPending && !!onMoveItem;
+              !isPending && !!onResizeItem && (height > RESIZE_HANDLE_MIN || widthPct > 4);
+            const canDrag = !isPending && !!onMoveItem;
             return (
               <div
                 key={item.id}
@@ -605,13 +605,11 @@ export function RackCanvas({
                   draggable={canDrag}
                   className={cn(
                     "h-full px-2 py-1 overflow-hidden",
-                    isUnmanaged
-                      ? "cursor-default"
-                      : isPending
+                    isPending
                       ? "opacity-80 cursor-default"
                       : onMoveItem && "cursor-grab active:cursor-grabbing"
                   )}
-                  onDragStart={(e) => { if (!isUnmanaged) handleItemDragStart(e, item); }}
+                  onDragStart={(e) => handleItemDragStart(e, item)}
                   onDragEnd={handleItemDragEnd}
                   onDragOver={(e) => {
                     const topU = item.position_u_start + item.position_u_height - 1;
@@ -625,7 +623,7 @@ export function RackCanvas({
                   }}
                   onClick={(e) => {
                     e.stopPropagation();
-                    if (!isUnmanaged) onSelectItem?.(item.id, e);
+                    onSelectItem?.(item.id, e);
                   }}
                 >
                   <p className={cn("text-[11px] truncate", isUnmanaged ? "text-zinc-500" : "text-zinc-100")}>
