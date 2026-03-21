@@ -4,7 +4,8 @@ FROM ghcr.io/astral-sh/uv:python3.14-bookworm-slim
 ARG RACKSMITH_VERSION=dev
 ENV RACKSMITH_VERSION=$RACKSMITH_VERSION
 
-WORKDIR /app
+# uv.sources uses path = "../shared" — workdir must be a subdir of /app so ../shared → /app/shared
+WORKDIR /app/daemon
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     openssh-client \
@@ -16,27 +17,27 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/* \
     && setcap cap_net_raw+ep /usr/sbin/arp-scan
 
-# Shared library
+# Shared library (editable dep: ../shared from /app/daemon)
 COPY client/shared/ /app/shared/
 
 # Daemon Python deps
-COPY client/daemon/pyproject.toml client/daemon/uv.lock* ./
+COPY client/daemon/pyproject.toml client/daemon/uv.lock* /app/daemon/
 RUN uv sync --frozen --no-dev || uv sync --no-dev
 
 # Pre-install Ansible Galaxy collections at build time
 RUN uv run ansible-galaxy collection install --force community.general ansible.posix \
-    -p /app/.ansible/collections
+    -p /app/daemon/.ansible/collections
 
 # Daemon code
-COPY client/daemon/ .
+COPY client/daemon/ /app/daemon/
 
 # Supervisord config
 COPY client/supervisord.daemon.conf /etc/supervisord.conf
 
-RUN groupadd -r -g 10000 racksmith && useradd -r -u 10000 -g racksmith -d /app -s /sbin/nologin racksmith
+RUN groupadd -r -g 10000 racksmith && useradd -r -u 10000 -g racksmith -d /app/daemon -s /sbin/nologin racksmith
 
 RUN mkdir -p /data/.ssh \
-    && chown -R racksmith:racksmith /app /data
+    && chown -R racksmith:racksmith /app/daemon /app/shared /data
 
 ENV REDIS_URL=redis://redis:6379 \
     DATA_DIR=/data

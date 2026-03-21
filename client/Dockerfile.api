@@ -4,27 +4,28 @@ FROM ghcr.io/astral-sh/uv:python3.14-bookworm-slim
 ARG RACKSMITH_VERSION=dev
 ENV RACKSMITH_VERSION=$RACKSMITH_VERSION
 
-WORKDIR /app
+# uv.sources uses path = "../shared" — workdir must be a subdir of /app so ../shared → /app/shared
+WORKDIR /app/backend
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Shared library
+# Shared library (editable dep: ../shared from /app/backend)
 COPY client/shared/ /app/shared/
 
 # Backend Python deps
-COPY client/backend/pyproject.toml client/backend/uv.lock ./
+COPY client/backend/pyproject.toml client/backend/uv.lock /app/backend/
 RUN uv sync --frozen --no-dev
 
 # Backend code
-COPY client/backend/ .
+COPY client/backend/ /app/backend/
 
-RUN groupadd -r -g 10000 racksmith && useradd -r -u 10000 -g racksmith -d /app -s /sbin/nologin racksmith
+RUN groupadd -r -g 10000 racksmith && useradd -r -u 10000 -g racksmith -d /app/backend -s /sbin/nologin racksmith
 
 RUN mkdir -p /app/workspace \
-    && chown -R racksmith:racksmith /app
+    && chown -R racksmith:racksmith /app/backend /app/shared /app/workspace
 
 RUN git config --global --add safe.directory '*'
 
