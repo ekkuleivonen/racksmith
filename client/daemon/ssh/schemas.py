@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class SSHConnectRequest(BaseModel):
@@ -64,3 +64,17 @@ class RecordCommandRequest(BaseModel):
     host_name: str
     ip_address: str
     command: str
+
+
+class SSHExecRequest(BaseModel):
+    ip: str
+    ssh_user: str
+    ssh_port: int = 22
+    command: str = Field(default="", max_length=4096)
+    timeout: float = Field(default=30.0, ge=1.0, le=120.0)
+
+
+class SSHExecResponse(BaseModel):
+    exit_code: int | None
+    stdout: str = ""
+    stderr: str = ""

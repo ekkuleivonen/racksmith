@@ -176,3 +176,8 @@ export async function createPlaybookRun(playbookId: string, payload: PlaybookRun
 export function playbookRunStreamUrl(runId: string) {
   return wsUrl(`/playbooks/runs/${runId}/stream`);
 }
+
+/** POST body is empty JSON `{}`; path for SSE AI debug stream. */
+export function playbookDebugRunPath(runId: string) {
+  return `/ai/runs/${runId}/debug`;
+}

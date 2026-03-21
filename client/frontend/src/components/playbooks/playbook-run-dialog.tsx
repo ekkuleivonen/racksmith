@@ -1,6 +1,29 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { LoaderCircle, Play, Search, Tag, Users, X } from "lucide-react";
+import {
+  Bot,
+  Check,
+  CircleAlert,
+  Loader2,
+  LoaderCircle,
+  Play,
+  Search,
+  Sparkles,
+  Tag,
+  Users,
+  Wrench,
+  X,
+} from "lucide-react";
 import { toast } from "sonner";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import {
   Dialog,
   DialogContent,
@@ -20,12 +43,18 @@ import {
 } from "@/components/ui/popover";
 import { usePlaybooks, useHosts, useGroups } from "@/hooks/queries";
 import { cn } from "@/lib/utils";
+import {
+  useAgentStream,
+  type AgentStep,
+} from "@/hooks/use-agent-stream";
 import { useTerminalWebSocket } from "@/hooks/use-terminal-websocket";
+import { invalidateResource } from "@/lib/queryClient";
 import { toastApiError } from "@/lib/api";
 import { hostDisplayLabel, isManagedHost } from "@/lib/hosts";
 import {
   createPlaybookRun,
   getPlaybookRequiredRuntimeVars,
+  playbookDebugRunPath,
   type PlaybookRun,
   type PlaybookSummary,
   playbookRunStreamUrl,
@@ -43,7 +72,71 @@ interface PlaybookRunDialogProps {
   playbookId?: string;
 }
 
-type Phase = "pick" | "pick-hosts" | "running" | "done";
+type Phase = "pick" | "pick-hosts" | "running" | "done" | "debugging";
+
+function debugToolLabel(tool: string) {
+  const labels: Record<string, string> = {
+    run_ssh_command: "SSH command",
+    get_role_detail: "Inspecting role",
+    update_role: "Updating role",
+    get_playbook: "Reading playbook",
+    update_playbook: "Updating playbook",
+  };
+  return labels[tool] ?? tool;
+}
+
+function DebugStepRow({ step }: { step: AgentStep }) {
+  switch (step.type) {
+    case "thinking":
+      return (
+        <div className="flex items-start gap-2 text-[11px] text-violet-400/90">
+          <Sparkles className="size-3 shrink-0 mt-0.5" />
+          <span className="whitespace-pre-wrap break-words">{step.text}</span>
+        </div>
+      );
+    case "tool_call":
+      return (
+        <div className="flex items-center gap-2 text-[11px] text-zinc-400">
+          <Wrench className="size-3 shrink-0" />
+          <span>{debugToolLabel(step.tool)}</span>
+          {step.args && "command" in step.args && step.args.command ? (
+            <code className="text-zinc-500 truncate max-w-[min(100%,24rem)]">
+              {String(step.args.command)}
+            </code>
+          ) : null}
+          <Loader2 className="size-3 animate-spin ml-auto shrink-0" />
+        </div>
+      );
+    case "tool_result":
+      return (
+        <div className="flex items-start gap-2 text-[11px] text-emerald-400/90">
+          <Check className="size-3 shrink-0 mt-0.5" />
+          <span className="text-zinc-500 break-words">
+            {step.result?.slice(0, 400)}
+            {(step.result?.length ?? 0) > 400 ? "…" : ""}
+          </span>
+        </div>
+      );
+    case "done":
+      return (
+        <div className="flex items-start gap-2 text-[11px] text-emerald-400">
+          <Check className="size-3 shrink-0 mt-0.5" />
+          <span className="text-zinc-300 whitespace-pre-wrap">
+            {step.message ?? "Debug session finished."}
+          </span>
+        </div>
+      );
+    case "error":
+      return (
+        <div className="flex items-start gap-2 text-[11px] text-red-400">
+          <CircleAlert className="size-3 shrink-0 mt-0.5" />
+          <span>{step.message}</span>
+        </div>
+      );
+    default:
+      return null;
+  }
+}
 
 export function PlaybookRunDialog({
   open,
@@ -75,6 +168,25 @@ export function PlaybookRunDialog({
   const terminalHostRef = useRef<HTMLDivElement | null>(null);
   const renderedOutputRef = useRef("");
   const pendingTargetsRef = useRef<string[]>([]);
+  const debugStartedRef = useRef(false);
+  const [showDebugConsent, setShowDebugConsent] = useState(false);
+
+  const {
+    steps: debugSteps,
+    generating: debugGenerating,
+    error: debugError,
+    generate: generateDebug,
+    cancel: cancelDebug,
+  } = useAgentStream({
+    onComplete: (done) => {
+      if (done.playbook_id) {
+        invalidateResource("playbooks", "roles");
+        toast.success("Playbook updated by AI debug");
+      } else if (done.message) {
+        toast.success("AI debug finished");
+      }
+    },
+  });
 
   const hostLabels = useMemo(() => {
     const map = new Map<string, string>();
@@ -153,8 +265,18 @@ export function PlaybookRunDialog({
       setHostSearch("");
       setFilterGroupIds([]);
       setFilterLabels([]);
+      setShowDebugConsent(false);
+      debugStartedRef.current = false;
+      cancelDebug();
     }
-  }, [open]);
+  }, [open, cancelDebug]);
+
+  useEffect(() => {
+    if (phase !== "debugging" || !activeRun?.id) return;
+    if (debugStartedRef.current) return;
+    debugStartedRef.current = true;
+    void generateDebug(playbookDebugRunPath(activeRun.id), {});
+  }, [phase, activeRun?.id, generateDebug]);
 
   useEffect(() => {
     if (!open || !preselectedPlaybookId) return;
@@ -293,7 +415,10 @@ export function PlaybookRunDialog({
 
   useTerminalWebSocket({
     containerRef: terminalHostRef,
-    url: activeRun ? playbookRunStreamUrl(activeRun.id) : null,
+    url:
+      activeRun && phase !== "debugging"
+        ? playbookRunStreamUrl(activeRun.id)
+        : null,
     interactive: false,
     initialOutput: initialTerminalOutput,
     onMessage: handlePlaybookMessage,
@@ -318,6 +443,36 @@ export function PlaybookRunDialog({
 
   return (
     <>
+      <AlertDialog open={showDebugConsent} onOpenChange={setShowDebugConsent}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Allow AI SSH access?</AlertDialogTitle>
+            <AlertDialogDescription className="text-zinc-400">
+              The assistant can run non-interactive shell commands on the first
+              target host (
+              <span className="font-mono text-zinc-300">
+                {activeRun?.hosts[0]
+                  ? (hostLabels.get(activeRun.hosts[0]) ?? activeRun.hosts[0])
+                  : "unknown"}
+              </span>
+              ) using your Racksmith SSH key. Blocked commands (e.g. reboot,
+              mkfs) are rejected by the server.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                setShowDebugConsent(false);
+                setPhase("debugging");
+              }}
+            >
+              Continue
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       <RuntimeVarsDialog
         open={runtimeDialogOpen}
         fields={runtimeFields}
@@ -724,43 +879,145 @@ export function PlaybookRunDialog({
             </>
           )}
 
-          {(phase === "running" || phase === "done") && activeRun && (
+          {(phase === "running" || phase === "done" || phase === "debugging") &&
+            activeRun && (
             <>
               <DialogHeader>
                 <DialogTitle className="flex items-center gap-2">
-                  {selectedPlaybook?.name ?? "Playbook run"}
-                  {(activeRun.status === "running" ||
-                    activeRun.status === "queued") && (
+                  {phase === "debugging"
+                    ? `Debug: ${selectedPlaybook?.name ?? "Playbook run"}`
+                    : (selectedPlaybook?.name ?? "Playbook run")}
+                  {phase !== "debugging" &&
+                    (activeRun.status === "running" ||
+                      activeRun.status === "queued") && (
                     <LoaderCircle className="size-3.5 animate-spin text-zinc-400" />
+                  )}
+                  {phase === "debugging" && debugGenerating && (
+                    <LoaderCircle className="size-3.5 animate-spin text-violet-400" />
                   )}
                 </DialogTitle>
                 <DialogDescription>
-                  <span className={statusColor}>{statusLabel}</span>
-                  {" · "}
-                  {activeRun.hosts.length} host
-                  {activeRun.hosts.length !== 1 ? "s" : ""}
-                  {activeRun.exit_code !== null &&
-                    ` · exit ${activeRun.exit_code}`}
+                  {phase === "debugging" ? (
+                    <span className="text-zinc-400">
+                      AI may run SSH commands on{" "}
+                      <span className="text-zinc-200 font-mono text-[11px]">
+                        {hostLabels.get(activeRun.hosts[0] ?? "") ??
+                          activeRun.hosts[0] ??
+                          "first target"}
+                      </span>
+                    </span>
+                  ) : (
+                    <>
+                      <span className={statusColor}>{statusLabel}</span>
+                      {" · "}
+                      {activeRun.hosts.length} host
+                      {activeRun.hosts.length !== 1 ? "s" : ""}
+                      {activeRun.exit_code !== null &&
+                        ` · exit ${activeRun.exit_code}`}
+                    </>
+                  )}
                 </DialogDescription>
               </DialogHeader>
 
-              <div className="flex-1 min-h-0 border border-zinc-800 bg-zinc-950 p-2">
-                <div
-                  ref={terminalHostRef}
-                  className="h-full w-full min-h-[24rem] overflow-hidden"
-                />
-              </div>
+              {phase === "debugging" ? (
+                <div className="flex flex-col flex-1 min-h-0 gap-3">
+                  <div className="border border-zinc-800 bg-zinc-950 rounded-sm p-2 max-h-40 overflow-auto shrink-0">
+                    <p className="text-[10px] text-zinc-500 mb-1">
+                      Run output
+                    </p>
+                    <pre className="text-[10px] font-mono text-zinc-400 whitespace-pre-wrap break-words">
+                      {activeRun.output || "(empty)"}
+                    </pre>
+                  </div>
+                  <div className="flex-1 min-h-0 border border-zinc-800 bg-zinc-950 rounded-sm p-3 overflow-y-auto space-y-2 min-h-[14rem]">
+                    <p className="text-[10px] text-zinc-500 flex items-center gap-1.5">
+                      <Bot className="size-3" />
+                      AI debug
+                    </p>
+                    {debugError && (
+                      <p className="text-[11px] text-red-400">{debugError}</p>
+                    )}
+                    {debugSteps.map((s, i) => (
+                      <DebugStepRow key={i} step={s} />
+                    ))}
+                    {!debugGenerating &&
+                      debugSteps.length === 0 &&
+                      !debugError && (
+                        <p className="text-[11px] text-zinc-500">
+                          Starting…
+                        </p>
+                      )}
+                  </div>
+                </div>
+              ) : (
+                <div className="flex-1 min-h-0 border border-zinc-800 bg-zinc-950 p-2">
+                  <div
+                    ref={terminalHostRef}
+                    className="h-full w-full min-h-[24rem] overflow-hidden"
+                  />
+                </div>
+              )}
 
-              <DialogFooter>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => onOpenChange(false)}
-                >
-                  {phase === "done"
-                    ? "Close"
-                    : "Close (run continues in background)"}
-                </Button>
+              <DialogFooter className="flex-wrap gap-2">
+                {phase === "debugging" ? (
+                  <>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={debugGenerating}
+                      onClick={() => {
+                        setPhase("done");
+                        debugStartedRef.current = false;
+                      }}
+                    >
+                      Back to output
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      disabled={debugGenerating}
+                      onClick={() => {
+                        debugStartedRef.current = false;
+                        void generateDebug(
+                          playbookDebugRunPath(activeRun.id),
+                          {},
+                        );
+                      }}
+                    >
+                      Run debug again
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => onOpenChange(false)}
+                    >
+                      Close
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    {phase === "done" && activeRun.status === "failed" && (
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => setShowDebugConsent(true)}
+                        className="gap-1.5"
+                      >
+                        <Bot className="size-3.5" />
+                        Debug with AI
+                      </Button>
+                    )}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => onOpenChange(false)}
+                    >
+                      {phase === "done"
+                        ? "Close"
+                        : "Close (run continues in background)"}
+                    </Button>
+                  </>
+                )}
               </DialogFooter>
             </>
           )}

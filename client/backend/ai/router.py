@@ -6,7 +6,9 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 
 import settings
+from _utils.exceptions import NotFoundError
 from auth.dependencies import CurrentSession
+from hosts.managers import host_manager
 from playbooks.managers import playbook_manager
 from playbooks.schemas import EditGeneratePlaybookRequest, GeneratePlaybookRequest
 from roles.managers import role_manager
@@ -81,6 +83,44 @@ async def edit_generate_playbook(
     _require_openai()
     return StreamingResponse(
         playbook_manager.edit_generate_playbook(session, playbook_id, body.prompt),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+@router.post("/runs/{run_id}/debug")
+async def debug_failed_playbook_run(
+    run_id: str,
+    session: CurrentSession,
+) -> StreamingResponse:
+    """Debug a failed playbook run: AI reads output, may SSH to first host, edits roles/playbook."""
+    _require_openai()
+    run = await playbook_manager.load_playbook_run(run_id)
+    if run is None:
+        raise HTTPException(status_code=404, detail="Run not found or expired")
+    if run.status != "failed":
+        raise HTTPException(
+            status_code=400,
+            detail="Run did not fail; nothing to debug",
+        )
+    if not run.hosts:
+        raise HTTPException(status_code=400, detail="Run has no target hosts")
+    try:
+        host = host_manager.get_host(session, run.hosts[0])
+    except NotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    if not host.managed:
+        raise HTTPException(
+            status_code=400,
+            detail="First target host is not managed; SSH debug unavailable",
+        )
+    if not (host.ip_address or "").strip() or not (host.ssh_user or "").strip():
+        raise HTTPException(
+            status_code=400,
+            detail="First target host is missing IP address or ssh_user",
+        )
+    return StreamingResponse(
+        playbook_manager.debug_failed_run(session, run, host),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )

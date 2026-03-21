@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
+import httpx
 from pydantic_ai import Agent, RunContext
 from pydantic_ai.models.openai import OpenAIModel
 from pydantic_ai.providers.openai import OpenAIProvider
 
 import settings
-from _utils.agent_stream import AgentDeps
+from _utils.agent_stream import AgentDeps, DebugAgentDeps
 from playbooks.schemas import PlaybookCreate, PlaybookUpdate
 from roles.schemas import RoleCreate
 
@@ -114,6 +115,36 @@ async def get_playbook(ctx: RunContext[AgentDeps], playbook_id: str) -> str:
     )
 
 
+async def run_ssh_command(ctx: RunContext[DebugAgentDeps], command: str) -> str:
+    """Run a shell command on the playbook run's first target host via the daemon (non-interactive). Returns stdout, stderr, and exit code."""
+    from daemon.client import daemon_post
+
+    deps = ctx.deps
+    if not deps.host_ip or not deps.host_ssh_user:
+        return "SSH is not configured for this debug session (missing host IP or ssh_user)."
+    try:
+        result = await daemon_post(
+            "/ssh/exec",
+            {
+                "ip": deps.host_ip,
+                "ssh_user": deps.host_ssh_user,
+                "ssh_port": deps.host_ssh_port,
+                "command": command,
+            },
+            timeout=120.0,
+        )
+    except httpx.HTTPStatusError as exc:
+        detail = exc.response.text
+        return f"SSH exec request failed (HTTP {exc.response.status_code}): {detail}"
+
+    exit_code = result.get("exit_code")
+    stdout = result.get("stdout") or ""
+    stderr = result.get("stderr") or ""
+    return (
+        f"exit_code={exit_code}\n--- stdout ---\n{stdout}\n--- stderr ---\n{stderr}"
+    )
+
+
 async def update_playbook(
     ctx: RunContext[AgentDeps], playbook_id: str, playbook: PlaybookCreate
 ) -> str:
@@ -155,6 +186,18 @@ playbook_agent: Agent[AgentDeps, str] = Agent(
         create_role,
         update_role,
         create_playbook,
+        get_playbook,
+        update_playbook,
+    ],
+)
+
+debug_run_agent: Agent[DebugAgentDeps, str] = Agent(
+    output_type=str,
+    retries=2,
+    tools=[
+        run_ssh_command,
+        get_role_detail,
+        update_role,
         get_playbook,
         update_playbook,
     ],

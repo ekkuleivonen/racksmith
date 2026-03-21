@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import asyncssh
 from fastapi import APIRouter, Depends, HTTPException, WebSocket
 
 from auth import verify_daemon_token
+from ssh.exec import ssh_exec_command
 from ssh.history import load_history, record_command
 from ssh.keys import generate_ssh_key_pair, machine_public_key
 from ssh.ping import ping_hosts
@@ -17,6 +19,8 @@ from ssh.schemas import (
     PublicKeyResponse,
     RebootRequest,
     RecordCommandRequest,
+    SSHExecRequest,
+    SSHExecResponse,
     SSHProbeRequest,
     SSHProbeResponse,
 )
@@ -38,6 +42,24 @@ async def probe(body: SSHProbeRequest) -> SSHProbeResponse:
         os=result.os,
         labels=result.labels,
     )
+
+
+@router.post("/exec", response_model=SSHExecResponse, dependencies=[Depends(verify_daemon_token)])
+async def exec_command(body: SSHExecRequest) -> SSHExecResponse:
+    """Run a single non-interactive command on a host via SSH."""
+    try:
+        exit_code, stdout, stderr = await ssh_exec_command(
+            body.ip,
+            body.ssh_user,
+            body.ssh_port,
+            body.command,
+            timeout=body.timeout,
+        )
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    except (OSError, TimeoutError, asyncssh.Error) as exc:
+        raise HTTPException(502, str(exc)) from exc
+    return SSHExecResponse(exit_code=exit_code, stdout=stdout, stderr=stderr)
 
 
 @router.post("/reboot", status_code=202, dependencies=[Depends(verify_daemon_token)])

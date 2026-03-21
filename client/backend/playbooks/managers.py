@@ -39,6 +39,7 @@ from core.serialize import serialize_group_vars, serialize_host_vars, serialize_
 from daemon.client import daemon_post
 from groups.managers import group_manager
 from hosts.managers import host_manager
+from hosts.schemas import Host
 from playbooks.schemas import (
     AvailableVarEntry,
     AvailableVarsResponse,
@@ -471,6 +472,52 @@ class PlaybookManager(RunManagerMixin):
         ):
             yield event
 
+    async def debug_failed_run(
+        self,
+        session: SessionData,
+        run: PlaybookRun,
+        host: Host,
+    ) -> AsyncGenerator[str]:
+        """Stream an AI agent that inspects the host over SSH and fixes roles/playbook."""
+        from _utils.agent_stream import DebugAgentDeps, stream_agent
+        from _utils.ai import debug_run_agent
+        from playbooks.debug_prompts import DEBUG_RUN_SYSTEM_PROMPT
+
+        max_chars = 120_000
+        output = run.output or ""
+        if len(output) > max_chars:
+            omitted = len(output) - max_chars
+            output = (
+                f"... [truncated {omitted} characters from the start of the log]\n\n"
+                f"{output[-max_chars:]}"
+            )
+
+        user_prompt = (
+            f"Playbook context:\n"
+            f"- playbook_id: {run.playbook_id}\n"
+            f"- playbook_name: {run.playbook_name}\n"
+            f"- run_id: {run.id}\n"
+            f"- first_target_host_id: {run.hosts[0]}\n"
+            f"- SSH target: {host.ip_address}:{host.ssh_port} as {host.ssh_user}\n\n"
+            f"ansible-playbook output:\n{output}\n"
+        )
+
+        deps = DebugAgentDeps(
+            session=session,
+            host_ip=(host.ip_address or "").strip(),
+            host_ssh_user=(host.ssh_user or "").strip(),
+            host_ssh_port=int(host.ssh_port or 22),
+            playbook_id=run.playbook_id,
+            playbook_name=run.playbook_name,
+        )
+        async for event in stream_agent(
+            debug_run_agent,
+            user_prompt,
+            deps,
+            instructions=DEBUG_RUN_SYSTEM_PROMPT,
+        ):
+            yield event
+
     def delete_playbook(
         self, session: SessionData, playbook_id: str, *, cascade_roles: bool = False
     ) -> None:
@@ -539,6 +586,10 @@ class PlaybookManager(RunManagerMixin):
 
         hosts = sorted({h.id for h in filtered})
         return ResolveTargetsResponse(hosts=hosts)
+
+    async def load_playbook_run(self, run_id: str) -> PlaybookRun | None:
+        """Load a PlaybookRun from Redis, or None if expired/missing."""
+        return await self._load_run(run_id)
 
     async def _load_run(self, run_id: str) -> PlaybookRun | None:
         """Load a PlaybookRun from Redis, or None if expired/missing."""

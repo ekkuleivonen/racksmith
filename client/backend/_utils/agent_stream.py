@@ -35,6 +35,17 @@ class AgentDeps:
     updated_playbook_id: str | None = field(default=None, repr=False)
 
 
+@dataclass
+class DebugAgentDeps(AgentDeps):
+    """Extra context for debugging a failed playbook run (SSH target + playbook id)."""
+
+    host_ip: str = ""
+    host_ssh_user: str = ""
+    host_ssh_port: int = 22
+    playbook_id: str = ""
+    playbook_name: str = ""
+
+
 def _sse(payload: dict[str, Any]) -> str:
     return f"data: {json.dumps(payload)}\n\n"
 
@@ -61,11 +72,14 @@ def _summarize_tool_args(tool_name: str, raw_json: str) -> dict[str, Any]:
         return {"role_id": args.get("role_id", "")}
     if tool_name == "get_playbook":
         return {"playbook_id": args.get("playbook_id", "")}
+    if tool_name == "run_ssh_command":
+        cmd = str(args.get("command", ""))
+        return {"command": cmd[:160] + ("…" if len(cmd) > 160 else "")}
     return {}
 
 
 async def stream_agent(
-    agent: Agent[AgentDeps, Any],
+    agent: Agent[Any, Any],
     prompt: str,
     deps: AgentDeps,
     *,
@@ -144,7 +158,7 @@ async def stream_agent(
                                         {
                                             "type": "tool_result",
                                             "tool": current_tool,
-                                            "result": str(content)[:500],
+                                            "result": str(content)[:2000],
                                         }
                                     )
                                     current_tool = None

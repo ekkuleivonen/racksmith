@@ -151,6 +151,7 @@ function ToolLabel({ tool }: { tool: string }) {
     create_playbook: "Assembling playbook",
     get_playbook: "Reading playbook",
     update_playbook: "Updating playbook",
+    run_ssh_command: "SSH command",
   };
   return <>{labels[tool] ?? tool}</>;
 }
@@ -207,6 +208,11 @@ function AiStepIndicator({
               — {String(step.args.name)}
             </span>
           )}
+          {step.args && "command" in step.args && step.args.command ? (
+            <code className="text-zinc-500 truncate max-w-[12rem] text-[10px]">
+              {String(step.args.command)}
+            </code>
+          ) : null}
           <Loader2 className="size-3 animate-spin ml-auto shrink-0" />
         </div>
       );
