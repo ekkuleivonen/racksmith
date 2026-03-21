@@ -126,11 +126,6 @@ async def run_ssh_command(ctx: RunContext[AgentDeps], command: str) -> str:
     from daemon.client import daemon_post
 
     deps = ctx.deps
-    if not deps.host_ip or not deps.host_ssh_user:
-        return (
-            "SSH is not configured (no probe host). The user did not select a host "
-            "for SSH, or connection details are missing."
-        )
     try:
         result = await daemon_post(
             "/ssh/exec",
