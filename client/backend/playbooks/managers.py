@@ -9,6 +9,7 @@ from typing import cast
 
 from _utils.helpers import generate_unique_id, new_id, now_iso
 from _utils.logging import get_logger
+from _utils.pagination import sort_order_reverse
 from _utils.repo_helpers import get_layout, get_layout_or_none
 from _utils.run_manager import RunManagerMixin
 from _utils.runs import load_run, save_run
@@ -34,15 +35,22 @@ from core.racksmith_meta import (
     write_meta,
 )
 from core.roles import RoleData, list_roles
-from core.run import validate_become_password
+from core.serialize import serialize_group_vars, serialize_host_vars, serialize_inventory, serialize_run_payload
+from daemon.client import daemon_post
+from groups.managers import group_manager
 from hosts.managers import host_manager
 from playbooks.schemas import (
+    AvailableVarEntry,
+    AvailableVarsResponse,
+    PlaybookCreate,
     PlaybookDetail,
     PlaybookRoleEntry,
     PlaybookRun,
     PlaybookRunRequest,
     PlaybookSummary,
-    PlaybookUpsert,
+    PlaybookUpdate,
+    RequiredRuntimeVarEntry,
+    RequiredRuntimeVarsResponse,
     ResolveTargetsResponse,
     RoleCatalogEntry,
     TargetSelection,
@@ -126,6 +134,139 @@ class PlaybookManager(RunManagerMixin):
             )
         return sorted(results, key=lambda s: (s.name.lower(), s.id))
 
+    def list_playbooks_filtered(
+        self,
+        session: SessionData,
+        *,
+        q: str | None,
+        label: str | None,
+        sort: str,
+        order: str,
+    ) -> list[PlaybookSummary]:
+        rows = self.list_playbooks(session)
+        qn = (q or "").strip().lower()
+        ln = (label or "").strip().lower()
+
+        def ok(p: PlaybookSummary) -> bool:
+            if qn and qn not in p.name.lower() and qn not in (p.description or "").lower():
+                return False
+            if ln and ln not in p.name.lower() and ln not in (p.description or "").lower():
+                return False
+            return True
+
+        filtered = [p for p in rows if ok(p)]
+        rev = sort_order_reverse(order)
+        sk = (sort or "name").lower()
+
+        def sort_key(p: PlaybookSummary) -> tuple[int, str, str]:
+            if sk == "updated_at":
+                return (0, p.updated_at, p.id)
+            if sk == "id":
+                return (0, p.id.lower(), p.id)
+            return (0, p.name.lower(), p.id)
+
+        filtered.sort(key=sort_key, reverse=rev)
+        return filtered
+
+    def get_available_vars(self, session: SessionData, playbook_id: str) -> AvailableVarsResponse:
+        detail = self.get_playbook(session, playbook_id)
+        catalog = {r.id: r for r in detail.roles_catalog}
+        entries: list[AvailableVarEntry] = []
+
+        host_keys: set[str] = set()
+        for h in host_manager.list_hosts(session):
+            if h.managed and h.vars:
+                host_keys.update(h.vars.keys())
+        for k in sorted(host_keys):
+            entries.append(
+                AvailableVarEntry(
+                    source="host_var",
+                    key=k,
+                    var_from="host",
+                    role_order=None,
+                )
+            )
+
+        for g in group_manager.list_groups(session):
+            gvars = g.vars or {}
+            if not gvars:
+                continue
+            label = f"Group: {g.name or g.id}"
+            for k in sorted(gvars.keys()):
+                entries.append(
+                    AvailableVarEntry(
+                        source="group_var",
+                        key=k,
+                        var_from=label,
+                        role_order=None,
+                    )
+                )
+
+        for order, re in enumerate(detail.role_entries):
+            role = catalog.get(re.role_id)
+            if not role:
+                continue
+            for out in role.outputs or []:
+                entries.append(
+                    AvailableVarEntry(
+                        source="role_output",
+                        key=out.key,
+                        var_from=role.name,
+                        role_order=order,
+                        description=out.description,
+                        output_type=out.type or "string",
+                    )
+                )
+            for inp in role.inputs or []:
+                if inp.default is not None:
+                    entries.append(
+                        AvailableVarEntry(
+                            source="role_default",
+                            key=inp.key,
+                            var_from=role.name,
+                            role_order=order,
+                        )
+                    )
+        return AvailableVarsResponse(vars=entries)
+
+    def get_required_runtime_vars(
+        self, session: SessionData, playbook_id: str
+    ) -> RequiredRuntimeVarsResponse:
+        detail = self.get_playbook(session, playbook_id)
+        catalog = {r.id: r for r in detail.roles_catalog}
+        inputs: list[RequiredRuntimeVarEntry] = []
+        seen_keys: set[str] = set()
+        for re in detail.role_entries:
+            role = catalog.get(re.role_id)
+            if not role:
+                continue
+            for inp in role.inputs:
+                t = (inp.type or "string").lower()
+                is_secret = bool(inp.secret) or t == "secret"
+                no_default = inp.default is None
+                if not is_secret and not (inp.required and no_default):
+                    continue
+                if inp.key in seen_keys:
+                    continue
+                seen_keys.add(inp.key)
+                opts = list(inp.options or inp.choices or [])
+                inputs.append(
+                    RequiredRuntimeVarEntry(
+                        key=inp.key,
+                        label=inp.label or inp.key,
+                        type="string" if is_secret else t,
+                        required=inp.required,
+                        options=opts,
+                        role_id=role.id,
+                        role_name=role.name,
+                        secret=is_secret,
+                    )
+                )
+        return RequiredRuntimeVarsResponse(
+            inputs=inputs,
+            needs_become_password=detail.become,
+        )
+
     def get_playbook(self, session: SessionData, playbook_id: str) -> PlaybookDetail:
         layout = get_layout(session)
         playbook_path = layout.playbooks_path / f"{playbook_id}.yml"
@@ -154,7 +295,7 @@ class PlaybookManager(RunManagerMixin):
             become=p.become,
         )
 
-    def create_playbook(self, session: SessionData, body: PlaybookUpsert) -> PlaybookDetail:
+    def create_playbook(self, session: SessionData, body: PlaybookCreate) -> PlaybookDetail:
         layout = get_layout(session)
         roles_catalog = {r.id: r for r in list_roles(layout)}
         playbook_id = _generate_playbook_id(layout)
@@ -185,7 +326,7 @@ class PlaybookManager(RunManagerMixin):
         return self.get_playbook(session, playbook_id)
 
     def update_playbook(
-        self, session: SessionData, playbook_id: str, body: PlaybookUpsert
+        self, session: SessionData, playbook_id: str, body: PlaybookUpdate
     ) -> PlaybookDetail:
         layout = get_layout(session)
         roles_catalog = {r.id: r for r in list_roles(layout)}
@@ -194,27 +335,45 @@ class PlaybookManager(RunManagerMixin):
             playbook_path = layout.playbooks_path / f"{playbook_id}.yaml"
         if not playbook_path.exists():
             raise FileNotFoundError("Playbook not found")
-        ansible_roles: list[AnsiblePlaybookRoleEntry] = []
-        for re in body.roles:
-            if re.role_id not in roles_catalog:
-                raise ValueError(f"Unknown role: {re.role_id}")
-            role_data = roles_catalog[re.role_id]
-            ansible_roles.append(
-                AnsiblePlaybookRoleEntry(
-                    role=role_data.id,
-                    vars=_merged_role_vars(role_data, re.vars),
+        current = read_playbook_with_meta(playbook_path, layout)
+        name = current.name
+        if body.name is not None:
+            name = body.name.strip()
+        description = current.description
+        if body.description is not None:
+            description = body.description.strip()
+        become = current.become
+        if body.become is not None:
+            become = body.become
+
+        if body.roles is not None:
+            ansible_roles: list[AnsiblePlaybookRoleEntry] = []
+            for re in body.roles:
+                if re.role_id not in roles_catalog:
+                    raise ValueError(f"Unknown role: {re.role_id}")
+                role_data = roles_catalog[re.role_id]
+                ansible_roles.append(
+                    AnsiblePlaybookRoleEntry(
+                        role=role_data.id,
+                        vars=_merged_role_vars(role_data, re.vars),
+                    )
                 )
-            )
+        else:
+            ansible_roles = list(current.roles)
+
         playbook_data = PlaybookData(
             id=playbook_id,
             path=playbook_path,
-            name=body.name.strip(),
-            description=body.description.strip(),
-            hosts="all",
-            gather_facts=True,
-            become=body.become,
+            name=name,
+            description=description,
+            hosts=current.hosts,
+            gather_facts=current.gather_facts,
+            become=become,
             roles=ansible_roles,
-            raw_content="",
+            raw_content=current.raw_content,
+            registry_id=current.registry_id,
+            registry_version=current.registry_version,
+            folder=current.folder,
         )
         write_playbook(layout, playbook_data)
         logger.info("playbook_updated", playbook_id=playbook_id)
@@ -396,9 +555,13 @@ class PlaybookManager(RunManagerMixin):
             raise ValueError("No hosts matched the selected targets")
 
         if playbook.become and body.become_password:
-            await validate_become_password(
-                repo_path, hosts, body.become_password
-            )
+            await daemon_post("/ansible/validate-become", {
+                "inventory_yaml": serialize_inventory(layout),
+                "host_vars": serialize_host_vars(layout),
+                "group_vars": serialize_group_vars(layout),
+                "hosts": hosts,
+                "become_password": body.become_password,
+            }, timeout=30.0)
 
         commit_sha = await aget_head_sha(repo_path)
         run = PlaybookRun(
@@ -421,12 +584,16 @@ class PlaybookManager(RunManagerMixin):
             "commit_sha": run.commit_sha or "",
         })
 
+        payload = serialize_run_payload(layout, playbook.id)
         pool = self._ensure_arq_pool()
         await pool.enqueue_job(
             "execute_playbook_run",
             run_id=run.id,
-            repo_path=str(repo_path),
-            playbook_id=playbook.id,
+            playbook_yaml=payload["playbook_yaml"],
+            inventory_yaml=payload["inventory_yaml"],
+            host_vars=payload["host_vars"],
+            group_vars=payload["group_vars"],
+            role_files=payload["role_files"],
             hosts=hosts,
             runtime_vars=body.runtime_vars or {},
             become=playbook.become,

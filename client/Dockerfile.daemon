@@ -1,0 +1,49 @@
+# Racksmith Daemon — SSH, Ansible, network ops
+FROM ghcr.io/astral-sh/uv:python3.14-bookworm-slim
+
+ARG RACKSMITH_VERSION=dev
+ENV RACKSMITH_VERSION=$RACKSMITH_VERSION
+
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    openssh-client \
+    arp-scan \
+    iputils-ping \
+    libcap2-bin \
+    curl \
+    supervisor \
+    && rm -rf /var/lib/apt/lists/* \
+    && setcap cap_net_raw+ep /usr/sbin/arp-scan
+
+# Shared library
+COPY client/shared/ /app/shared/
+
+# Daemon Python deps
+COPY client/daemon/pyproject.toml client/daemon/uv.lock* ./
+RUN uv sync --frozen --no-dev || uv sync --no-dev
+
+# Pre-install Ansible Galaxy collections at build time
+RUN uv run ansible-galaxy collection install --force community.general ansible.posix \
+    -p /app/.ansible/collections
+
+# Daemon code
+COPY client/daemon/ .
+
+# Supervisord config
+COPY client/supervisord.daemon.conf /etc/supervisord.conf
+
+RUN groupadd -r -g 10000 racksmith && useradd -r -u 10000 -g racksmith -d /app -s /sbin/nologin racksmith
+
+RUN mkdir -p /data/.ssh \
+    && chown -R racksmith:racksmith /app /data
+
+ENV REDIS_URL=redis://redis:6379 \
+    DATA_DIR=/data
+
+EXPOSE 8001
+
+HEALTHCHECK --interval=10s --timeout=5s --start-period=30s --retries=3 \
+    CMD curl -f http://127.0.0.1:8001/health || exit 1
+
+CMD ["/usr/bin/supervisord", "-c", "/etc/supervisord.conf"]

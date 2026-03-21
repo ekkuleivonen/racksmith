@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
 import { Loader2, Plus, Radar, Import, X } from "lucide-react";
 import { toast } from "sonner";
 import { toastApiError } from "@/lib/api";
@@ -12,8 +12,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { DeviceTable } from "@/components/shared/device-table";
+import { SSH_PORT_FALLBACK } from "@/lib/defaults";
 import { createHostsBulk, refreshHost, type HostInput } from "@/lib/hosts";
-import { useDiscoveryScan, useHosts } from "@/hooks/queries";
+import { useDefaults, useDiscoveryScan, useHosts } from "@/hooks/queries";
 import { useStartScan, useImportDiscoveredHosts } from "@/hooks/mutations";
 
 type HostRow = { ip_address: string; name: string };
@@ -58,10 +59,17 @@ function emptyRow(): HostRow {
 }
 
 function ManualTab({ onClose }: { onClose: () => void }) {
+  const { data: defaults } = useDefaults();
   const [sshUser, setSshUser] = useState("root");
-  const [sshPort, setSshPort] = useState(22);
+  const [sshPort, setSshPort] = useState(SSH_PORT_FALLBACK);
   const [rows, setRows] = useState<HostRow[]>([emptyRow()]);
   const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (defaults?.ssh_port != null) setSshPort(defaults.ssh_port);
+  }, [defaults?.ssh_port]);
+
+  const sshPortFallback = defaults?.ssh_port ?? SSH_PORT_FALLBACK;
 
   const updateRow = (index: number, patch: Partial<HostRow>) => {
     setRows((prev) =>
@@ -133,7 +141,9 @@ function ManualTab({ onClose }: { onClose: () => void }) {
             className="h-8 text-xs"
             type="number"
             value={sshPort}
-            onChange={(e) => setSshPort(Number(e.target.value) || 22)}
+            onChange={(e) =>
+              setSshPort(Number(e.target.value) || sshPortFallback)
+            }
           />
         </div>
       </div>
@@ -209,6 +219,7 @@ function ScannerTab({ onClose }: { onClose: () => void }) {
   const importHosts = useImportDiscoveredHosts();
   const { data: scan } = useDiscoveryScan(scanId);
   const { data: existingHosts } = useHosts();
+  const { data: defaults } = useDefaults();
 
   const defaultSshUser = useMemo(() => {
     if (!existingHosts?.length) return "root";
@@ -263,7 +274,11 @@ function ScannerTab({ onClose }: { onClose: () => void }) {
     );
     if (toImport.length === 0) return;
     importHosts.mutate(
-      { devices: toImport, sshUser: sshUser.trim() || "root" },
+      {
+        devices: toImport,
+        sshUser: sshUser.trim() || "root",
+        sshPort: defaults?.ssh_port ?? SSH_PORT_FALLBACK,
+      },
       {
         onSuccess: () => {
           setSelected(new Set());
@@ -272,7 +287,7 @@ function ScannerTab({ onClose }: { onClose: () => void }) {
         },
       },
     );
-  }, [devices, selected, importHosts, sshUser, onClose]);
+  }, [defaults?.ssh_port, devices, selected, importHosts, sshUser, onClose]);
 
   return (
     <div className="space-y-4 py-2">

@@ -12,6 +12,7 @@ export const queryClient = new QueryClient({
 
 export const queryKeys = {
   hosts: ["hosts"] as const,
+  defaults: ["defaults"] as const,
   racks: ["racks"] as const,
   groups: ["groups"] as const,
   playbooks: ["playbooks"] as const,

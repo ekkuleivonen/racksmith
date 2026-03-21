@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { SSH_PORT_FALLBACK } from "@/lib/defaults";
 import { X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -19,6 +20,8 @@ interface ItemHardwareFieldsProps {
   onChange: (patch: Partial<ItemLike>) => void;
   /** Onboarding mode: simplified layout, labels after connection */
   onboarding?: boolean;
+  /** Fallback when port field is cleared */
+  defaultSshPort?: number;
 }
 
 function normalizeLabel(value: string): string {
@@ -97,9 +100,11 @@ function LabelsSection({
 function ConnectionSection({
   item,
   onChange,
+  defaultSshPort,
 }: {
   item: ItemLike;
   onChange: (patch: Partial<ItemLike>) => void;
+  defaultSshPort: number;
 }) {
   return (
     <>
@@ -123,7 +128,9 @@ function ConnectionSection({
           className="h-8 text-xs w-20"
           type="number"
           value={item.ssh_port}
-          onChange={(e) => onChange({ ssh_port: Number(e.target.value) || 22 })}
+          onChange={(e) =>
+            onChange({ ssh_port: Number(e.target.value) || defaultSshPort })
+          }
           placeholder="Port"
         />
       </div>
@@ -139,6 +146,7 @@ export function ItemHardwareFields({
   item,
   onChange,
   onboarding = false,
+  defaultSshPort = SSH_PORT_FALLBACK,
 }: ItemHardwareFieldsProps) {
   const [labelInput, setLabelInput] = useState("");
 
@@ -163,7 +171,11 @@ export function ItemHardwareFields({
   );
 
   const connectionSection = (
-    <ConnectionSection item={item} onChange={onChange} />
+    <ConnectionSection
+      item={item}
+      onChange={onChange}
+      defaultSshPort={defaultSshPort}
+    />
   );
 
   if (onboarding) {

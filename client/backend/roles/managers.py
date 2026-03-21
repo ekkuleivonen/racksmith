@@ -12,6 +12,7 @@ from pydantic import ValidationError
 
 from _utils.helpers import generate_unique_id, new_id, now_iso
 from _utils.logging import get_logger
+from _utils.pagination import sort_order_reverse
 from _utils.repo_helpers import get_layout, get_layout_or_none
 from _utils.run_manager import RunManagerMixin
 from _utils.runs import load_run, save_run
@@ -31,11 +32,14 @@ from core.roles import (
     remove_role,
     write_role,
 )
-from core.run import validate_become_password
+from core.serialize import serialize_all_role_files, serialize_group_vars, serialize_host_vars, serialize_inventory
+from daemon.client import daemon_post
 from playbooks.managers import playbook_manager
 from roles.schemas import (
+    LocalRoleFacetItem,
     RoleCreate,
     RoleDetail,
+    RoleFacetsResponse,
     RoleRun,
     RoleRunRequest,
     RoleSummary,
@@ -149,6 +153,78 @@ class RoleManager(RunManagerMixin):
         if layout is None:
             return []
         return [_role_data_to_summary(r) for r in list_roles(layout)]
+
+    def list_roles_filtered(
+        self,
+        session: SessionData,
+        *,
+        q: str | None,
+        label: str | None,
+        platform: str | None,
+        sort: str,
+        order: str,
+    ) -> list[RoleSummary]:
+        roles = self.list_roles(session)
+        qn = (q or "").strip().lower()
+        ln = (label or "").strip().lower()
+        pn = (platform or "").strip().lower()
+
+        def ok(r: RoleSummary) -> bool:
+            if ln and not any(ln == x.lower() for x in r.labels):
+                return False
+            if pn:
+                os_fams = r.compatibility.get("os_family") or []
+                if isinstance(os_fams, list):
+                    if not any(pn in str(x).lower() for x in os_fams):
+                        return False
+                elif pn not in str(os_fams).lower():
+                    return False
+            if qn:
+                hay = f"{r.name} {r.description} {' '.join(r.labels)}".lower()
+                if qn not in hay:
+                    return False
+            return True
+
+        filtered = [r for r in roles if ok(r)]
+        rev = sort_order_reverse(order)
+        sk = (sort or "name").lower()
+
+        def sort_key(r: RoleSummary) -> tuple[int, str, str]:
+            if sk == "id":
+                return (0, r.id.lower(), r.id)
+            if sk == "description":
+                return (0, r.description.lower(), r.id)
+            return (0, r.name.lower(), r.id)
+
+        filtered.sort(key=sort_key, reverse=rev)
+        return filtered
+
+    def get_facets(self, session: SessionData) -> RoleFacetsResponse:
+        roles = self.list_roles(session)
+        label_counts: dict[str, int] = {}
+        platform_counts: dict[str, int] = {}
+        for r in roles:
+            for lab in r.labels:
+                label_counts[lab] = label_counts.get(lab, 0) + 1
+            os_fams = r.compatibility.get("os_family") or []
+            if isinstance(os_fams, list):
+                for os in os_fams:
+                    s = str(os).strip()
+                    if s:
+                        platform_counts[s] = platform_counts.get(s, 0) + 1
+            elif os_fams:
+                s = str(os_fams).strip()
+                if s:
+                    platform_counts[s] = platform_counts.get(s, 0) + 1
+        labels = sorted(
+            (LocalRoleFacetItem(name=k, count=v) for k, v in label_counts.items()),
+            key=lambda x: (-x.count, x.name.lower()),
+        )
+        platforms = sorted(
+            (LocalRoleFacetItem(name=k, count=v) for k, v in platform_counts.items()),
+            key=lambda x: (-x.count, x.name.lower()),
+        )
+        return RoleFacetsResponse(labels=labels, platforms=platforms)
 
     def get_role(self, session: SessionData, role_id: str) -> RoleSummary:
         layout = get_layout(session)
@@ -339,9 +415,13 @@ class RoleManager(RunManagerMixin):
             raise ValueError("No hosts matched the selected targets")
 
         if body.become and body.become_password:
-            await validate_become_password(
-                repo_path, hosts, body.become_password
-            )
+            await daemon_post("/ansible/validate-become", {
+                "inventory_yaml": serialize_inventory(layout),
+                "host_vars": serialize_host_vars(layout),
+                "group_vars": serialize_group_vars(layout),
+                "hosts": hosts,
+                "become_password": body.become_password,
+            }, timeout=30.0)
 
         commit_sha = await aget_head_sha(repo_path)
         run = RoleRun(
@@ -372,8 +452,11 @@ class RoleManager(RunManagerMixin):
         await pool.enqueue_job(
             "execute_role_run",
             run_id=run.id,
-            repo_path=str(repo_path),
             role_id=role_id,
+            inventory_yaml=serialize_inventory(layout),
+            host_vars=serialize_host_vars(layout),
+            group_vars=serialize_group_vars(layout),
+            role_files=serialize_all_role_files(layout),
             hosts=hosts,
             role_vars=body.vars,
             become=body.become,

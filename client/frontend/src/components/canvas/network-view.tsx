@@ -21,8 +21,15 @@ import { useHosts, useSubnets } from "@/hooks/queries";
 import { useSelection } from "@/stores/selection";
 import { usePingStore } from "@/stores/ping";
 import { hostStatusKey } from "@/lib/ssh";
-import { compareHosts, hostDisplayLabel, isManagedHost, matchesHostFilters, type Host } from "@/lib/hosts";
-import { getSubnetCidr, upsertSubnet, type SubnetMeta } from "@/lib/subnets";
+import {
+  compareHosts,
+  hostDisplayLabel,
+  hostSubnetBucket,
+  isManagedHost,
+  matchesCanvasHostFilters,
+  type Host,
+} from "@/lib/hosts";
+import { upsertSubnet, type SubnetMeta } from "@/lib/subnets";
 import { invalidateResource } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
@@ -245,21 +252,31 @@ function NetworkViewInner({ filters, selectedHostId, onSelectHost }: NetworkView
   }, [subnetMetas]);
 
   const { mutate: saveSubnet } = useMutation({
-    mutationFn: ({ cidr, name, description }: { cidr: string; name: string; description: string }) =>
-      upsertSubnet(cidr, { name, description }),
+    mutationFn: ({
+      cidr,
+      name,
+      description,
+      existsInMeta,
+    }: {
+      cidr: string;
+      name: string;
+      description: string;
+      existsInMeta: boolean;
+    }) => upsertSubnet(cidr, { name, description }, existsInMeta),
     onSuccess: () => invalidateResource("subnets"),
     onError: (err) => toastApiError(err, "Failed to save subnet"),
   });
 
   const handleSubnetSave = useCallback<SubnetSaveFn>(
-    (cidr, name, description) => saveSubnet({ cidr, name, description }),
-    [saveSubnet],
+    (cidr, name, description) =>
+      saveSubnet({ cidr, name, description, existsInMeta: subnetMetaMap.has(cidr) }),
+    [saveSubnet, subnetMetaMap],
   );
 
   const hosts = useMemo(() => {
     return allHosts
       .filter(isManagedHost)
-      .filter((h) => matchesHostFilters(h, filters, pingStatuses))
+      .filter((h) => matchesCanvasHostFilters(h, filters, pingStatuses))
       .sort(compareHosts);
   }, [allHosts, filters, pingStatuses]);
 
@@ -267,7 +284,7 @@ function NetworkViewInner({ filters, selectedHostId, onSelectHost }: NetworkView
   // membership changes — NOT on status/selection updates.
   const structureKey = useMemo(() => {
     return hosts
-      .map((h) => `${h.id}:${getSubnetCidr(h.ip_address)}`)
+      .map((h) => `${h.id}:${hostSubnetBucket(h)}`)
       .sort()
       .join("|");
   }, [hosts]);
@@ -275,7 +292,7 @@ function NetworkViewInner({ filters, selectedHostId, onSelectHost }: NetworkView
   const { layoutNodes: laidOutNodes, layoutEdges } = useMemo(() => {
     const groupMap = new Map<string, Host[]>();
     for (const host of hosts) {
-      const subnet = getSubnetCidr(host.ip_address);
+      const subnet = hostSubnetBucket(host);
       if (!groupMap.has(subnet)) groupMap.set(subnet, []);
       groupMap.get(subnet)!.push(host);
     }

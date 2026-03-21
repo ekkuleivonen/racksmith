@@ -3,7 +3,6 @@ import { Link } from "react-router-dom";
 import {
   AlertTriangle,
   ArrowUpCircle,
-  Check,
   ChevronLeft,
   ChevronRight,
   Download,
@@ -16,11 +15,6 @@ import {
   X,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -153,12 +147,12 @@ function RoleCard({
                 </Badge>
               )}
               {imported && !upgradeAvailable && (
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Check className="size-3.5 shrink-0 text-emerald-400" />
-                  </TooltipTrigger>
-                  <TooltipContent>Imported</TooltipContent>
-                </Tooltip>
+                <Badge
+                  variant="outline"
+                  className="shrink-0 border-zinc-700/50 text-[10px] text-zinc-500"
+                >
+                  Imported
+                </Badge>
               )}
             </div>
             <p className="line-clamp-2 text-xs leading-relaxed text-zinc-500">
@@ -254,12 +248,12 @@ function PlaybookCard({
                 </Badge>
               )}
               {imported && !upgradeAvailable && (
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Check className="size-3.5 shrink-0 text-emerald-400" />
-                  </TooltipTrigger>
-                  <TooltipContent>Imported</TooltipContent>
-                </Tooltip>
+                <Badge
+                  variant="outline"
+                  className="shrink-0 border-zinc-700/50 text-[10px] text-zinc-500"
+                >
+                  Imported
+                </Badge>
               )}
               {roleCount > 0 && (
                 <Badge
@@ -358,12 +352,12 @@ function RecommendedCard({
                 </Badge>
               )}
               {imported && !upgradeAvailable && (
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Check className="size-3 shrink-0 text-emerald-400" />
-                  </TooltipTrigger>
-                  <TooltipContent>Imported</TooltipContent>
-                </Tooltip>
+                <Badge
+                  variant="outline"
+                  className="shrink-0 border-zinc-700/50 px-1 text-[9px] text-zinc-500"
+                >
+                  Imported
+                </Badge>
               )}
             </div>
             <p className="line-clamp-2 text-[11px] leading-relaxed text-zinc-500">

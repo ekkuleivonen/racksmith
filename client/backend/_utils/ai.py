@@ -8,7 +8,7 @@ from pydantic_ai.providers.openai import OpenAIProvider
 
 import settings
 from _utils.agent_stream import AgentDeps
-from playbooks.schemas import PlaybookUpsert
+from playbooks.schemas import PlaybookCreate, PlaybookUpdate
 from roles.schemas import RoleCreate
 
 
@@ -80,7 +80,7 @@ async def update_role(ctx: RunContext[AgentDeps], role_id: str, role: RoleCreate
     return f"Updated role '{detail.name}' (id: {detail.id})"
 
 
-async def create_playbook(ctx: RunContext[AgentDeps], playbook: PlaybookUpsert) -> str:
+async def create_playbook(ctx: RunContext[AgentDeps], playbook: PlaybookCreate) -> str:
     """Assemble and save a playbook from existing roles. Each entry in the roles list must reference a role_id that already exists. Use vars to pass input values to each role. Roles execute in the order listed."""
     from playbooks.managers import playbook_manager
 
@@ -115,13 +115,19 @@ async def get_playbook(ctx: RunContext[AgentDeps], playbook_id: str) -> str:
 
 
 async def update_playbook(
-    ctx: RunContext[AgentDeps], playbook_id: str, playbook: PlaybookUpsert
+    ctx: RunContext[AgentDeps], playbook_id: str, playbook: PlaybookCreate
 ) -> str:
     """Update an existing playbook. Provide the playbook_id and the full updated playbook definition (name, description, roles, become). All role_ids referenced must already exist."""
     from playbooks.managers import playbook_manager
 
+    body = PlaybookUpdate(
+        name=playbook.name,
+        description=playbook.description,
+        become=playbook.become,
+        roles=playbook.roles,
+    )
     detail = playbook_manager.update_playbook(
-        ctx.deps.session, playbook_id, playbook
+        ctx.deps.session, playbook_id, body
     )
     ctx.deps.updated_playbook_id = detail.id
     return (

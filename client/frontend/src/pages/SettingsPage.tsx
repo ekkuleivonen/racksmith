@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { LogOut, Trash2, TriangleAlert } from "lucide-react";
-import { apiPost, toastApiError } from "@/lib/api";
+import { toastApiError } from "@/lib/api";
+import { clearCache } from "@/lib/settings";
 import { toast } from "sonner";
 import {
   AlertDialog,
@@ -108,9 +109,7 @@ export function SettingsPage() {
               onClick={async () => {
                 setClearingCache(true);
                 try {
-                  const res = await apiPost<{ deleted_keys: number }>(
-                    "/settings/clear-cache",
-                  );
+                  const res = await clearCache();
                   toast.success(`Cache cleared (${res.deleted_keys} keys)`);
                 } catch (error) {
                   toastApiError(error, "Failed to clear cache");

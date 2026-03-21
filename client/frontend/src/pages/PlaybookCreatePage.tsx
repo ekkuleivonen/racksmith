@@ -185,7 +185,7 @@ export function PlaybookCreatePage() {
     (p: string) => {
       setCompletedId(null);
       setExpandedSteps(new Set());
-      return rawGenerate("/playbooks/generate", { prompt: p });
+      return rawGenerate("/ai/playbooks/generate", { prompt: p });
     },
     [rawGenerate],
   );

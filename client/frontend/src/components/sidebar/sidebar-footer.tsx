@@ -87,8 +87,8 @@ export function SidebarFooter() {
 
   const [hostPickerOpen, setHostPickerOpen] = useState(false);
 
-  const modifiedPaths = gitData?.modifiedPaths ?? {};
-  const untrackedPaths = gitData?.untrackedPaths ?? {};
+  const modifiedPaths = gitData?.modified_paths ?? {};
+  const untrackedPaths = gitData?.untracked_paths ?? {};
   const changeCount =
     Object.keys(modifiedPaths).length + Object.keys(untrackedPaths).length;
 

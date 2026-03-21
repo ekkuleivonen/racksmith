@@ -18,15 +18,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { apiGet, apiPut, toastApiError } from "@/lib/api";
+import { toastApiError } from "@/lib/api";
+import {
+  getOpenAIModels,
+  getSettings,
+  updateSettings,
+  type AppSettings,
+} from "@/lib/settings";
 
-export type AppSettings = {
-  OPENAI_API_KEY: string;
-  OPENAI_BASE_URL: string;
-  OPENAI_MODEL: string;
-  GIT_RACKSMITH_BRANCH: string;
-  REGISTRY_URL: string;
-};
+export type { AppSettings } from "@/lib/settings";
 
 const EMPTY_SETTINGS: AppSettings = {
   OPENAI_API_KEY: "",
@@ -57,8 +57,8 @@ export const UserConfigForm = forwardRef<
 
   const fetchSettings = useCallback(async () => {
     try {
-      const data = await apiGet<{ settings: AppSettings }>("/settings");
-      setSettings(data.settings);
+      const data = await getSettings();
+      setSettings(data);
     } catch (error) {
       toastApiError(error, "Failed to load settings");
     } finally {
@@ -69,10 +69,8 @@ export const UserConfigForm = forwardRef<
   const loadOpenaiModels = useCallback(async () => {
     setLoadingModels(true);
     try {
-      const data = await apiGet<{ models: string[] }>(
-        "/settings/openai-models",
-      );
-      setOpenaiModels(data.models);
+      const models = await getOpenAIModels();
+      setOpenaiModels(models);
     } catch {
       // non-critical
     } finally {
@@ -97,7 +95,10 @@ export const UserConfigForm = forwardRef<
 
     const timer = setTimeout(async () => {
       try {
-        await apiPut("/settings", { values: { OPENAI_API_KEY: settings.OPENAI_API_KEY } });
+        const next = await updateSettings({
+          OPENAI_API_KEY: settings.OPENAI_API_KEY,
+        });
+        setSettings(next);
         await loadOpenaiModels();
       } catch {
         setOpenaiModels([]);
@@ -113,10 +114,8 @@ export const UserConfigForm = forwardRef<
   const handleSave = async () => {
     setSaving(true);
     try {
-      const data = await apiPut<{ settings: AppSettings }>("/settings", {
-        values: settings,
-      });
-      setSettings(data.settings);
+      const next = await updateSettings(settings as Record<string, string>);
+      setSettings(next);
       toast.success("Settings saved");
       void loadOpenaiModels();
       onSaved?.();

@@ -77,6 +77,10 @@ export async function listRegistryRoles(
   return apiGet<RegistryRoleList>(`/registry/roles?${searchParams.toString()}`);
 }
 
+export async function listRecommendedRegistryRoles(): Promise<RegistryRoleList> {
+  return apiGet<RegistryRoleList>("/registry/roles/recommended");
+}
+
 export async function getRegistryFacets(): Promise<RegistryFacets> {
   return apiGet<RegistryFacets>("/registry/roles/facets");
 }

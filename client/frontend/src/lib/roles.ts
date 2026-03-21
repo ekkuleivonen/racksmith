@@ -1,4 +1,4 @@
-import { apiDelete, apiGet, apiPatch, apiPost, apiPut, wsUrl } from "@/lib/api";
+import { apiDelete, apiGet, apiPatch, apiPost, wsUrl } from "@/lib/api";
 import { invalidateResource } from "@/lib/queryClient";
 import type { TargetSelection } from "@/lib/playbooks";
 
@@ -67,23 +67,41 @@ export type RoleRunRequest = {
   runtime_vars?: Record<string, string>;
 };
 
+const ROLES_PER_PAGE = 200;
+
 export async function listRoles() {
-  const data = await apiGet<{ roles: RoleSummary[] }>("/roles");
-  return data.roles;
+  const data = await apiGet<{
+    items: RoleSummary[];
+    total: number;
+    page: number;
+    per_page: number;
+  }>(`/roles?page=1&per_page=${ROLES_PER_PAGE}`);
+  return data.items;
+}
+
+export type LocalRoleFacetItem = { name: string; count: number };
+
+export type RoleFacetsResponse = {
+  labels: LocalRoleFacetItem[];
+  platforms: LocalRoleFacetItem[];
+};
+
+export async function getRoleFacets(): Promise<RoleFacetsResponse> {
+  return apiGet<RoleFacetsResponse>("/roles/facets");
 }
 
 export async function getRoleDetail(roleId: string) {
-  return apiGet<{ role: RoleDetail }>(`/roles/${roleId}/detail`);
+  return apiGet<{ role: RoleDetail }>(`/roles/${roleId}`);
 }
 
 export async function updateRole(roleId: string, yamlText: string) {
-  const result = await apiPut<{ role: RoleDetail }>(`/roles/${roleId}`, { yaml_text: yamlText });
+  const result = await apiPatch<{ role: RoleDetail }>(`/roles/${roleId}`, { yaml_text: yamlText });
   invalidateAfterRoleMutation();
   return result;
 }
 
 export async function createRoleFromYaml(yamlText: string) {
-  const result = await apiPost<{ role: RoleSummary }>("/roles/from-yaml", { yaml_text: yamlText });
+  const result = await apiPost<{ role: RoleSummary }>("/roles", { yaml_text: yamlText });
   invalidateAfterRoleMutation();
   return result;
 }

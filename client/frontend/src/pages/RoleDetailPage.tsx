@@ -227,11 +227,8 @@ export function RoleDetailPage() {
           <YamlEditorWithAi
             value={editing ? yamlText : role.raw_content}
             onChange={setYamlText}
-            apiEndpoint="/roles/edit-generate"
-            buildBody={(prompt) => ({
-              existing_yaml: editing ? yamlText : role.raw_content,
-              prompt,
-            })}
+            apiEndpoint={`/ai/roles/${roleId}/edit`}
+            buildBody={(prompt) => ({ prompt })}
             editorHidden={!editing}
             onBeforeGenerate={() => {
               setYamlText("");

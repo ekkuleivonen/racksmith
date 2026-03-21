@@ -273,7 +273,7 @@ export function PlaybookDetailPage() {
   const generateEdit = useCallback(
     (p: string) => {
       setExpandedSteps(new Set());
-      return rawGenerate(`/playbooks/${playbookId}/edit-generate`, {
+      return rawGenerate(`/ai/playbooks/${playbookId}/edit`, {
         prompt: p,
       });
     },
@@ -340,7 +340,14 @@ export function PlaybookDetailPage() {
 
   useEffect(() => {
     const handler = () => {
-      if (isDirty()) navigator.sendBeacon?.(`/api/playbooks/${playbookId}`, JSON.stringify(draft));
+      if (!isDirty() || !draft || !playbookId) return;
+      void fetch(`/api/playbooks/${playbookId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(draft),
+        keepalive: true,
+        credentials: "include",
+      });
     };
     window.addEventListener("beforeunload", handler);
     return () => window.removeEventListener("beforeunload", handler);
@@ -516,6 +523,7 @@ export function PlaybookDetailPage() {
           hosts={hosts}
           groups={groups}
           compact
+          savedPlaybookId={playbookId}
           onChange={setDraft}
         />
         </div>

@@ -2,22 +2,25 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Cookie, HTTPException, WebSocket
-from fastapi.responses import StreamingResponse
+from fastapi import APIRouter, Cookie, Query, WebSocket
 
 import settings
+from _utils.pagination import paginate
+from _utils.schemas import PaginatedResponse
 from _utils.websocket import require_ws_session, ws_error_handler
 from auth.dependencies import CurrentSession
 from playbooks.managers import playbook_manager
 from playbooks.schemas import (
-    EditGeneratePlaybookRequest,
+    AvailableVarsResponse,
     FolderUpdate,
-    GeneratePlaybookRequest,
-    PlaybookListResponse,
+    PlaybookCatalogResponse,
+    PlaybookCreate,
     PlaybookResponse,
     PlaybookRunRequest,
     PlaybookRunResponse,
-    PlaybookUpsert,
+    PlaybookSummary,
+    PlaybookUpdate,
+    RequiredRuntimeVarsResponse,
     ResolveTargetsRequest,
     ResolveTargetsResponse,
 )
@@ -25,40 +28,39 @@ from playbooks.schemas import (
 router = APIRouter()
 
 
-@router.get("", response_model=PlaybookListResponse)
-async def list_playbooks(session: CurrentSession) -> PlaybookListResponse:
-    """List all playbooks and the available roles catalog."""
-    playbooks = playbook_manager.list_playbooks(session)
+@router.get("/catalog", response_model=PlaybookCatalogResponse)
+async def playbook_roles_catalog(session: CurrentSession) -> PlaybookCatalogResponse:
+    """Roles catalog for playbook authoring."""
     roles = playbook_manager.roles_catalog(session)
-    return PlaybookListResponse(playbooks=playbooks, roles=roles)
+    return PlaybookCatalogResponse(roles=roles)
+
+
+@router.get("", response_model=PaginatedResponse[PlaybookSummary])
+async def list_playbooks(
+    session: CurrentSession,
+    q: str | None = Query(None, description="Search name or description"),
+    label: str | None = Query(None, description="Substring match on name or description"),
+    sort: str = Query("name", description="Sort field: name, id, updated_at"),
+    order: str = Query("asc", description="asc or desc"),
+    page: int = Query(1, ge=1),
+    per_page: int = Query(50, ge=1, le=200),
+) -> PaginatedResponse[PlaybookSummary]:
+    """List playbooks in the active repo (paginated)."""
+    rows = playbook_manager.list_playbooks_filtered(
+        session, q=q, label=label, sort=sort, order=order
+    )
+    slice_rows, total = paginate(rows, page=page, per_page=per_page)
+    return PaginatedResponse(items=slice_rows, total=total, page=page, per_page=per_page)
 
 
 @router.post("", status_code=201, response_model=PlaybookResponse)
 async def create_playbook(
-    body: PlaybookUpsert,
+    body: PlaybookCreate,
     session: CurrentSession,
 ) -> PlaybookResponse:
     """Create a new playbook."""
     playbook = playbook_manager.create_playbook(session, body)
     return PlaybookResponse(playbook=playbook)
-
-
-@router.post("/generate")
-async def generate_playbook(
-    body: GeneratePlaybookRequest,
-    session: CurrentSession,
-) -> StreamingResponse:
-    """Generate a playbook (roles + assembly) from a natural-language prompt via AI."""
-    if not settings.OPENAI_API_KEY:
-        raise HTTPException(
-            status_code=503,
-            detail="AI generation is not configured (OPENAI_API_KEY missing)",
-        )
-    return StreamingResponse(
-        playbook_manager.generate_playbook(session, body.prompt),
-        media_type="text/event-stream",
-        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
-    )
 
 
 @router.post("/resolve-targets", response_model=ResolveTargetsResponse)
@@ -70,23 +72,20 @@ async def resolve_targets(
     return playbook_manager.resolve_targets(session, body.targets)
 
 
-@router.post("/{playbook_id}/edit-generate")
-async def edit_generate_playbook(
-    playbook_id: str,
-    body: EditGeneratePlaybookRequest,
-    session: CurrentSession,
-) -> StreamingResponse:
-    """Edit a playbook from a natural-language prompt via AI."""
-    if not settings.OPENAI_API_KEY:
-        raise HTTPException(
-            status_code=503,
-            detail="AI generation is not configured (OPENAI_API_KEY missing)",
-        )
-    return StreamingResponse(
-        playbook_manager.edit_generate_playbook(session, playbook_id, body.prompt),
-        media_type="text/event-stream",
-        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
-    )
+@router.get("/{playbook_id}/available-vars", response_model=AvailableVarsResponse)
+async def available_vars(
+    playbook_id: str, session: CurrentSession
+) -> AvailableVarsResponse:
+    """Return all variable sources available to a playbook."""
+    return playbook_manager.get_available_vars(session, playbook_id)
+
+
+@router.get("/{playbook_id}/required-runtime-vars", response_model=RequiredRuntimeVarsResponse)
+async def required_runtime_vars(
+    playbook_id: str, session: CurrentSession
+) -> RequiredRuntimeVarsResponse:
+    """Return inputs that require user-provided values at run time."""
+    return playbook_manager.get_required_runtime_vars(session, playbook_id)
 
 
 @router.get("/{playbook_id}", response_model=PlaybookResponse)
@@ -98,10 +97,10 @@ async def get_playbook(
     return PlaybookResponse(playbook=playbook)
 
 
-@router.put("/{playbook_id}", response_model=PlaybookResponse)
+@router.patch("/{playbook_id}", response_model=PlaybookResponse)
 async def update_playbook(
     playbook_id: str,
-    body: PlaybookUpsert,
+    body: PlaybookUpdate,
     session: CurrentSession,
 ) -> PlaybookResponse:
     """Update an existing playbook."""

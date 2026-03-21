@@ -4,30 +4,13 @@ import type { Host } from "@/lib/hosts";
 
 export type RackWidthInches = 10 | 19;
 
-/** Canvas-compatible host shape (flat placement fields). Layout only has hosts on the rack. */
+/** Host row from GET /racks/:id/layout (flat placement). */
 export type RackLayoutHost = Omit<Host, "placement"> & {
   placement: "rack";
   position_u_start: number;
   position_u_height: number;
   position_col_start: number;
   position_col_count: number;
-};
-
-export function hostToRackLayoutHost(host: Host): RackLayoutHost {
-  const p = host.placement!;
-  return {
-    ...host,
-    placement: "rack",
-    position_u_start: p.u_start ?? 1,
-    position_u_height: p.u_height ?? 1,
-    position_col_start: p.col_start ?? 0,
-    position_col_count: p.col_count ?? 1,
-  };
-}
-
-export const COLS_BY_WIDTH: Record<RackWidthInches, number> = {
-  19: 12,
-  10: 6,
 };
 
 export type RackSummary = {
@@ -50,7 +33,7 @@ export type RackDetail = {
 };
 
 export type RackLayout = RackDetail & {
-  hosts: Host[];
+  hosts: RackLayoutHost[];
 };
 
 export type ZoneSelection = {
@@ -64,9 +47,26 @@ function invalidateAfterRackMutation() {
   invalidateResource("racks", "filesTree");
 }
 
+const RACKS_PER_PAGE = 200;
+
 export async function listRacks() {
-  const data = await apiGet<{ racks: RackSummary[] }>("/racks");
-  return data.racks;
+  const data = await apiGet<{
+    items: RackSummary[];
+    total: number;
+    page: number;
+    per_page: number;
+  }>(`/racks?page=1&per_page=${RACKS_PER_PAGE}`);
+  return data.items;
+}
+
+export async function listRacksWithLayouts() {
+  const data = await apiGet<{
+    items: RackLayout[];
+    total: number;
+    page: number;
+    per_page: number;
+  }>(`/racks?include=layout&page=1&per_page=${RACKS_PER_PAGE}`);
+  return data.items;
 }
 
 export async function getRack(id: string) {
@@ -83,7 +83,7 @@ export async function createRack(payload: {
   rack_units: number;
   rack_cols: number;
 }) {
-  const result = await apiPost<{ rack: RackDetail; rack_id: string }>("/racks", payload);
+  const result = await apiPost<{ rack: RackDetail }>("/racks", payload);
   invalidateAfterRackMutation();
   return result;
 }
@@ -104,5 +104,10 @@ export async function updateRack(
 
 export async function deleteRack(id: string) {
   await apiDelete(`/racks/${id}`);
+  invalidateAfterRackMutation();
+}
+
+export async function unassignAllHostsFromRack(rackId: string) {
+  await apiDelete(`/racks/${rackId}/hosts`);
   invalidateAfterRackMutation();
 }

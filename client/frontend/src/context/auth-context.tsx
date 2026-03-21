@@ -6,15 +6,9 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { apiPost } from "@/lib/api";
+import { getCurrentUser, logout as apiLogout, type User } from "@/lib/auth";
 
-export type User = {
-  id: number;
-  login: string;
-  avatar_url: string;
-  name: string | null;
-  email: string | null;
-};
+export type { User } from "@/lib/auth";
 
 type AuthContextValue = {
   user: User | null;
@@ -33,13 +27,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const refresh = useCallback(async () => {
     try {
-      const res = await fetch("/api/auth/me", { credentials: "include" });
-      if (!res.ok) {
-        setUser(null);
-        return;
-      }
-      const data: { user: User } = await res.json();
-      setUser(data.user);
+      const u = await getCurrentUser();
+      setUser(u);
     } catch {
       setUser(null);
     } finally {
@@ -56,7 +45,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const logout = useCallback(() => {
-    void apiPost<{ status: string }>("/auth/logout").finally(() => {
+    void apiLogout().finally(() => {
       setUser(null);
       setIsLoading(false);
     });

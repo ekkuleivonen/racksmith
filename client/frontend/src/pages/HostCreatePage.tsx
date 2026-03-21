@@ -1,25 +1,34 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { toastApiError } from "@/lib/api";
 import { CreatePageShell } from "@/components/shared/create-page-shell";
 import { Button } from "@/components/ui/button";
 import { ItemHardwareFields } from "@/components/racks/item-hardware-fields";
+import { useDefaults } from "@/hooks/queries";
+import { SSH_PORT_FALLBACK } from "@/lib/defaults";
 import { createHost, refreshHost, type HostInput } from "@/lib/hosts";
 
 const defaultForm: HostInput = {
   name: "",
   ip_address: "",
   ssh_user: "",
-  ssh_port: 22,
+  ssh_port: SSH_PORT_FALLBACK,
   groups: [],
   labels: [],
 };
 
 export function HostCreatePage() {
   const navigate = useNavigate();
+  const { data: defaults } = useDefaults();
   const [form, setForm] = useState<HostInput>(defaultForm);
   const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (defaults?.ssh_port != null) {
+      setForm((f) => ({ ...f, ssh_port: defaults.ssh_port }));
+    }
+  }, [defaults?.ssh_port]);
 
   const handleSubmit = async () => {
     setSaving(true);
@@ -42,11 +51,12 @@ export function HostCreatePage() {
     }
   };
 
+  const defPort = defaults?.ssh_port ?? SSH_PORT_FALLBACK;
   const itemLike = {
     name: form.name ?? "",
     ip_address: form.ip_address ?? "",
     ssh_user: form.ssh_user ?? "",
-    ssh_port: form.ssh_port ?? 22,
+    ssh_port: form.ssh_port ?? defPort,
     labels: form.labels ?? [],
   };
 
@@ -58,6 +68,7 @@ export function HostCreatePage() {
       <div className="space-y-4 border border-zinc-800 bg-zinc-900/30 p-4">
         <ItemHardwareFields
           item={itemLike}
+          defaultSshPort={defPort}
           onChange={(patch) =>
             setForm((prev) => ({
               ...prev,

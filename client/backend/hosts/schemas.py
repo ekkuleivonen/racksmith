@@ -26,6 +26,7 @@ class HostCreate(BaseModel):
     groups: list[str] = Field(default_factory=list)
     labels: list[str] = Field(default_factory=list)
     os_family: str | None = None
+    mac_address: str = Field(default="", max_length=64)
     placement: HostPlacement | None = None
     vars: dict[str, Any] = Field(default_factory=dict)
 
@@ -60,6 +61,9 @@ class Host(BaseModel):
     os_family: str | None = None
     placement: HostPlacement | None = None
     mac_address: str = ""
+    subnet: str | None = Field(
+        default=None, description="Configured subnet CIDR containing this host IP, if any"
+    )
     vars: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -75,10 +79,6 @@ class HostSummary(BaseModel):
 
 class HostResponse(BaseModel):
     host: Host
-
-
-class HostListResponse(BaseModel):
-    hosts: list[Host]
 
 
 class BulkAddToGroupRequest(BaseModel):
@@ -105,6 +105,18 @@ class BulkHostCreateRequest(BaseModel):
 
 class BulkHostCreateResponse(BaseModel):
     hosts: list[Host]
+
+
+class BulkImportDiscoveredDevice(BaseModel):
+    ip: str = Field(min_length=1, max_length=255)
+    mac: str | None = Field(default=None, max_length=64)
+    hostname: str | None = Field(default=None, max_length=255)
+
+
+class BulkImportDiscoveredRequest(BaseModel):
+    devices: list[BulkImportDiscoveredDevice] = Field(min_length=1)
+    ssh_user: str = Field(min_length=1, max_length=64)
+    ssh_port: int = Field(default=22, ge=1, le=65535)
 
 
 class RelocateRequest(BaseModel):

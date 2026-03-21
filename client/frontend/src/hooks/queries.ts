@@ -1,36 +1,67 @@
 import { useQuery } from "@tanstack/react-query";
 import { queryKeys } from "@/lib/queryClient";
+import { getDefaults } from "@/lib/defaults";
 import { getScanStatus, type ScanStatus } from "@/lib/discovery";
-import { getHost, listHosts, type Host } from "@/lib/hosts";
+import { getHost, listHosts, type ListHostsParams } from "@/lib/hosts";
 import { hostStatusKey, type PingStatus } from "@/lib/ssh";
 import { usePingStore } from "@/stores/ping";
-import { listRacks, getRackLayout, type RackSummary } from "@/lib/racks";
+import {
+  listRacksWithLayouts,
+  type RackLayoutHost,
+  type RackSummary,
+} from "@/lib/racks";
 import { listGroups, getGroup } from "@/lib/groups";
 import { listPlaybooks, getPlaybook } from "@/lib/playbooks";
-import { getRoleDetail, listRoles } from "@/lib/roles";
+import { getRoleDetail, getRoleFacets, listRoles } from "@/lib/roles";
 import {
   getRegistryFacets,
   getRegistryPlaybook,
   getRegistryPlaybookFacets,
   getRegistryRole,
   listRegistryPlaybooks,
+  listRecommendedRegistryRoles,
   listRegistryRoles,
   type ListRegistryPlaybooksParams,
   type ListRegistryRolesParams,
 } from "@/lib/registry";
-import { apiGet } from "@/lib/api";
+import { getCodeTree, getGitStatus } from "@/lib/files";
 import { listSubnets } from "@/lib/subnets";
-import type { TreeEntry } from "@/components/files/file-tree";
 
 export type RackNavEntry = {
   rack: RackSummary;
-  hosts: Host[];
+  hosts: RackLayoutHost[];
 };
 
-export function useHosts() {
+function serializeHostsParams(params?: ListHostsParams): string {
+  if (!params) return "all";
+  const filtered: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(params)) {
+    if (v === undefined) continue;
+    if (Array.isArray(v) && v.length === 0) continue;
+    filtered[k] = v;
+  }
+  return Object.keys(filtered).length === 0 ? "all" : JSON.stringify(filtered);
+}
+
+export function useHosts(params?: ListHostsParams) {
   return useQuery({
-    queryKey: queryKeys.hosts,
-    queryFn: () => listHosts(),
+    queryKey: [...queryKeys.hosts, serializeHostsParams(params)],
+    queryFn: () => listHosts(params),
+  });
+}
+
+export function useDefaults() {
+  return useQuery({
+    queryKey: queryKeys.defaults,
+    queryFn: () => getDefaults(),
+    staleTime: Number.POSITIVE_INFINITY,
+  });
+}
+
+export function useRoleFacets() {
+  return useQuery({
+    queryKey: [...queryKeys.roles, "facets"],
+    queryFn: () => getRoleFacets(),
   });
 }
 
@@ -56,13 +87,18 @@ export function useRackEntries() {
   return useQuery({
     queryKey: queryKeys.racks,
     queryFn: async () => {
-      const racks = await listRacks();
-      const entries: RackNavEntry[] = await Promise.all(
-        racks.map(async (rack) => {
-          const { layout } = await getRackLayout(rack.id);
-          return { rack, hosts: layout.hosts };
-        }),
-      );
+      const layouts = await listRacksWithLayouts();
+      const entries: RackNavEntry[] = layouts.map((layout) => ({
+        rack: {
+          id: layout.id,
+          name: layout.name,
+          rack_width_inches: layout.rack_width_inches,
+          rack_units: layout.rack_units,
+          rack_cols: layout.rack_cols,
+          created_at: layout.created_at,
+        },
+        hosts: layout.hosts,
+      }));
       return entries;
     },
   });
@@ -128,17 +164,9 @@ export function useRoleDetail(roleId: string | undefined) {
 export function useCodeTree() {
   return useQuery({
     queryKey: queryKeys.filesTree,
-    queryFn: async () => {
-      const data = await apiGet<{ entries: TreeEntry[] }>("/files/tree");
-      return data.entries;
-    },
+    queryFn: () => getCodeTree(),
   });
 }
-
-type GitStatuses = {
-  modifiedPaths: Record<string, true>;
-  untrackedPaths: Record<string, true>;
-};
 
 export function useRegistryRoles(params: ListRegistryRolesParams = {}) {
   return useQuery({
@@ -189,25 +217,9 @@ export function useRegistryPlaybookFacets() {
 }
 
 export function useRecommendedRoles() {
-  const { data: hosts } = useHosts();
-  const osFamilies = [
-    ...new Set(
-      (hosts ?? [])
-        .map((h) => h.os_family)
-        .filter((f): f is string => !!f),
-    ),
-  ];
-  const platformsParam = osFamilies.join(",");
-
   return useQuery({
-    queryKey: [...queryKeys.registry, "recommended", platformsParam],
-    queryFn: () =>
-      listRegistryRoles({
-        platforms: platformsParam,
-        sort: "downloads",
-        per_page: 6,
-      }),
-    enabled: osFamilies.length > 0,
+    queryKey: [...queryKeys.registry, "recommended"],
+    queryFn: () => listRecommendedRegistryRoles(),
     staleTime: 60_000,
   });
 }
@@ -215,20 +227,7 @@ export function useRecommendedRoles() {
 export function useGitStatuses() {
   return useQuery({
     queryKey: queryKeys.filesStatuses,
-    queryFn: async (): Promise<GitStatuses> => {
-      const data = await apiGet<{
-        modified_paths: string[];
-        untracked_paths: string[];
-      }>("/files/file-statuses");
-      return {
-        modifiedPaths: Object.fromEntries(
-          data.modified_paths.map((p) => [p, true as const]),
-        ),
-        untrackedPaths: Object.fromEntries(
-          data.untracked_paths.map((p) => [p, true as const]),
-        ),
-      };
-    },
+    queryFn: () => getGitStatus(),
   });
 }
 

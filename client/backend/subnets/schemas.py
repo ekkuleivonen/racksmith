@@ -11,13 +11,15 @@ class SubnetMeta(BaseModel):
     description: str = ""
 
 
-class SubnetUpdate(BaseModel):
+class SubnetCreate(BaseModel):
+    cidr: str = Field(min_length=3, max_length=64)
     name: str = Field(default="", max_length=120)
     description: str = Field(default="", max_length=500)
 
 
-class SubnetListResponse(BaseModel):
-    subnets: list[SubnetMeta]
+class SubnetPatch(BaseModel):
+    name: str | None = Field(default=None, max_length=120)
+    description: str | None = Field(default=None, max_length=500)
 
 
 class SubnetResponse(BaseModel):

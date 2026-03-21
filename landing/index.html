@@ -152,6 +152,9 @@
       .f {
         color: #d2a8ff;
       }
+      pre .dim {
+        color: var(--dim);
+      }
 
       .note {
         margin-top: 12px;
@@ -382,22 +385,21 @@
             <span>terminal</span>
             <button
               class="copy"
-              onclick="
-                navigator.clipboard.writeText(
-                  `docker run -d --network host \\\n  -e APP_URL=http://localhost:8080 \\\n  -v ./data:/app/data \\\n  -v ./workspace:/app/workspace \\\n  ghcr.io/ekkuleivonen/racksmith-client:latest`,
-                )
-              "
+              type="button"
+              onclick="navigator.clipboard.writeText(['cp .env.example .env','# Set APP_URL, DAEMON_SECRET','docker compose -f docker-compose.client.yml up -d'].join('\n'))"
             >
               copy
             </button>
           </div>
-          <pre>docker run <span class="f">-d</span> <span class="f">--network</span> host \
-  <span class="f">-e</span> <span class="s">APP_URL=http://localhost:8080</span> \
-  <span class="f">-v</span> ./data:/app/data \
-  <span class="f">-v</span> ./workspace:/app/workspace \
-  ghcr.io/ekkuleivonen/racksmith-client:0.1.1</pre>
+          <pre>cp .env.example .env
+<span class="dim"># Set APP_URL, DAEMON_SECRET in .env</span>
+
+docker compose <span class="f">-f</span> docker-compose.client.yml up <span class="f">-d</span></pre>
         </div>
-        <p class="note">Open <code>http://localhost:8080</code></p>
+        <p class="note">
+          From the repo root. Open <code>APP_URL</code> from your <code>.env</code> (compose defaults to
+          <code>http://localhost:8080</code>).
+        </p>
       </section>
 
       <section>
@@ -409,14 +411,15 @@
           </div>
           <div class="arrow">↓</div>
           <div class="box wide">
-            <div class="box-title">Racksmith</div>
-            <div class="box-sub">single container, your LAN</div>
+            <div class="box-title">Racksmith stack</div>
+            <div class="box-sub">Compose — frontend, API, daemon, Redis on your LAN</div>
             <div class="tags">
               <span class="tag">nginx</span>
               <span class="tag">FastAPI</span>
+              <span class="tag">daemon</span>
               <span class="tag">Ansible</span>
               <span class="tag">Redis</span>
-              <span class="tag">Worker</span>
+              <span class="tag">Arq</span>
             </div>
           </div>
           <div>

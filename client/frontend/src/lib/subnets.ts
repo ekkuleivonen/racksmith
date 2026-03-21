@@ -1,11 +1,4 @@
-import { apiGet, apiPut } from "@/lib/api";
-
-export function getSubnetCidr(ip: string | undefined | null): string {
-  if (!ip) return "unknown";
-  const parts = ip.split(".");
-  if (parts.length !== 4) return "unknown";
-  return `${parts[0]}.${parts[1]}.${parts[2]}.0/24`;
-}
+import { apiDelete, apiGet, apiPatch, apiPost } from "@/lib/api";
 
 export interface SubnetMeta {
   cidr: string;
@@ -13,18 +6,42 @@ export interface SubnetMeta {
   description: string;
 }
 
+const SUBNETS_PER_PAGE = 200;
+
 export async function listSubnets(): Promise<SubnetMeta[]> {
-  const { subnets } = await apiGet<{ subnets: SubnetMeta[] }>("/subnets");
-  return subnets;
+  const data = await apiGet<{
+    items: SubnetMeta[];
+    total: number;
+    page: number;
+    per_page: number;
+  }>(`/subnets?page=1&per_page=${SUBNETS_PER_PAGE}`);
+  return data.items;
 }
 
+/** Create or update subnet metadata; pass whether this CIDR already exists in meta. */
 export async function upsertSubnet(
   cidr: string,
   data: { name: string; description: string },
-): Promise<SubnetMeta> {
-  const { subnet } = await apiPut<{ subnet: SubnetMeta }>(
-    `/subnets/${encodeURIComponent(cidr)}`,
-    data,
-  );
+  existsInMeta: boolean,
+): Promise<SubnetMeta | null> {
+  const enc = encodeURIComponent(cidr);
+  if (!data.name.trim() && !data.description.trim()) {
+    if (existsInMeta) {
+      await apiDelete(`/subnets/${enc}`);
+    }
+    return null;
+  }
+  if (existsInMeta) {
+    const { subnet } = await apiPatch<{ subnet: SubnetMeta }>(`/subnets/${enc}`, {
+      name: data.name,
+      description: data.description,
+    });
+    return subnet;
+  }
+  const { subnet } = await apiPost<{ subnet: SubnetMeta }>("/subnets", {
+    cidr,
+    name: data.name,
+    description: data.description,
+  });
   return subnet;
 }

@@ -7,8 +7,8 @@ from collections.abc import Awaitable, Callable
 from typing import Any
 
 import redis.asyncio as aioredis
-
-import settings
+from racksmith_shared import settings_base
+from racksmith_shared.runs import run_events_channel
 
 
 async def stream_run(
@@ -31,8 +31,8 @@ async def stream_run(
         )
         return
 
-    channel = f"{settings.REDIS_RUN_EVENTS_PREFIX}{run_id}:events"
-    redis_client = aioredis.from_url(settings.REDIS_URL, decode_responses=True)
+    channel = run_events_channel(run_id)
+    redis_client = aioredis.from_url(settings_base.REDIS_URL, decode_responses=True)
     pubsub = redis_client.pubsub()
     try:
         await pubsub.subscribe(channel)

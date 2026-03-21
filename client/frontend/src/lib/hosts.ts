@@ -1,7 +1,6 @@
 import { apiDelete, apiGet, apiPatch, apiPost } from "@/lib/api";
 import { invalidateResource } from "@/lib/queryClient";
 import { hostStatusKey } from "@/lib/ssh";
-import { getSubnetCidr } from "@/lib/subnets";
 import type { CanvasFilters } from "@/hooks/use-canvas-params";
 
 export type HostPlacement = {
@@ -29,6 +28,8 @@ export type Host = HostInput & {
   id: string;
   hostname?: string;
   mac_address?: string;
+  /** Subnet CIDR from repo meta when the host IP falls in a configured subnet */
+  subnet?: string | null;
   vars: Record<string, unknown>;
 };
 
@@ -78,15 +79,76 @@ export function isManagedHost(host: Host | HostSummary): boolean {
   return host.managed ?? false;
 }
 
-export function matchesHostFilters(
+/** Group hosts in the network view — uses backend-derived subnet when available */
+export function hostSubnetBucket(host: Host): string {
+  return host.subnet?.trim() || "unknown";
+}
+
+export type ListHostsParams = {
+  q?: string;
+  group?: string[];
+  label?: string[];
+  subnet?: string[];
+  managed?: boolean;
+  sort?: string;
+  order?: "asc" | "desc";
+};
+
+export function canvasToListHostsParams(
+  filters: CanvasFilters,
+  sort?: { column: string; dir: "asc" | "desc" },
+): ListHostsParams {
+  const sortMap: Record<string, string> = {
+    name: "name",
+    ip: "ip",
+    user: "ssh_user",
+    os: "os_family",
+    labels: "labels",
+    status: "name",
+  };
+  const p: ListHostsParams = {
+    q: filters.search.trim() || undefined,
+    group: filters.groups.length > 0 ? filters.groups : undefined,
+    label: filters.labels.length > 0 ? filters.labels : undefined,
+    subnet: filters.subnets.length > 0 ? filters.subnets : undefined,
+    managed: true,
+  };
+  if (sort) {
+    const col = sort.column;
+    p.sort = sortMap[col] ?? "name";
+    p.order = sort.dir;
+  }
+  return p;
+}
+
+export function matchesStatusFilter(
+  host: Host,
+  statusFilters: string[],
+  pingStatuses: Record<string, string>,
+): boolean {
+  if (statusFilters.length === 0) return true;
+  const status = pingStatuses[hostStatusKey(host.id)] ?? "unknown";
+  return statusFilters.includes(status);
+}
+
+/** Canvas filtering (search, groups, labels, status, subnet) — subnet uses backend `host.subnet`. */
+export function matchesCanvasHostFilters(
   host: Host,
   filters: CanvasFilters,
   pingStatuses: Record<string, string>,
 ): boolean {
   if (filters.search) {
     const q = filters.search.toLowerCase();
-    const searchable = [host.name, host.hostname, host.ip_address, host.os_family, ...(host.labels ?? [])]
-      .filter(Boolean).join(" ").toLowerCase();
+    const searchable = [
+      host.name,
+      host.hostname,
+      host.ip_address,
+      host.os_family,
+      ...(host.labels ?? []),
+    ]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase();
     if (!searchable.includes(q)) return false;
   }
   if (filters.groups.length > 0) {
@@ -95,12 +157,10 @@ export function matchesHostFilters(
   if (filters.labels.length > 0) {
     if (!filters.labels.some((l) => (host.labels ?? []).includes(l))) return false;
   }
-  if (filters.status.length > 0) {
-    const status = pingStatuses[hostStatusKey(host.id)] ?? "unknown";
-    if (!filters.status.includes(status)) return false;
-  }
+  if (!matchesStatusFilter(host, filters.status, pingStatuses)) return false;
   if (filters.subnets.length > 0) {
-    if (!filters.subnets.includes(getSubnetCidr(host.ip_address))) return false;
+    const bucket = host.subnet?.trim() || "unknown";
+    if (!filters.subnets.includes(bucket)) return false;
   }
   return true;
 }
@@ -109,9 +169,26 @@ function invalidateAfterHostMutation() {
   invalidateResource("hosts", "racks", "filesStatuses", "filesTree");
 }
 
-export async function listHosts() {
-  const data = await apiGet<{ hosts: Host[] }>("/hosts");
-  return data.hosts;
+const HOSTS_PER_PAGE = 500;
+
+export async function listHosts(params?: ListHostsParams) {
+  const sp = new URLSearchParams();
+  sp.set("page", "1");
+  sp.set("per_page", String(HOSTS_PER_PAGE));
+  if (params?.q) sp.set("q", params.q);
+  if (params?.group?.length) sp.set("group", params.group.join(","));
+  if (params?.label?.length) sp.set("label", params.label.join(","));
+  if (params?.subnet?.length) sp.set("subnet", params.subnet.join(","));
+  if (params?.managed !== undefined) sp.set("managed", String(params.managed));
+  if (params?.sort) sp.set("sort", params.sort);
+  if (params?.order) sp.set("order", params.order);
+  const data = await apiGet<{
+    items: Host[];
+    total: number;
+    page: number;
+    per_page: number;
+  }>(`/hosts?${sp.toString()}`);
+  return data.items;
 }
 
 export async function getHost(id: string) {
@@ -184,4 +261,27 @@ export async function bulkAddLabel(hostIds: string[], label: string) {
   );
   invalidateAfterHostMutation();
   return result;
+}
+
+export type DiscoveredDeviceInput = {
+  ip: string;
+  mac?: string;
+  hostname?: string;
+};
+
+export async function bulkImportDiscovered(
+  devices: DiscoveredDeviceInput[],
+  sshUser: string,
+  sshPort: number,
+) {
+  const result = await apiPost<{ hosts: Host[] }>(
+    "/hosts/bulk/import-discovered",
+    {
+      devices,
+      ssh_user: sshUser,
+      ssh_port: sshPort,
+    },
+  );
+  invalidateAfterHostMutation();
+  return result.hosts;
 }

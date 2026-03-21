@@ -23,25 +23,29 @@ export function hostStatusKey(hostId: string) {
 }
 
 export async function fetchCommandHistory(hostId: string) {
-  return apiGet<{ history: CommandHistoryEntry[] }>(`/ssh/hosts/${hostId}/history`);
+  return apiGet<{ history: CommandHistoryEntry[] }>(
+    `/daemon/ssh/hosts/${hostId}/history`,
+  );
 }
 
 export async function rebootHost(hostId: string) {
-  return apiPost<{ status: string }>(`/ssh/hosts/${hostId}/reboot`);
+  return apiPost<{ status: string }>(`/daemon/ssh/hosts/${hostId}/reboot`);
 }
 
 export async function fetchPingStatuses(targets: PingStatusTarget[]) {
-  return apiPost<{ statuses: PingStatusEntry[] }>("/ssh/ping-status", { targets });
+  return apiPost<{ statuses: PingStatusEntry[] }>("/daemon/ssh/ping-status", {
+    targets,
+  });
 }
 
 export async function fetchMachinePublicKey() {
-  return apiGet<{ public_key: string }>("/ssh/public-key");
+  return apiGet<{ public_key: string }>("/daemon/ssh/public-key");
 }
 
 export async function generateMachineKey() {
-  return apiPost<{ public_key: string }>("/ssh/generate-key");
+  return apiPost<{ public_key: string }>("/daemon/ssh/generate-key");
 }
 
 export function sshTerminalUrl(hostId: string) {
-  return wsUrl(`/ssh/hosts/${hostId}/terminal`);
+  return wsUrl(`/daemon/ssh/hosts/${hostId}/terminal`);
 }

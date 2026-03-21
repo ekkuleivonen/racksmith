@@ -40,14 +40,9 @@ class GroupResponse(BaseModel):
     group: Group
 
 
-class GroupCreateResponse(BaseModel):
-    group: Group
-    group_id: str
-
-
 class GroupWithMembersResponse(BaseModel):
     group: GroupWithMembers
 
 
-class GroupListResponse(BaseModel):
-    groups: list[Group]
+class AddMembersRequest(BaseModel):
+    host_ids: list[str] = Field(min_length=1)

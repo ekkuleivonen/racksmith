@@ -21,39 +21,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import type { RoleCatalogEntry, RoleInput } from "@/lib/playbooks";
+import type { RequiredRuntimeVarEntry } from "@/lib/playbooks";
 
-export type SecretInput = {
-  key: string;
-  label: string;
-  type: string;
-  required: boolean;
-  options: string[];
-};
-
-function collectSecretInputs(roles: RoleCatalogEntry[]): SecretInput[] {
-  const seen = new Set<string>();
-  const result: SecretInput[] = [];
-  for (const role of roles) {
-    for (const inp of role.inputs ?? []) {
-      if ((inp as RoleInput & { secret?: boolean }).secret && !seen.has(inp.key)) {
-        seen.add(inp.key);
-        result.push({
-          key: inp.key,
-          label: inp.label,
-          type: inp.type ?? "string",
-          required: (inp as RoleInput & { required?: boolean }).required ?? false,
-          options: (inp as RoleInput & { options?: string[] }).options ?? [],
-        });
-      }
-    }
-  }
-  return result;
-}
+export type RuntimeVarField = RequiredRuntimeVarEntry;
 
 export interface RuntimeVarsDialogProps {
   open: boolean;
-  roles: RoleCatalogEntry[];
+  fields: RuntimeVarField[];
   needsBecomePassword: boolean;
   onConfirm: (vars: Record<string, string>, becomePassword: string | null) => void | Promise<void>;
   onCancel: () => void;
@@ -61,28 +35,29 @@ export interface RuntimeVarsDialogProps {
 
 export function RuntimeVarsDialog({
   open,
-  roles,
+  fields,
   needsBecomePassword,
   onConfirm,
   onCancel,
 }: RuntimeVarsDialogProps) {
-  const secretInputs = collectSecretInputs(roles);
-  const hasSecretInputs = secretInputs.length > 0 || needsBecomePassword;
+  const hasSecretInputs = fields.some((f) => f.secret);
+  const hasPlainRequired = fields.some((f) => !f.secret);
+  const hasAnyInputs = hasSecretInputs || hasPlainRequired || needsBecomePassword;
 
   const [vars, setVars] = useState<Record<string, string>>({});
   const [becomePassword, setBecomePassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
-  const requiredSecrets = secretInputs.filter((i) => i.required);
+  const requiredFields = fields.filter((f) => f.required);
   const allRequiredFilled =
-    requiredSecrets.every((i) => (vars[i.key] ?? "").trim().length > 0) &&
+    requiredFields.every((i) => (vars[i.key] ?? "").trim().length > 0) &&
     (!needsBecomePassword || becomePassword.trim().length > 0);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!allRequiredFilled || submitting) return;
     const runtimeVars: Record<string, string> = {};
-    for (const inp of secretInputs) {
+    for (const inp of fields) {
       const v = (vars[inp.key] ?? "").trim();
       if (v) runtimeVars[inp.key] = v;
     }
@@ -102,7 +77,7 @@ export function RuntimeVarsDialog({
     onCancel();
   };
 
-  if (!hasSecretInputs) return null;
+  if (!hasAnyInputs) return null;
 
   const isBoolType = (type: string) => type === "bool" || type === "boolean";
 
@@ -118,11 +93,16 @@ export function RuntimeVarsDialog({
           </AlertDialogHeader>
 
           <div className="space-y-4 py-4">
-            {secretInputs.map((inp) => (
+            {fields.map((inp) => (
               <div key={inp.key} className="space-y-2">
                 <Label htmlFor={inp.key}>
                   {inp.label}
                   {inp.required ? " *" : ""}
+                  {!inp.secret ? (
+                    <span className="ml-1 text-[10px] font-normal text-zinc-500">
+                      ({inp.role_name})
+                    </span>
+                  ) : null}
                 </Label>
                 {isBoolType(inp.type) ? (
                   <Select
@@ -150,9 +130,9 @@ export function RuntimeVarsDialog({
                       <SelectValue placeholder="Select..." />
                     </SelectTrigger>
                     <SelectContent>
-                      {inp.options.map((option) => (
-                        <SelectItem key={option} value={option}>
-                          {option}
+                      {inp.options.map((opt) => (
+                        <SelectItem key={opt} value={opt}>
+                          {opt}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -160,27 +140,27 @@ export function RuntimeVarsDialog({
                 ) : (
                   <Input
                     id={inp.key}
-                    type={inp.type === "secret" ? "password" : "text"}
+                    type={inp.secret ? "password" : "text"}
+                    autoComplete="off"
                     value={vars[inp.key] ?? ""}
                     onChange={(e) =>
                       setVars((prev) => ({ ...prev, [inp.key]: e.target.value }))
                     }
-                    autoComplete="off"
+                    placeholder={inp.secret ? "••••••••" : ""}
                   />
                 )}
               </div>
             ))}
+
             {needsBecomePassword ? (
               <div className="space-y-2">
-                <Label htmlFor="become-password">
-                  Sudo password *
-                </Label>
+                <Label htmlFor="become-password">Sudo password *</Label>
                 <Input
                   id="become-password"
                   type="password"
+                  autoComplete="off"
                   value={becomePassword}
                   onChange={(e) => setBecomePassword(e.target.value)}
-                  autoComplete="off"
                 />
               </div>
             ) : null}
@@ -209,9 +189,8 @@ export function RuntimeVarsDialog({
 
 // eslint-disable-next-line react-refresh/only-export-components
 export function needsRuntimeVarsDialog(
-  roles: RoleCatalogEntry[],
+  fields: RuntimeVarField[],
   needsBecomePassword: boolean,
 ): boolean {
-  if (needsBecomePassword) return true;
-  return collectSecretInputs(roles).length > 0;
+  return fields.length > 0 || needsBecomePassword;
 }

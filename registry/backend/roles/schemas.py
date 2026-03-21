@@ -106,14 +106,14 @@ class ConfirmDownloadRequest(BaseModel):
 # ── Responses ─────────────────────────────────────────────────────────────────
 
 
-class OwnerOut(BaseModel):
+class OwnerResponse(BaseModel):
     username: str
     avatar_url: str
 
     model_config = {"from_attributes": True}
 
 
-class VersionOut(BaseModel):
+class VersionResponse(BaseModel):
     id: UUID
     role_id: UUID
     version_number: int
@@ -132,20 +132,20 @@ class VersionOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
-class RoleOut(BaseModel):
+class RoleResponse(BaseModel):
     id: UUID
-    owner: OwnerOut
+    owner: OwnerResponse
     download_count: int
     playbook_download_count: int = 0
     created_at: datetime
     updated_at: datetime | None
-    latest_version: VersionOut | None = None
+    latest_version: VersionResponse | None = None
 
     model_config = {"from_attributes": True}
 
 
-class RoleListOut(BaseModel):
-    items: list[RoleOut]
+class RoleListResponse(BaseModel):
+    items: list[RoleResponse]
     total: int
     page: int
     per_page: int
@@ -156,6 +156,6 @@ class FacetItem(BaseModel):
     count: int
 
 
-class FacetsOut(BaseModel):
+class FacetsResponse(BaseModel):
     tags: list[FacetItem]
     platforms: list[FacetItem]

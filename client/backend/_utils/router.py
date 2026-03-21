@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel
 
 import settings
 from _utils.logging import get_logger
@@ -13,19 +14,40 @@ logger = get_logger(__name__)
 router = APIRouter()
 
 
-@router.get("/api/version")
-async def get_version():
+class VersionResponse(BaseModel):
+    version: str
+    schema_version: int
+
+
+class HealthResponse(BaseModel):
+    status: str
+    checks: dict[str, str]
+
+
+class AppDefaultsResponse(BaseModel):
+    ssh_port: int = 22
+    rack_cols_by_width: dict[int, int] = {19: 12, 10: 6}
+
+
+@router.get("/api/defaults", response_model=AppDefaultsResponse)
+async def get_defaults() -> AppDefaultsResponse:
+    """Return application defaults for the frontend."""
+    return AppDefaultsResponse()
+
+
+@router.get("/api/version", response_model=VersionResponse)
+async def get_version() -> VersionResponse:
     """Return app and schema versions (unauthenticated)."""
     from core.migrations import current_schema_version
 
-    return {
-        "version": settings.RACKSMITH_VERSION,
-        "schema_version": current_schema_version(),
-    }
+    return VersionResponse(
+        version=settings.RACKSMITH_VERSION,
+        schema_version=current_schema_version(),
+    )
 
 
 @router.get("/health")
-async def health_check():
+async def health_check() -> JSONResponse:
     """Check Redis connectivity for monitoring."""
     checks: dict[str, str] = {}
 
@@ -39,7 +61,8 @@ async def health_check():
 
     healthy = all(v == "ok" for v in checks.values())
     status_code = 200 if healthy else 503
-    return JSONResponse(
-        status_code=status_code,
-        content={"status": "healthy" if healthy else "degraded", "checks": checks},
-    )
+    body = HealthResponse(
+        status="healthy" if healthy else "degraded",
+        checks=checks,
+    ).model_dump(mode="json")
+    return JSONResponse(status_code=status_code, content=body)

@@ -16,7 +16,12 @@ import { Button } from "@/components/ui/button";
 import { EntityListPage } from "@/components/shared/entity-list-page";
 import { FacetDropdown } from "@/components/shared/facet-dropdown";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
-import { useRegistryRoles, useRegistryFacets, useRoles } from "@/hooks/queries";
+import {
+  useRegistryRoles,
+  useRegistryFacets,
+  useRoleFacets,
+  useRoles,
+} from "@/hooks/queries";
 import { usePushToRegistry } from "@/hooks/mutations";
 import { usePinsStore, useRepoKey } from "@/stores/pins";
 import type { RoleSummary } from "@/lib/roles";
@@ -71,30 +76,6 @@ function PushButton({ roleId }: { roleId: string }) {
       Push
     </Button>
   );
-}
-
-function buildFacets(roles: RoleSummary[]) {
-  const labelCounts = new Map<string, number>();
-  const platformCounts = new Map<string, number>();
-
-  for (const r of roles) {
-    for (const l of r.labels) {
-      labelCounts.set(l, (labelCounts.get(l) ?? 0) + 1);
-    }
-    for (const os of r.compatibility?.os_family ?? []) {
-      platformCounts.set(os, (platformCounts.get(os) ?? 0) + 1);
-    }
-  }
-
-  const labelFacets: FacetItem[] = [...labelCounts.entries()]
-    .map(([name, count]) => ({ name, count }))
-    .sort((a, b) => b.count - a.count);
-
-  const platformFacets: FacetItem[] = [...platformCounts.entries()]
-    .map(([name, count]) => ({ name, count }))
-    .sort((a, b) => b.count - a.count);
-
-  return { labelFacets, platformFacets };
 }
 
 function formatCount(n: number): string {
@@ -155,10 +136,9 @@ export function RolesPage() {
 
   const debouncedSearch = useDebouncedValue(search, 300);
 
-  const { labelFacets, platformFacets } = useMemo(
-    () => buildFacets(roles),
-    [roles],
-  );
+  const { data: localFacets } = useRoleFacets();
+  const labelFacets: FacetItem[] = localFacets?.labels ?? [];
+  const platformFacets: FacetItem[] = localFacets?.platforms ?? [];
 
   const hasActiveFilters = selectedLabels.size > 0 || selectedPlatforms.size > 0;
   const hasSearchOrFilters = !!debouncedSearch.trim() || hasActiveFilters;

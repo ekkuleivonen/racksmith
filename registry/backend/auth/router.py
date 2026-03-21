@@ -72,6 +72,28 @@ class RefreshRequest(BaseModel):
     refresh_token: str
 
 
+class UserProfile(BaseModel):
+    id: int
+    login: str
+    avatar_url: str
+    name: str | None = None
+    email: str | None = None
+
+    model_config = {"extra": "ignore"}
+
+
+class ExchangeResponse(BaseModel):
+    github_access_token: str
+    user: UserProfile
+    refresh_token: str
+
+
+class RefreshResponse(BaseModel):
+    github_access_token: str
+    user: UserProfile
+    refresh_token: str
+
+
 @router.get("/auth/login")
 async def auth_login(callback_url: str, state: str) -> RedirectResponse:
     """Entry point from a Racksmith client. Redirects to GitHub OAuth."""
@@ -140,11 +162,11 @@ async def auth_callback(
     return RedirectResponse(url=redirect)
 
 
-@router.post("/auth/exchange")
+@router.post("/auth/exchange", response_model=ExchangeResponse)
 async def auth_exchange(
     body: ExchangeRequest,
     session: AsyncSession = Depends(get_db),
-) -> dict:
+) -> ExchangeResponse:
     """Client backend exchanges a one-time code for the GH token + user profile + refresh token."""
     _cleanup_expired()
 
@@ -163,18 +185,18 @@ async def auth_exchange(
         session.add(RefreshToken(user_id=user.id, token_hash=_hash_token(refresh_token)))
         await session.commit()
 
-    return {
-        "github_access_token": data["github_access_token"],
-        "user": data["user"],
-        "refresh_token": refresh_token,
-    }
+    return ExchangeResponse(
+        github_access_token=data["github_access_token"],
+        user=UserProfile.model_validate(data["user"]),
+        refresh_token=refresh_token,
+    )
 
 
-@router.post("/auth/refresh")
+@router.post("/auth/refresh", response_model=RefreshResponse)
 async def auth_refresh(
     body: RefreshRequest,
     session: AsyncSession = Depends(get_db),
-) -> dict:
+) -> RefreshResponse:
     """Return the stored GH token for a user, authenticated by refresh token.
 
     Each call rotates the refresh token — the old one is invalidated and a
@@ -203,15 +225,15 @@ async def auth_refresh(
     user.last_seen = func.now()
     await session.commit()
 
-    return {
-        "github_access_token": gh_token,
-        "user": {
-            "id": user.github_id,
-            "login": user.username,
-            "avatar_url": user.avatar_url,
-        },
-        "refresh_token": new_refresh_token,
-    }
+    return RefreshResponse(
+        github_access_token=gh_token,
+        user=UserProfile(
+            id=user.github_id,
+            login=user.username,
+            avatar_url=user.avatar_url,
+        ),
+        refresh_token=new_refresh_token,
+    )
 
 
 # ---------------------------------------------------------------------------

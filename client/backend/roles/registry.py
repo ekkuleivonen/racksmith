@@ -269,7 +269,7 @@ class RegistryManager:
         return role, role_dir
 
     async def push_role(self, session: SessionData, role_id: str) -> RegistryRole:
-        """Read local role via ansible module, serialize, POST or PUT to registry."""
+        """Read local role via ansible module, serialize, POST to registry."""
         repo_path = repos_manager.active_repo_path(session)
         layout = resolve_layout(repo_path)
         role, role_dir = self._resolve_role_by_id(layout, role_id)
@@ -319,7 +319,7 @@ class RegistryManager:
             meta_yaml=meta_yaml,
         )
 
-        resp = await self._request(session, "PUT", "/roles", json_body=payload.model_dump())
+        resp = await self._request(session, "POST", "/roles", json_body=payload.model_dump())
         try:
             resp.raise_for_status()
         except httpx.HTTPStatusError as exc:
@@ -585,7 +585,7 @@ class RegistryManager:
         )
 
         resp = await self._request(
-            session, "PUT", "/playbooks",
+            session, "POST", "/playbooks",
             json_body=payload.model_dump(mode="json"),
         )
         try:

@@ -22,8 +22,8 @@ import {
   type VarRow,
 } from "@/components/shared/key-value-editor-utils";
 import { useGroup, useHosts } from "@/hooks/queries";
-import { deleteGroup, updateGroup } from "@/lib/groups";
-import { hostDisplayLabel, isManagedHost, updateHost, getHost } from "@/lib/hosts";
+import { addGroupMembers, deleteGroup, removeGroupMember, updateGroup } from "@/lib/groups";
+import { hostDisplayLabel, isManagedHost } from "@/lib/hosts";
 
 export function GroupDetailPage() {
   const { groupId = "" } = useParams();
@@ -128,18 +128,7 @@ export function GroupDetailPage() {
                 if (!hostId) return;
                 setAddingHost(true);
                 try {
-                  const { host } = await getHost(hostId);
-                  await updateHost(hostId, {
-                    name: host.name ?? "",
-                    ip_address: host.ip_address ?? "",
-                    ssh_user: host.ssh_user ?? "",
-                    ssh_port: host.ssh_port ?? 22,
-                    managed: host.managed ?? true,
-                    labels: host.labels ?? [],
-                    groups: [...(host.groups ?? []), groupId],
-                    os_family: host.os_family ?? null,
-                    placement: host.placement ?? null,
-                  });
+                  await addGroupMembers(groupId, [hostId]);
                   invalidateGroup();
                   toast.success("Host added to group");
                 } catch (error) {
@@ -207,20 +196,7 @@ export function GroupDetailPage() {
                           e.stopPropagation();
                           setRemovingHostId(host.id);
                           try {
-                            const { host: fullHost } = await getHost(host.id);
-                            await updateHost(host.id, {
-                              name: fullHost.name ?? "",
-                              ip_address: fullHost.ip_address ?? "",
-                              ssh_user: fullHost.ssh_user ?? "",
-                              ssh_port: fullHost.ssh_port ?? 22,
-                              managed: fullHost.managed ?? true,
-                              labels: fullHost.labels ?? [],
-                              groups: (fullHost.groups ?? []).filter(
-                                (g) => g !== groupId,
-                              ),
-                              os_family: fullHost.os_family ?? null,
-                              placement: fullHost.placement ?? null,
-                            });
+                            await removeGroupMember(groupId, host.id);
                             invalidateGroup();
                             toast.success("Host removed from group");
                           } catch (error) {

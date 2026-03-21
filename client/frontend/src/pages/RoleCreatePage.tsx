@@ -57,7 +57,7 @@ export function RoleCreatePage() {
           <YamlEditorWithAi
             value={yaml}
             onChange={setYaml}
-            apiEndpoint="/roles/generate"
+            apiEndpoint="/ai/roles/generate"
             buildBody={(prompt) => ({ prompt })}
             height="400px"
             placeholder='Describe the role you need, e.g. "Install and configure Nginx with SSL"'

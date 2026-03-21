@@ -22,9 +22,9 @@ type ScanResponse = {
 };
 
 export async function startScan(subnet?: string): Promise<ScanResponse> {
-  return apiPost<ScanResponse>("/discovery", { subnet: subnet || null });
+  return apiPost<ScanResponse>("/daemon/discovery", { subnet: subnet || null });
 }
 
 export async function getScanStatus(scanId: string): Promise<ScanStatus> {
-  return apiGet<ScanStatus>(`/discovery/${scanId}`);
+  return apiGet<ScanStatus>(`/daemon/discovery/${scanId}`);
 }
