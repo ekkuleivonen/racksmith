@@ -11,7 +11,7 @@ import {
   PopoverContent,
   PopoverAnchor,
 } from "@/components/ui/popover";
-import { Textarea } from "@/components/ui/textarea";
+import { cn } from "@/lib/utils";
 
 export type MentionCandidate = {
   type: "host" | "playbook" | "role" | "rack";
@@ -25,7 +25,10 @@ type Props = {
   onSend: () => void;
   disabled: boolean;
   candidates: MentionCandidate[];
-  onMentionSelect: (item: MentionCandidate) => void;
+  attachments: MentionCandidate[];
+  onAttach: (item: MentionCandidate) => void;
+  onDetachLast: () => void;
+  onDetach: (item: MentionCandidate) => void;
 };
 
 const MENTION_RE = /@([\w.:_-]*)$/;
@@ -37,13 +40,23 @@ const TYPE_COLORS: Record<string, string> = {
   rack: "text-rose-400",
 };
 
-export function AiMentionComposer({
+const CHIP_COLORS: Record<string, string> = {
+  host: "border-emerald-500/30 bg-emerald-500/10 text-emerald-200/90",
+  playbook: "border-sky-500/30 bg-sky-500/10 text-sky-200/90",
+  role: "border-amber-500/30 bg-amber-500/10 text-amber-200/90",
+  rack: "border-rose-500/30 bg-rose-500/10 text-rose-200/90",
+};
+
+export function AiChatComposer({
   value,
   onChange,
   onSend,
   disabled,
   candidates,
-  onMentionSelect,
+  attachments,
+  onAttach,
+  onDetachLast,
+  onDetach,
 }: Props) {
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const [mentionOpen, setMentionOpen] = useState(false);
@@ -78,12 +91,23 @@ export function AiMentionComposer({
         setMentionOpen(false);
         return;
       }
+      if (
+        e.key === "Backspace" &&
+        !mentionOpen &&
+        attachments.length > 0 &&
+        (textareaRef.current?.selectionStart ?? 0) === 0 &&
+        (textareaRef.current?.selectionEnd ?? 0) === 0
+      ) {
+        e.preventDefault();
+        onDetachLast();
+        return;
+      }
       if (e.key === "Enter" && !e.shiftKey && !mentionOpen) {
         e.preventDefault();
         onSend();
       }
     },
-    [onSend, mentionOpen],
+    [onSend, mentionOpen, attachments.length, onDetachLast],
   );
 
   const filtered = useMemo(() => {
@@ -101,23 +125,22 @@ export function AiMentionComposer({
     (itemValue: string) => {
       const item = candidates.find((c) => `${c.type}:${c.id}` === itemValue);
       if (!item) return;
-      onMentionSelect(item);
+      onAttach(item);
+      // Strip the @query fragment from the textarea — don't insert a token
       const before = value.slice(0, mentionStart);
       const after = value.slice(mentionStart + 1 + mentionQuery.length);
-      const token = `@${item.type}:${item.label}`;
-      const next = `${before}${token} ${after}`;
-      onChange(next);
+      onChange((before + after).replace(/\s+$/, before || after ? " " : ""));
       setMentionOpen(false);
       requestAnimationFrame(() => {
         const ta = textareaRef.current;
         if (ta) {
-          const pos = before.length + token.length + 1;
           ta.focus();
+          const pos = before.length + (before || after ? 1 : 0);
           ta.setSelectionRange(pos, pos);
         }
       });
     },
-    [candidates, mentionQuery, mentionStart, onMentionSelect, onChange, value],
+    [candidates, mentionQuery, mentionStart, onAttach, onChange, value],
   );
 
   useEffect(() => {
@@ -132,18 +155,67 @@ export function AiMentionComposer({
     return () => document.removeEventListener("mousedown", handler, true);
   }, [mentionOpen]);
 
+  const hasChips = attachments.length > 0;
+
   return (
     <Popover open={mentionOpen && filtered.length > 0}>
       <PopoverAnchor asChild>
-        <Textarea
-          ref={textareaRef}
-          value={value}
-          onChange={handleChange}
-          onKeyDown={handleKeyDown}
-          placeholder="Ask about playbooks, roles, hosts… (@ to mention)"
-          className="min-h-[48px] max-h-[120px] text-[11px] resize-y bg-zinc-900 border-zinc-800 flex-1"
-          disabled={disabled}
-        />
+        <div
+          className={cn(
+            "flex-1 min-w-0 rounded-lg border border-zinc-800 bg-zinc-950/80 transition-colors",
+            "focus-within:border-zinc-700",
+          )}
+        >
+          {hasChips && (
+            <div className="flex flex-wrap gap-1 px-2.5 pt-2">
+              {attachments.map((a) => (
+                <span
+                  key={`${a.type}:${a.id}`}
+                  className={cn(
+                    "inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-[10px] max-w-[180px]",
+                    CHIP_COLORS[a.type],
+                  )}
+                  title={a.id}
+                >
+                  <span className="truncate">
+                    <span className="opacity-70">@{a.type}</span>
+                    <span className="mx-0.5">·</span>
+                    {a.label}
+                  </span>
+                  <button
+                    type="button"
+                    className="shrink-0 rounded p-0.5 hover:bg-black/20 text-current opacity-60 hover:opacity-100"
+                    aria-label={`Remove ${a.label} from context`}
+                    onClick={() => onDetach(a)}
+                    tabIndex={-1}
+                  >
+                    ×
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
+          <textarea
+            ref={textareaRef}
+            value={value}
+            onChange={handleChange}
+            onKeyDown={handleKeyDown}
+            placeholder="Ask about playbooks, roles, hosts… (@ to mention)"
+            className={cn(
+              "w-full bg-transparent text-[11px] text-zinc-200 placeholder:text-zinc-600",
+              "resize-none outline-none border-0",
+              "min-h-[40px] max-h-[120px] px-2.5 py-2",
+              hasChips && "pt-1.5",
+            )}
+            disabled={disabled}
+            rows={1}
+            onInput={(e) => {
+              const ta = e.currentTarget;
+              ta.style.height = "auto";
+              ta.style.height = `${Math.min(ta.scrollHeight, 120)}px`;
+            }}
+          />
+        </div>
       </PopoverAnchor>
       <PopoverContent
         side="top"

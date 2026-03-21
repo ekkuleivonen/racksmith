@@ -1,8 +1,6 @@
 import { Wrench, CheckCircle2, XCircle, Ban, Brain } from "lucide-react";
 import { MarkdownContent } from "@/components/shared/markdown-content";
 import { cn } from "@/lib/utils";
-import type { ChatStreamContext } from "@/lib/ai-chat";
-import type { MentionCandidate } from "./ai-mention-composer";
 
 function toolCallAccentClass(tool: string): string {
   const t = tool.toLowerCase();
@@ -115,70 +113,6 @@ export function AiThinkingBlock({ text }: { text: string }) {
         <span className="uppercase tracking-wide">Reasoning</span>
       </div>
       <MarkdownContent className={thinkingMarkdownClassName}>{text}</MarkdownContent>
-    </div>
-  );
-}
-
-const CHIP: Record<MentionCandidate["type"], string> = {
-  host: "border-emerald-500/30 bg-emerald-500/10 text-emerald-200/90",
-  playbook: "border-sky-500/30 bg-sky-500/10 text-sky-200/90",
-  role: "border-amber-500/30 bg-amber-500/10 text-amber-200/90",
-  rack: "border-rose-500/30 bg-rose-500/10 text-rose-200/90",
-};
-
-export function AiContextChips({
-  context,
-  resolveLabel,
-  onRemove,
-}: {
-  context: ChatStreamContext;
-  resolveLabel: (type: MentionCandidate["type"], id: string) => string;
-  onRemove: (type: MentionCandidate["type"], id: string) => void;
-}) {
-  type Row = { t: MentionCandidate["type"]; id: string; label: string };
-  const rows: Row[] = [];
-  for (const id of context.hosts ?? []) {
-    rows.push({ t: "host", id, label: resolveLabel("host", id) });
-  }
-  for (const id of context.playbooks ?? []) {
-    rows.push({ t: "playbook", id, label: resolveLabel("playbook", id) });
-  }
-  for (const id of context.roles ?? []) {
-    rows.push({ t: "role", id, label: resolveLabel("role", id) });
-  }
-  for (const id of context.racks ?? []) {
-    rows.push({ t: "rack", id, label: resolveLabel("rack", id) });
-  }
-  if (rows.length === 0) return null;
-  return (
-    <div className="flex flex-wrap gap-1 items-center px-0.5">
-      <span className="text-[9px] text-zinc-600 uppercase tracking-wider shrink-0 mr-0.5">
-        Context
-      </span>
-      {rows.map((r) => (
-        <span
-          key={`${r.t}-${r.id}`}
-          className={cn(
-            "inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-[10px] max-w-[200px]",
-            CHIP[r.t],
-          )}
-          title={r.id}
-        >
-          <span className="truncate">
-            <span className="opacity-70">@{r.t}</span>
-            <span className="mx-0.5">·</span>
-            {r.label}
-          </span>
-          <button
-            type="button"
-            className="shrink-0 rounded p-0.5 hover:bg-black/20 text-current opacity-60 hover:opacity-100"
-            aria-label={`Remove ${r.label} from context`}
-            onClick={() => onRemove(r.t, r.id)}
-          >
-            ×
-          </button>
-        </span>
-      ))}
     </div>
   );
 }

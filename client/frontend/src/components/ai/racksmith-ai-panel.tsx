@@ -3,6 +3,11 @@ import { Loader2, Minus, Plus, Send, Sparkles, X } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { useSetupStore } from "@/stores/setup";
 import { useAiChatUiStore } from "@/stores/ai-chat-ui";
 import {
@@ -22,16 +27,14 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { toastApiError } from "@/lib/api";
 import { MarkdownContent } from "@/components/shared/markdown-content";
-import { AiMentionComposer, type MentionCandidate } from "./ai-mention-composer";
+import { AiChatComposer, type MentionCandidate } from "./ai-chat-composer";
 import {
-  AiContextChips,
   AiThinkingBlock,
   AiToolCallBlock,
   AiToolResultBlock,
   type LiveStreamBlock,
 } from "./ai-chat-blocks";
 
-/** Compact prose overrides for chat bubbles (base styles from ``MarkdownContent``). */
 const assistantMarkdownClassName = cn(
   "text-zinc-300",
   "[&_p]:text-[11px] [&_p]:leading-relaxed [&_p]:my-1",
@@ -100,6 +103,19 @@ function MessageRow({ m }: { m: ChatUiMessage }) {
   }
 }
 
+function attachmentsToContext(items: MentionCandidate[]): ChatStreamContext {
+  const ctx: ChatStreamContext = {};
+  for (const a of items) {
+    const key =
+      a.type === "host" ? "hosts"
+      : a.type === "playbook" ? "playbooks"
+      : a.type === "role" ? "roles"
+      : "racks";
+    (ctx[key] ??= []).push(a.id);
+  }
+  return ctx;
+}
+
 export function AiBottomPanel() {
   const panelOpen = useAiChatUiStore((s) => s.panelOpen);
   const setPanelOpen = useAiChatUiStore((s) => s.setPanelOpen);
@@ -112,7 +128,7 @@ export function AiBottomPanel() {
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [liveBlocks, setLiveBlocks] = useState<LiveStreamBlock[]>([]);
-  const [context, setContext] = useState<ChatStreamContext>({});
+  const [attachments, setAttachments] = useState<MentionCandidate[]>([]);
   const scrollEndRef = useRef<HTMLDivElement | null>(null);
 
   const { data: hosts = [] } = useHosts();
@@ -200,6 +216,8 @@ export function AiBottomPanel() {
       disengageDock();
     }
   };
+
+  const context = useMemo(() => attachmentsToContext(attachments), [attachments]);
 
   const handleSend = async () => {
     const text = input.trim();
@@ -294,61 +312,23 @@ export function AiBottomPanel() {
     [hosts, playbooks, roles, rackEntries],
   );
 
-  const labelByTypeId = useMemo(() => {
-    const m = new Map<string, string>();
-    for (const c of mentionCandidates) {
-      m.set(`${c.type}:${c.id}`, c.label);
-    }
-    return m;
-  }, [mentionCandidates]);
-
-  const resolveLabel = useCallback(
-    (type: MentionCandidate["type"], id: string) =>
-      labelByTypeId.get(`${type}:${id}`) ?? id.slice(0, 12),
-    [labelByTypeId],
-  );
-
-  const handleRemoveContext = useCallback((type: MentionCandidate["type"], id: string) => {
-    setContext((c) => {
-      const key =
-        type === "host"
-          ? "hosts"
-          : type === "playbook"
-            ? "playbooks"
-            : type === "role"
-              ? "roles"
-              : "racks";
-      const cur = new Set(c[key] ?? []);
-      cur.delete(id);
-      const next = [...cur];
-      const copy = { ...c };
-      if (next.length === 0) {
-        delete copy[key];
-      } else {
-        copy[key] = next;
-      }
-      return copy;
+  const handleAttach = useCallback((item: MentionCandidate) => {
+    setAttachments((prev) => {
+      const key = `${item.type}:${item.id}`;
+      if (prev.some((a) => `${a.type}:${a.id}` === key)) return prev;
+      return [...prev, item];
     });
   }, []);
 
-  const handleMentionSelect = useCallback(
-    (item: { type: "host" | "playbook" | "role" | "rack"; id: string }) => {
-      setContext((c) => {
-        const key =
-          item.type === "host"
-            ? "hosts"
-            : item.type === "playbook"
-              ? "playbooks"
-              : item.type === "role"
-                ? "roles"
-                : "racks";
-        const cur = new Set(c[key] ?? []);
-        cur.add(item.id);
-        return { ...c, [key]: [...cur] };
-      });
-    },
-    [],
-  );
+  const handleDetachLast = useCallback(() => {
+    setAttachments((prev) => (prev.length > 0 ? prev.slice(0, -1) : prev));
+  }, []);
+
+  const handleDetach = useCallback((item: MentionCandidate) => {
+    setAttachments((prev) =>
+      prev.filter((a) => !(a.type === item.type && a.id === item.id)),
+    );
+  }, []);
 
   if (!repoReady) {
     return (
@@ -425,8 +405,8 @@ export function AiBottomPanel() {
       </div>
 
       <div className="flex-1 min-h-0 flex flex-col">
-        <ScrollArea className="flex-1 min-h-0 px-3">
-          <div className="space-y-4 py-3 pr-2">
+        <ScrollArea className="flex-1 min-h-0 px-4">
+          <div className="space-y-4 py-3 pr-3">
             {messagesQuery.isLoading && (
               <div className="flex justify-center py-6 text-zinc-500">
                 <Loader2 className="size-4 animate-spin" />
@@ -469,35 +449,40 @@ export function AiBottomPanel() {
           </div>
         </ScrollArea>
 
-        <div className="border-t border-zinc-800/60 px-2 pt-1.5 pb-1 flex flex-col gap-1.5 shrink-0">
-          <AiContextChips
-            context={context}
-            resolveLabel={resolveLabel}
-            onRemove={handleRemoveContext}
-          />
-          <div className="flex gap-1.5 items-end">
-            <AiMentionComposer
+        <div className="border-t border-zinc-800/60 px-3 pt-2.5 pb-3 shrink-0">
+          <div className="flex gap-2 items-end">
+            <AiChatComposer
               value={input}
               onChange={setInput}
               onSend={handleSend}
               disabled={sending || !activeChatId}
               candidates={mentionCandidates}
-              onMentionSelect={handleMentionSelect}
+              attachments={attachments}
+              onAttach={handleAttach}
+              onDetachLast={handleDetachLast}
+              onDetach={handleDetach}
             />
-            <Button
-              type="button"
-              size="icon"
-              className="shrink-0 size-7"
-              disabled={sending || !input.trim() || !activeChatId}
-              onClick={() => void handleSend()}
-              aria-label="Send"
-            >
-              {sending ? (
-                <Loader2 className="size-3.5 animate-spin" />
-              ) : (
-                <Send className="size-3.5" />
-              )}
-            </Button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  size="icon"
+                  className="shrink-0 size-8 rounded-lg"
+                  disabled={sending || !input.trim() || !activeChatId}
+                  onClick={() => void handleSend()}
+                  aria-label="Send message"
+                >
+                  {sending ? (
+                    <Loader2 className="size-3.5 animate-spin" />
+                  ) : (
+                    <Send className="size-3.5" />
+                  )}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="top" className="text-xs">
+                Send (Enter)
+              </TooltipContent>
+            </Tooltip>
           </div>
         </div>
       </div>
