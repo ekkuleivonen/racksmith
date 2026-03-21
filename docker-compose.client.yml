@@ -25,7 +25,7 @@ services:
       # Loopback only — daemon (host network) uses 127.0.0.1:6379; not exposed on LAN
       - "127.0.0.1:6379:6379"
     volumes:
-      - ./data/redis:/data
+      - redis-data:/data
 
   api:
     image: ghcr.io/ekkuleivonen/racksmith-client-api:${RACKSMITH_VERSION:-latest}
@@ -74,3 +74,6 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
       - ${HOME}/.docker/config.json:/config.json:ro
     restart: unless-stopped
+
+volumes:
+  redis-data:
