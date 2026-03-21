@@ -4,6 +4,10 @@
 #   APP_URL      — Public URL of the client (e.g. http://localhost:8080)
 #   DAEMON_SECRET — Shared secret between API and daemon
 #
+# Daemon uses network_mode: host (arp-scan). Therefore:
+#   - Redis publishes 127.0.0.1:6379 so the daemon can reach it via REDIS_URL=redis://127.0.0.1:6379
+#   - API uses host.docker.internal:8001 to reach the daemon (not the service name "daemon")
+#
 # Logging: json-file rotation caps disk use (important on Raspberry Pi / SD cards).
 
 x-logging: &log-rotated
@@ -17,6 +21,9 @@ services:
     image: redis:7-alpine
     restart: unless-stopped
     logging: *log-rotated
+    ports:
+      # Loopback only — daemon (host network) uses 127.0.0.1:6379; not exposed on LAN
+      - "127.0.0.1:6379:6379"
     volumes:
       - redis_data:/data
 
@@ -25,11 +32,14 @@ services:
     restart: unless-stopped
     logging: *log-rotated
     depends_on: [redis]
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - workspace:/app/workspace
     environment:
       REDIS_URL: redis://redis:6379
-      DAEMON_URL: http://daemon:8001
+      # host-gateway: daemon listens on host :8001 (network_mode: host); "daemon" DNS is unreachable from bridge
+      DAEMON_URL: http://host.docker.internal:8001
       DAEMON_SECRET: ${DAEMON_SECRET}
     env_file: [.env]
 

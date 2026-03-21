@@ -86,7 +86,7 @@ Rough namespaces under `/api/` (see Swagger on the API for the full list):
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `REDIS_URL` | `redis://localhost:6379` | Must be consistent for API, daemon worker, and Arq |
-| `DAEMON_URL` | `http://localhost:8001` | API base URL for the daemon (compose sets `http://daemon:8001`) |
+| `DAEMON_URL` | `http://localhost:8001` | API → daemon (compose sets `http://host.docker.internal:8001` when daemon uses host network) |
 | `DATA_DIR` | `./data` (daemon) | Daemon data directory; SSH keys under `.ssh/` |
 | `REPOS_WORKSPACE` | `/app/workspace` (API) | Git workspace path inside API container |
 | `OPENAI_API_KEY` | `""` | Enables AI-assisted role/playbook generation if set |
@@ -95,7 +95,7 @@ Rough namespaces under `/api/` (see Swagger on the API for the full list):
 | `SSH_DISABLE_HOST_KEY_CHECK` | `true` | Ansible / SSH host key checking |
 | `LOG_LEVEL` | `INFO` | Logging level |
 
-> **Host networking on the daemon:** The default compose uses `network_mode: host` for the daemon so **arp-scan** sees real interfaces. The daemon’s `REDIS_URL` is `redis://127.0.0.1:6379` — you need Redis reachable on the host (e.g. publish port `6379` from the Redis container) or override `REDIS_URL` (e.g. host gateway / `host.docker.internal` where supported).
+> **Host networking on the daemon:** Compose uses `network_mode: host` so **arp-scan** works. **Redis** publishes **`127.0.0.1:6379`** so the daemon can keep `REDIS_URL=redis://127.0.0.1:6379` without exposing Redis on your LAN. The **API** container calls the daemon at **`http://host.docker.internal:8001`** (`extra_hosts: host-gateway`); do not set `DAEMON_URL=http://daemon:8001` in `.env` or the API cannot reach a host-network daemon.
 
 ---
 

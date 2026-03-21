@@ -93,6 +93,8 @@ See `.env.example` and [README.md](README.md) for full lists.
 
 Both compose files set **json-file log rotation** (10 MB × 3 files per service) for SD-card–friendly defaults; edit the `x-logging` anchor to tune.
 
+**Client stack networking:** The daemon uses `network_mode: host`. Compose publishes Redis on **`127.0.0.1:6379`** and sets **`DAEMON_URL=http://host.docker.internal:8001`** for the API (with `extra_hosts: host-gateway`).
+
 **Both locally:**
 
 ```bash

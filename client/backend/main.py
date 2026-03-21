@@ -129,6 +129,8 @@ app.include_router(registry_router, prefix="/api/registry", tags=["registry"])
 app.include_router(settings_router, prefix="/api/settings", tags=["settings"])
 app.include_router(onboarding_router, prefix="/api/onboarding", tags=["onboarding"])
 app.include_router(daemon_proxy_router, prefix="/api/daemon", tags=["daemon"])
+# Older SPA builds called /api/ssh/*; keep aliases so cached assets still work
+app.include_router(daemon_proxy_router, prefix="/api", tags=["daemon-legacy"])
 
 _EXCEPTION_MAP: list[tuple[type[Exception], int]] = [
     (RepoNotAvailableError, 409),
