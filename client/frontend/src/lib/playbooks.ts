@@ -1,4 +1,4 @@
-import { apiDelete, apiGet, apiPatch, apiPost, apiPut, wsUrl } from "@/lib/api";
+import { apiDelete, apiGet, apiPatch, apiPost, wsUrl } from "@/lib/api";
 import { invalidateResource } from "@/lib/queryClient";
 import type { RoleInput, RoleOutput } from "@/lib/roles";
 
@@ -74,8 +74,56 @@ export type PlaybookListResult = {
   roles: RoleCatalogEntry[];
 };
 
-export async function listPlaybooks(): Promise<PlaybookListResult> {
-  return apiGet<PlaybookListResult>("/playbooks");
+const LIST_PER_PAGE = 200;
+
+export async function listPlaybooks(q?: string): Promise<PlaybookListResult> {
+  const sp = new URLSearchParams();
+  sp.set("page", "1");
+  sp.set("per_page", String(LIST_PER_PAGE));
+  if (q?.trim()) sp.set("q", q.trim());
+  const [listData, cat] = await Promise.all([
+    apiGet<{
+      items: PlaybookSummary[];
+      total: number;
+      page: number;
+      per_page: number;
+    }>(`/playbooks?${sp.toString()}`),
+    apiGet<{ roles: RoleCatalogEntry[] }>("/playbooks/catalog"),
+  ]);
+  return { playbooks: listData.items, roles: cat.roles };
+}
+
+export type AvailableVarEntry = {
+  source: "host_var" | "group_var" | "role_output" | "role_default";
+  key: string;
+  from: string;
+  role_order: number | null;
+  description?: string;
+  output_type?: string;
+};
+
+export async function getPlaybookAvailableVars(playbookId: string) {
+  return apiGet<{ vars: AvailableVarEntry[] }>(
+    `/playbooks/${playbookId}/available-vars`,
+  );
+}
+
+export type RequiredRuntimeVarEntry = {
+  key: string;
+  label: string;
+  type: string;
+  required: boolean;
+  options: string[];
+  role_id: string;
+  role_name: string;
+  secret: boolean;
+};
+
+export async function getPlaybookRequiredRuntimeVars(playbookId: string) {
+  return apiGet<{
+    inputs: RequiredRuntimeVarEntry[];
+    needs_become_password: boolean;
+  }>(`/playbooks/${playbookId}/required-runtime-vars`);
 }
 
 export async function getPlaybook(playbookId: string) {
@@ -92,7 +140,7 @@ export async function updatePlaybook(
   playbookId: string,
   payload: PlaybookUpsert
 ) {
-  const result = await apiPut<{ playbook: PlaybookDetail }>(
+  const result = await apiPatch<{ playbook: PlaybookDetail }>(
     `/playbooks/${playbookId}`,
     payload
   );

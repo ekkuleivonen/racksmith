@@ -35,6 +35,28 @@ jobs:
         working-directory: client/backend
         run: uv run mypy .
 
+  lint-client-daemon:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+          cache-dependency-glob: client/daemon/uv.lock
+
+      - name: Install dependencies
+        working-directory: client/daemon
+        run: uv sync --frozen
+
+      - name: Ruff check
+        working-directory: client/daemon
+        run: uv run ruff check .
+
+      - name: Mypy
+        working-directory: client/daemon
+        run: uv run mypy .
+
   lint-registry-backend:
     runs-on: ubuntu-latest
     steps:
@@ -99,6 +121,24 @@ jobs:
         working-directory: client/backend
         run: uv run python -m pytest -v
 
+  test-client-daemon:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+          cache-dependency-glob: client/daemon/uv.lock
+
+      - name: Install dependencies
+        working-directory: client/daemon
+        run: uv sync --frozen
+
+      - name: Run pytest
+        working-directory: client/daemon
+        run: uv run python -m pytest -v
+
   # ── Security scanning ───────────────────────────────────────────────────────
   audit-client-backend:
     runs-on: ubuntu-latest
@@ -160,9 +200,11 @@ jobs:
     if: github.event_name == 'push'
     needs:
       - lint-client-backend
+      - lint-client-daemon
       - lint-registry-backend
       - lint-client-frontend
       - test-client-backend
+      - test-client-daemon
       - audit-client-backend
       - audit-registry-backend
       - audit-client-frontend
@@ -175,13 +217,33 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - name: racksmith-client
-            dockerfile: client/Dockerfile.client
+          - name: racksmith-client-api
+            dockerfile: client/Dockerfile.api
             context: .
             platform: linux/amd64
             runner: ubuntu-latest
-          - name: racksmith-client
-            dockerfile: client/Dockerfile.client
+          - name: racksmith-client-api
+            dockerfile: client/Dockerfile.api
+            context: .
+            platform: linux/arm64
+            runner: ubuntu-24.04-arm
+          - name: racksmith-client-daemon
+            dockerfile: client/Dockerfile.daemon
+            context: .
+            platform: linux/amd64
+            runner: ubuntu-latest
+          - name: racksmith-client-daemon
+            dockerfile: client/Dockerfile.daemon
+            context: .
+            platform: linux/arm64
+            runner: ubuntu-24.04-arm
+          - name: racksmith-client-frontend
+            dockerfile: client/Dockerfile.frontend
+            context: .
+            platform: linux/amd64
+            runner: ubuntu-latest
+          - name: racksmith-client-frontend
+            dockerfile: client/Dockerfile.frontend
             context: .
             platform: linux/arm64
             runner: ubuntu-24.04-arm
@@ -263,7 +325,7 @@ jobs:
 
     strategy:
       matrix:
-        name: [racksmith-client, racksmith-registry, racksmith-landing]
+        name: [racksmith-client-api, racksmith-client-daemon, racksmith-client-frontend, racksmith-registry, racksmith-landing]
 
     steps:
       - name: Set version

@@ -18,9 +18,12 @@ import settings
 from _utils.exceptions import AlreadyExistsError, NotFoundError, RepoNotAvailableError
 from _utils.logging import configure_logging, get_logger
 from _utils.router import router as system_router
+from ai.router import router as ai_router
 from auth.router import auth_router
+from daemon.proxy import router as daemon_proxy_router
+from git.router import router as git_router
 from groups.router import router as groups_router
-from hosts.router import hosts_router, scan_router, ssh_router
+from hosts.router import hosts_router
 from onboarding.router import onboarding_router
 from playbooks.router import router as playbooks_router
 from racks.router import router as racks_router
@@ -38,7 +41,6 @@ async def lifespan(app: FastAPI):
     from arq.connections import RedisSettings
 
     from core.migrations import migrate_all_active_repos
-    from hosts.scan import scan_manager
     from playbooks.managers import playbook_manager
     from roles.managers import role_manager
     from settings_store import load_user_settings
@@ -49,7 +51,6 @@ async def lifespan(app: FastAPI):
     arq_pool = await create_pool(RedisSettings.from_dsn(settings.REDIS_URL))
     playbook_manager.set_arq_pool(arq_pool)
     role_manager.set_arq_pool(arq_pool)
-    scan_manager.set_arq_pool(arq_pool)
     logger.info("app_starting")
     try:
         yield
@@ -114,19 +115,20 @@ async def log_requests(request: Request, call_next):
 
 app.include_router(system_router, tags=["system"])
 app.include_router(auth_router, prefix="/api/auth", tags=["auth"])
-app.include_router(roles_router, prefix="/api/roles", tags=["roles"])
-app.include_router(repos_router, prefix="/api/repos", tags=["repos"])
-app.include_router(racks_router, prefix="/api/racks", tags=["racks"])
 app.include_router(hosts_router, prefix="/api/hosts", tags=["hosts"])
 app.include_router(groups_router, prefix="/api/groups", tags=["groups"])
+app.include_router(racks_router, prefix="/api/racks", tags=["racks"])
+app.include_router(roles_router, prefix="/api/roles", tags=["roles"])
 app.include_router(playbooks_router, prefix="/api/playbooks", tags=["playbooks"])
+app.include_router(subnets_router, prefix="/api/subnets", tags=["subnets"])
 app.include_router(files_router, prefix="/api/files", tags=["files"])
-app.include_router(ssh_router, prefix="/api/ssh", tags=["ssh"])
-app.include_router(scan_router, prefix="/api/discovery", tags=["discovery"])
+app.include_router(repos_router, prefix="/api/repos", tags=["repos"])
+app.include_router(git_router, prefix="/api/git", tags=["git"])
+app.include_router(ai_router, prefix="/api/ai", tags=["ai"])
 app.include_router(registry_router, prefix="/api/registry", tags=["registry"])
 app.include_router(settings_router, prefix="/api/settings", tags=["settings"])
 app.include_router(onboarding_router, prefix="/api/onboarding", tags=["onboarding"])
-app.include_router(subnets_router, prefix="/api/subnets", tags=["subnets"])
+app.include_router(daemon_proxy_router, prefix="/api/daemon", tags=["daemon"])
 
 _EXCEPTION_MAP: list[tuple[type[Exception], int]] = [
     (RepoNotAvailableError, 409),

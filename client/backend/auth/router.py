@@ -2,15 +2,15 @@
 
 from __future__ import annotations
 
-from typing import Any
-
-from fastapi import APIRouter, Cookie, Request
+from fastapi import APIRouter, Cookie, HTTPException, Request
 from fastapi.responses import JSONResponse, RedirectResponse
 
 import settings
 from _utils.logging import get_logger
+from _utils.schemas import StatusMessageResponse
 from auth.dependencies import CurrentSession, CurrentUser
 from auth.managers import auth_manager
+from auth.schemas import UserInfo, UserResponse
 
 logger = get_logger(__name__)
 auth_router = APIRouter()
@@ -71,10 +71,10 @@ async def registry_callback(
     return response
 
 
-@auth_router.get("/me")
-async def me(user: CurrentUser) -> dict[str, dict[str, Any]]:
+@auth_router.get("/me", response_model=UserResponse)
+async def me(user: CurrentUser) -> UserResponse:
     """Return the currently authenticated user's profile."""
-    return {"user": user}
+    return UserResponse(user=UserInfo.model_validate(user))
 
 
 @auth_router.post("/refresh")
@@ -91,11 +91,14 @@ async def refresh(
     """
     new_session_id = await auth_manager.refresh_token(session)
     if not new_session_id:
-        return JSONResponse({"status": "refresh_failed"}, status_code=502)
+        raise HTTPException(status_code=502, detail="Token refresh failed")
 
     await auth_manager.logout(session_id)
 
-    response = JSONResponse({"status": "refreshed"})
+    body = StatusMessageResponse(status="refreshed", message="Session refreshed").model_dump(
+        mode="json"
+    )
+    response = JSONResponse(body)
     response.set_cookie(
         key=settings.SESSION_COOKIE_NAME,
         value=new_session_id,
@@ -116,6 +119,8 @@ async def logout(
 ) -> JSONResponse:
     """Destroy the current session and clear the cookie."""
     await auth_manager.logout(session_id)
-    response = JSONResponse({"status": "logged_out"})
+    response = JSONResponse(
+        StatusMessageResponse(status="logged_out", message="Logged out").model_dump(mode="json")
+    )
     response.delete_cookie(settings.SESSION_COOKIE_NAME)
     return response

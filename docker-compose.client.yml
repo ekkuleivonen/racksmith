@@ -1,26 +1,45 @@
-# Racksmith Client — runs locally on your machine / homelab
+# Racksmith Client — 4-service split
 #
 # MUST have env vars (set in .env):
-#   APP_URL — Public URL of the client (e.g. http://localhost:8080)
+#   APP_URL      — Public URL of the client (e.g. http://localhost:8080)
+#   DAEMON_SECRET — Shared secret between API and daemon
 
 services:
-  client:
-    image: ghcr.io/ekkuleivonen/racksmith-client:${RACKSMITH_VERSION:-latest}
+  redis:
+    image: redis:7-alpine
     restart: unless-stopped
-    network_mode: host
-    env_file:
-      - .env
-    environment:
-      APP_URL: ${APP_URL}
     volumes:
-      - ./data:/app/data
-      - ./workspace:/app/workspace
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://127.0.0.1:8080/api/version"]
-      interval: 10s
-      timeout: 5s
-      retries: 3
-      start_period: 30s
+      - redis_data:/data
+
+  api:
+    image: ghcr.io/ekkuleivonen/racksmith-client-api:${RACKSMITH_VERSION:-latest}
+    restart: unless-stopped
+    depends_on: [redis]
+    volumes:
+      - workspace:/app/workspace
+    environment:
+      REDIS_URL: redis://redis:6379
+      DAEMON_URL: http://daemon:8001
+      DAEMON_SECRET: ${DAEMON_SECRET}
+    env_file: [.env]
+
+  daemon:
+    image: ghcr.io/ekkuleivonen/racksmith-client-daemon:${RACKSMITH_VERSION:-latest}
+    restart: unless-stopped
+    depends_on: [redis]
+    network_mode: host
+    volumes:
+      - daemon_data:/data
+    environment:
+      REDIS_URL: redis://127.0.0.1:6379
+      DAEMON_SECRET: ${DAEMON_SECRET}
+
+  frontend:
+    image: ghcr.io/ekkuleivonen/racksmith-client-frontend:${RACKSMITH_VERSION:-latest}
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+    depends_on: [api]
 
   watchtower:
     image: nickfedor/watchtower
@@ -31,3 +50,8 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
       - ${HOME}/.docker/config.json:/config.json:ro
     restart: unless-stopped
+
+volumes:
+  redis_data:
+  workspace:
+  daemon_data:

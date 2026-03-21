@@ -8,6 +8,7 @@ from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 
 from _utils.logging import get_logger
+from _utils.schemas import StatusMessageResponse
 from auth.dependencies import CurrentSession
 from auth.session import user_storage_id
 from auth.workspace import (
@@ -29,7 +30,9 @@ async def complete_onboarding(
 ) -> JSONResponse:
     user_id = user_storage_id(session.user)
     mark_onboarding_completed(user_id)
-    return JSONResponse({"status": "ok"})
+    return JSONResponse(
+        StatusMessageResponse(status="ok", message="Onboarding completed").model_dump(mode="json")
+    )
 
 
 @onboarding_router.post("/factory-reset")
@@ -62,4 +65,6 @@ async def factory_reset(
         onboarding_file.unlink()
 
     logger.info("factory_reset_complete", user_id=user_id)
-    return JSONResponse({"status": "ok"})
+    return JSONResponse(
+        StatusMessageResponse(status="ok", message="Factory reset complete").model_dump(mode="json")
+    )

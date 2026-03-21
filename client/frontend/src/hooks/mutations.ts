@@ -3,6 +3,7 @@ import { toast } from "sonner";
 import { startScan, type DiscoveredDevice } from "@/lib/discovery";
 import { invalidateResource, queryKeys } from "@/lib/queryClient";
 import {
+  bulkImportDiscovered,
   createHost,
   deleteHost,
   refreshHost,
@@ -203,21 +204,21 @@ export function useImportDiscoveredHosts() {
     async ({
       devices,
       sshUser,
+      sshPort,
     }: {
       devices: DiscoveredDevice[];
       sshUser: string;
+      sshPort: number;
     }) => {
-      const results = [];
-      for (const device of devices) {
-        const result = await createHost({
-          ip_address: device.ip,
-          ssh_user: sshUser,
-          ssh_port: 22,
-          managed: true,
-        });
-        results.push(result);
-      }
-      return results;
+      return bulkImportDiscovered(
+        devices.map((d) => ({
+          ip: d.ip,
+          mac: d.mac,
+          hostname: d.hostname,
+        })),
+        sshUser,
+        sshPort,
+      );
     },
     {
       success: (_data, vars) =>

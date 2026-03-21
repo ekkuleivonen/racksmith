@@ -10,8 +10,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { useGroups, useHosts, useSubnets } from "@/hooks/queries";
-import { isManagedHost, matchesHostFilters } from "@/lib/hosts";
-import { getSubnetCidr } from "@/lib/subnets";
+import { isManagedHost, matchesCanvasHostFilters } from "@/lib/hosts";
 import { usePingStore } from "@/stores/ping";
 import { cn } from "@/lib/utils";
 import type { CanvasActions, CanvasFilters } from "@/hooks/use-canvas-params";
@@ -126,14 +125,23 @@ export function FilterBar({ filters, actions }: FilterBarProps) {
   }, [subnetMetas]);
 
   const subnetOptions = useMemo(() => {
-    const cidrs = Array.from(new Set(managedHosts.map((h) => getSubnetCidr(h.ip_address))))
-      .filter((c) => c !== "unknown")
-      .sort();
-    return cidrs.map((cidr) => ({ value: cidr, label: subnetMetaMap.get(cidr) ?? cidr }));
-  }, [managedHosts, subnetMetaMap]);
+    const cidrs = new Set<string>();
+    for (const h of managedHosts) {
+      if (h.subnet) cidrs.add(h.subnet);
+    }
+    for (const s of subnetMetas) {
+      cidrs.add(s.cidr);
+    }
+    return [...cidrs]
+      .sort()
+      .map((cidr) => ({ value: cidr, label: subnetMetaMap.get(cidr) ?? cidr }));
+  }, [managedHosts, subnetMetaMap, subnetMetas]);
 
   const filteredCount = useMemo(
-    () => managedHosts.filter((host) => matchesHostFilters(host, filters, pingStatuses)).length,
+    () =>
+      managedHosts.filter((host) =>
+        matchesCanvasHostFilters(host, filters, pingStatuses),
+      ).length,
     [managedHosts, filters, pingStatuses],
   );
 

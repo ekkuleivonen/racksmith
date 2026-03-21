@@ -4,110 +4,117 @@
 
 **Ansible automation for your homelab, managed through Git.**
 
-Racksmith gives you a local web UI to build, run, and manage Ansible playbooks and roles across every machine on your network. All configuration lives in a `.racksmith/` directory inside your own Git repo — nothing is hidden, nothing is locked in.
+Racksmith gives you a local web UI to build, run, and manage Ansible playbooks and roles across machines on your network. All configuration lives in a `.racksmith/` directory inside your own Git repo — nothing is hidden, nothing is locked in.
 
 Connect your repo, point at your hosts, and let Racksmith handle the rest.
 
 ---
 
-## Client — `racksmith-client`
+## Client — homelab stack (split services)
 
-The client is the image you run on your homelab. It bundles the API server, background worker, embedded Redis, and a React frontend into a single container.
+The **client** is no longer a single “all-in-one” container. It is **four services**: **Redis**, **API**, **daemon**, and **frontend**. Only the **daemon** needs raw LAN access (ARP scan, SSH to hosts, Ansible). The **API** holds the Git **workspace**; the daemon runs jobs from **serialized payloads** over Redis (no shared workspace volume).
 
-### Quick start
+Published images (multi-arch on `main` / tags):
+
+| Image | Purpose |
+|-------|---------|
+| `ghcr.io/ekkuleivonen/racksmith-client-api` | FastAPI: workspace, auth proxy to registry, job enqueue, WebSocket proxy to daemon |
+| `ghcr.io/ekkuleivonen/racksmith-client-daemon` | SSH, Ansible, ping, network scan, Arq worker; SSH keys on `/data/.ssh` |
+| `ghcr.io/ekkuleivonen/racksmith-client-frontend` | nginx + built SPA; proxies `/api/*` to the API |
+
+Shared Python package: **`racksmith-shared`** (path dependency in repo under `client/shared/`).
+
+### Quick start (Docker Compose)
 
 ```bash
-docker run -d \
-  --name racksmith \
-  --network host \
-  -e APP_URL=http://racksmith.local:8080 \
-  -e REGISTRY_URL=https://registry.racksmith.io \
-  -v racksmith-data:/app/data \
-  -v racksmith-workspace:/app/workspace \
-  ghcr.io/ekkuleivonen/racksmith-client:latest
+cp .env.example .env
+# Set APP_URL, DAEMON_SECRET (and REGISTRY_URL if needed)
+
+docker compose -f docker-compose.client.yml up -d
 ```
 
-Or with Docker Compose:
+Open **`APP_URL`** (default in compose: `http://localhost:8080`), sign in with GitHub, and connect a repo.
 
-```yaml
-services:
-  racksmith:
-    image: ghcr.io/ekkuleivonen/racksmith-client:latest
-    network_mode: host
-    environment:
-      - APP_URL=http://racksmith.local:8080
-      - REGISTRY_URL=https://registry.racksmith.io
-    volumes:
-      - racksmith-data:/app/data
-      - racksmith-workspace:/app/workspace
+### Architecture (high level)
 
-volumes:
-  racksmith-data:
-  racksmith-workspace:
+```
+Browser → frontend (nginx) → API (FastAPI)
+                              ↓ Redis (Arq + pub/sub)
+                              ↓ HTTP + WS (DAEMON_SECRET)
+                           daemon (Ansible, SSH, arp-scan) → your LAN
 ```
 
-> **Why host networking?** Racksmith's network discovery uses ARP scanning to find devices on your LAN. Host networking lets the container see your real network interfaces. The UI is served on port 8080 directly on the host.
+- **Frontend** → only talks to the **API** (same origin `/api`).
+- **API** → Redis for sessions/caches/runs; enqueues **Arq** jobs the **daemon** executes; calls the daemon for SSH probe, ping, keys, become validation, etc.
+- **Daemon** → must reach **Redis**; uses **host networking** in the default compose so ARP scan works. SSH keys live on the **daemon** volume only (`daemon_data` → `/data`).
 
-Open `http://<your-host>:8080`, sign in with GitHub, and connect a repo.
+### Client API layout (FastAPI)
 
-### Volumes
+Rough namespaces under `/api/` (see Swagger on the API for the full list):
 
-| Mount point | Purpose |
-|---|---|
-| `/app/data` | Persistent data — SSH keys, SQLite database, Redis state, sessions |
-| `/app/workspace` | Locally cloned Git repos that Racksmith manages |
+| Prefix | Purpose |
+|--------|---------|
+| `/api/auth` | GitHub OAuth via registry |
+| `/api/hosts`, `/api/groups`, `/api/racks`, `/api/subnets` | Inventory and layout |
+| `/api/roles`, `/api/playbooks` | Roles, playbooks, runs (runs enqueue work on the daemon) |
+| `/api/files`, `/api/git` | Repo workspace and Git (commit, sync, diffs) |
+| `/api/daemon` | Proxy to daemon: SSH terminal, ping, keys, discovery scans |
+| `/api/registry` | Catalog proxy to the registry service |
+| `/api/ai`, `/api/settings`, `/api/onboarding` | AI assist, user settings, setup |
+| `/api/defaults` | Static app defaults for the SPA (SSH port, rack columns, …) |
 
-### Required environment variables
+### Volumes (compose defaults)
 
-| Variable | Description |
-|---|---|
-| `APP_URL` | Public URL where you access the UI (e.g. `http://192.168.1.50:8080`) |
-| `REGISTRY_URL` | Registry API URL (default: `https://registry.racksmith.io`) |
+| Volume / mount | Service | Purpose |
+|----------------|---------|---------|
+| `workspace` | API | Cloned Git repos (`.racksmith/` layout) |
+| `daemon_data` | Daemon | **SSH keys only** (`/data/.ssh`) — not the workspace |
+| `redis_data` | Redis | Persistence (optional; depends on Redis config) |
 
-### Optional environment variables
+### Required environment variables (client stack)
+
+| Variable | Where | Description |
+|----------|--------|-------------|
+| `APP_URL` | API (+ browser) | Public URL of the UI (e.g. `http://192.168.1.50:8080`) |
+| `DAEMON_SECRET` | API + Daemon | Shared bearer token for API → daemon calls |
+| `REGISTRY_URL` | API | Registry API URL (default: `https://registry.racksmith.io`) |
+
+### Important optional variables
 
 | Variable | Default | Description |
-|---|---|---|
-| `OPENAI_API_KEY` | `""` | Enables AI-assisted role generation (disabled if empty) |
-| `OPENAI_MODEL` | `gpt-4o-mini` | OpenAI model to use for generation |
-| `REPOS_WORKSPACE` | `/app/workspace` | Override the workspace path inside the container |
-| `DATA_DIR` | `/app/data` | Override the data path inside the container |
-| `REDIS_URL` | `redis://127.0.0.1:6379` | Redis connection URL (embedded Redis runs by default) |
-| `GIT_RACKSMITH_BRANCH` | `racksmith` | Branch name Racksmith uses in your repo |
-| `GIT_COMMIT_USER_NAME` | `Racksmith` | Git commit author name |
-| `GIT_COMMIT_USER_EMAIL` | `racksmith@localhost` | Git commit author email |
-| `SESSION_MAX_AGE` | `604800` | Session lifetime in seconds (default 7 days) |
-| `SSH_DISABLE_HOST_KEY_CHECK` | `true` | Disable strict host key checking for Ansible |
+|----------|---------|-------------|
+| `REDIS_URL` | `redis://localhost:6379` | Must be consistent for API, daemon worker, and Arq |
+| `DAEMON_URL` | `http://localhost:8001` | API base URL for the daemon (compose sets `http://daemon:8001`) |
+| `DATA_DIR` | `./data` (daemon) | Daemon data directory; SSH keys under `.ssh/` |
+| `REPOS_WORKSPACE` | `/app/workspace` (API) | Git workspace path inside API container |
+| `OPENAI_API_KEY` | `""` | Enables AI-assisted role/playbook generation if set |
+| `OPENAI_MODEL` | `gpt-4o-mini` | OpenAI model |
+| `GIT_RACKSMITH_BRANCH` | `racksmith` | Branch Racksmith uses in your repo |
+| `SSH_DISABLE_HOST_KEY_CHECK` | `true` | Ansible / SSH host key checking |
 | `LOG_LEVEL` | `INFO` | Logging level |
+
+> **Host networking on the daemon:** The default compose uses `network_mode: host` for the daemon so **arp-scan** sees real interfaces. The daemon’s `REDIS_URL` is `redis://127.0.0.1:6379` — you need Redis reachable on the host (e.g. publish port `6379` from the Redis container) or override `REDIS_URL` (e.g. host gateway / `host.docker.internal` where supported).
 
 ---
 
 ## Registry — `racksmith-registry`
 
-The registry is the shared backend that handles GitHub OAuth and hosts a public catalog of reusable Ansible roles. The public instance at `registry.racksmith.io` is available for everyone — most users will never need to self-host this.
+The registry is the shared backend that handles GitHub OAuth and hosts a public catalog of reusable Ansible roles. The public instance at `registry.racksmith.io` is available for most users — self-host only if you need your own.
 
-If you do want to run your own registry, you'll need a PostgreSQL database.
+Self-hosting requires PostgreSQL. See [registry/backend/README.md](registry/backend/README.md).
 
-### Required environment variables
+### Required environment variables (registry)
 
 | Variable | Description |
-|---|---|
-| `TOKEN_ENCRYPTION_KEY` | Fernet encryption key for storing GitHub tokens |
+|----------|-------------|
+| `TOKEN_ENCRYPTION_KEY` | Fernet encryption key for GitHub tokens |
 | `GITHUB_CLIENT_ID` | GitHub OAuth App client ID |
 | `GITHUB_CLIENT_SECRET` | GitHub OAuth App client secret |
 | `DATABASE_URL` | PostgreSQL connection string |
-| `REGISTRY_PUBLIC_URL` | Public URL of the registry (used for OAuth callbacks) |
-
-### Optional environment variables
-
-| Variable | Default | Description |
-|---|---|---|
-| `ALLOWED_ORIGINS` | `[]` | Comma-separated list of allowed CORS origins |
-| `PORT` | `8001` | Port the registry listens on |
-| `LOG_LEVEL` | `INFO` | Logging level |
+| `REGISTRY_PUBLIC_URL` | Public URL of the registry (OAuth callbacks) |
 
 ---
 
 ## License
 
-[AGPL-3.0](LICENSE)
+Licensed under the **GNU Affero General Public License v3.0**. See [LICENSE](LICENSE) (SPDX: **AGPL-3.0**).

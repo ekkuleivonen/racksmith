@@ -8,12 +8,8 @@ from auth.dependencies import CurrentSession
 from hosts.managers import host_manager
 from repo.files import files_manager
 from repo.files_schemas import (
-    CommitRequest,
-    CommitResponse,
     CreateFolderRequest,
-    DiffsResponse,
     FileContentResponse,
-    FileStatusesResponse,
     FileUpdate,
     MoveEntryRequest,
     TreeResponse,
@@ -34,7 +30,6 @@ from repo.schemas import (
     RepoResponse,
     RepoSelection,
     SetupStatus,
-    StatusMessageResponse,
 )
 
 repos_router = APIRouter()
@@ -94,7 +89,7 @@ async def drop_local_repo(
     repos_manager.drop_repo(session, owner=owner, repo=repo)
 
 
-@repos_router.post("/create", status_code=201, response_model=RepoResponse)
+@repos_router.post("", status_code=201, response_model=RepoResponse)
 async def create_repo(
     body: RepoCreate, session: CurrentSession
 ) -> RepoResponse:
@@ -109,16 +104,6 @@ async def create_repo(
     except RuntimeError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     return RepoResponse(repo=repo)
-
-
-@repos_router.post("/sync", response_model=StatusMessageResponse)
-async def sync_repo(session: CurrentSession) -> StatusMessageResponse:
-    """Pull latest changes from the remote racksmith branch."""
-    try:
-        await repos_manager.sync_repo(session)
-    except RuntimeError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    return StatusMessageResponse(status="ok")
 
 
 @repos_router.post("/detect-ansible", response_model=DetectedResponse)
@@ -165,23 +150,6 @@ async def get_file(path: str, session: CurrentSession) -> FileContentResponse:
     return FileContentResponse(content=content)
 
 
-@files_router.get("/diffs", response_model=DiffsResponse)
-async def get_diffs(session: CurrentSession) -> DiffsResponse:
-    """Get unified diffs for all uncommitted changes."""
-    files = await files_manager.get_diffs(session)
-    return DiffsResponse(files=files)
-
-
-@files_router.get("/file-statuses", response_model=FileStatusesResponse)
-async def get_file_statuses(session: CurrentSession) -> FileStatusesResponse:
-    """Get modified and untracked file paths in the working tree."""
-    statuses = await files_manager.get_file_statuses(session)
-    return FileStatusesResponse(
-        modified_paths=statuses["modified"],
-        untracked_paths=statuses["untracked"],
-    )
-
-
 @files_router.put("/file", response_model=FilesStatusMessageResponse)
 async def update_file(
     body: FileUpdate, session: CurrentSession
@@ -223,21 +191,6 @@ async def delete_folder(
 ) -> None:
     """Delete a directory from the repo."""
     files_manager.delete_folder(session, path)
-
-
-@files_router.post("/discard", status_code=204)
-async def discard(session: CurrentSession) -> None:
-    """Discard all uncommitted changes in the working tree."""
-    await files_manager.discard_changes(session)
-
-
-@files_router.post("/commit", response_model=CommitResponse)
-async def commit(
-    body: CommitRequest, session: CurrentSession
-) -> CommitResponse:
-    """Commit and push all changes, returning the PR URL."""
-    pr_url = await files_manager.commit_and_push(session, body.message)
-    return CommitResponse(status="pushed", pr_url=pr_url)
 
 
 @files_router.patch("/move", status_code=200, response_model=FilesStatusMessageResponse)

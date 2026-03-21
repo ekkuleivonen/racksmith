@@ -21,9 +21,16 @@ function invalidateAfterGroupMutation() {
   invalidateResource("groups", "filesStatuses", "filesTree");
 }
 
+const GROUPS_PER_PAGE = 200;
+
 export async function listGroups() {
-  const data = await apiGet<{ groups: Group[] }>("/groups");
-  return data.groups;
+  const data = await apiGet<{
+    items: Group[];
+    total: number;
+    page: number;
+    per_page: number;
+  }>(`/groups?page=1&per_page=${GROUPS_PER_PAGE}`);
+  return data.items;
 }
 
 export async function getGroup(id: string) {
@@ -31,7 +38,7 @@ export async function getGroup(id: string) {
 }
 
 export async function createGroup(payload: GroupInput) {
-  const result = await apiPost<{ group: Group }>("/groups", payload);
+  const result = await apiPost<{ group: GroupWithMembers }>("/groups", payload);
   invalidateAfterGroupMutation();
   return result;
 }
@@ -44,5 +51,15 @@ export async function updateGroup(id: string, payload: GroupInput) {
 
 export async function deleteGroup(id: string) {
   await apiDelete(`/groups/${id}`);
+  invalidateAfterGroupMutation();
+}
+
+export async function addGroupMembers(groupId: string, hostIds: string[]) {
+  await apiPost(`/groups/${groupId}/members`, { host_ids: hostIds });
+  invalidateAfterGroupMutation();
+}
+
+export async function removeGroupMember(groupId: string, hostId: string) {
+  await apiDelete(`/groups/${groupId}/members/${hostId}`);
   invalidateAfterGroupMutation();
 }

@@ -4,7 +4,14 @@ import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
 import { useHosts } from "@/hooks/queries";
 import { usePingStore } from "@/stores/ping";
 import { hostStatusKey } from "@/lib/ssh";
-import { compareHosts, hostDisplayLabel, isManagedHost, matchesHostFilters, type Host } from "@/lib/hosts";
+import {
+  canvasToListHostsParams,
+  compareHosts,
+  hostDisplayLabel,
+  isManagedHost,
+  matchesStatusFilter,
+  type Host,
+} from "@/lib/hosts";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { HostStatusDot } from "@/components/shared/host-status-dot";
@@ -104,7 +111,12 @@ interface HostsListViewProps {
 }
 
 export function HostsListView({ filters, selectedHostId, onSelectHost }: HostsListViewProps) {
-  const { data: allHosts = [] } = useHosts();
+  const [sortCol, setSortCol] = useState<SortColumn>("name");
+  const [sortDir, setSortDir] = useState<SortDir>("asc");
+
+  const { data: apiHosts = [] } = useHosts(
+    canvasToListHostsParams(filters, { column: sortCol, dir: sortDir }),
+  );
   const pingStatuses = usePingStore((s) => s.statuses);
   const selected = useSelection((s) => s.selected);
   const toggle = useSelection((s) => s.toggle);
@@ -113,8 +125,6 @@ export function HostsListView({ filters, selectedHostId, onSelectHost }: HostsLi
   const addMany = useSelection((s) => s.addMany);
   const lastClickedRef = useRef<number>(-1);
   const parentRef = useRef<HTMLDivElement>(null);
-  const [sortCol, setSortCol] = useState<SortColumn>("name");
-  const [sortDir, setSortDir] = useState<SortDir>("asc");
 
   const handleSort = useCallback((col: SortColumn) => {
     setSortCol((prev) => {
@@ -128,11 +138,14 @@ export function HostsListView({ filters, selectedHostId, onSelectHost }: HostsLi
   }, []);
 
   const hosts = useMemo(() => {
-    return allHosts
+    let rows = apiHosts
       .filter(isManagedHost)
-      .filter((h) => matchesHostFilters(h, filters, pingStatuses))
-      .sort(columnComparator(sortCol, sortDir, pingStatuses));
-  }, [allHosts, filters, pingStatuses, sortCol, sortDir]);
+      .filter((h) => matchesStatusFilter(h, filters.status, pingStatuses));
+    if (sortCol === "status") {
+      rows = [...rows].sort(columnComparator(sortCol, sortDir, pingStatuses));
+    }
+    return rows;
+  }, [apiHosts, filters.status, pingStatuses, sortCol, sortDir]);
 
   const allSelected = hosts.length > 0 && hosts.every((h) => selected.has(h.id));
 

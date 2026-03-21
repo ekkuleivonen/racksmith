@@ -60,7 +60,7 @@ class TestRoleDeletionBlocked:
         with pytest.raises(HTTPException) as exc_info:
             await role_managers.delete_role(db, role.id, seed.user)
         assert exc_info.value.status_code == 409
-        assert "referenced by playbooks" in exc_info.value.detail
+        assert "playbook" in str(exc_info.value.detail).lower()
 
     async def test_role_deletion_blocked_preserves_playbook_visibility(self, db, seed: SeedData):
         """Since deletion is blocked, playbooks remain visible and functional."""
@@ -267,8 +267,10 @@ class TestUpdateRole:
         update = RoleUpdate(description="Updated description")
         role_v2 = await role_managers.update_role(db, role.id, update, seed.user)
         assert str(role_v2.id) == str(role.id)
-        assert role_v2.versions[0].version_number == 2
-        assert role_v2.versions[0].description == "Updated description"
+        await db.refresh(role_v2, attribute_names=["versions"])
+        latest = max(role_v2.versions, key=lambda v: v.version_number)
+        assert latest.version_number == 2
+        assert latest.description == "Updated description"
 
     async def test_update_rejects_other_user(self, db, seed: SeedData):
         """Update by a different user → 403."""
@@ -302,8 +304,10 @@ class TestUpdatePlaybook:
         update = PlaybookUpdate(description="Updated")
         pb_v2 = await pb_managers.update_playbook(db, playbook.id, update, seed.user)
         assert str(pb_v2.id) == str(playbook.id)
-        assert pb_v2.versions[0].version_number == 2
-        assert pb_v2.versions[0].description == "Updated"
+        await db.refresh(pb_v2, attribute_names=["versions"])
+        latest_pb = max(pb_v2.versions, key=lambda v: v.version_number)
+        assert latest_pb.version_number == 2
+        assert latest_pb.description == "Updated"
 
     async def test_update_rejects_other_user(self, db, seed: SeedData):
         """Update by a different user → 403."""

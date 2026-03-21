@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { getFileViewForFile } from "@/components/files/get-file-view";
-import { apiGet, apiPut, toastApiError } from "@/lib/api";
+import { toastApiError } from "@/lib/api";
+import { getFileContent, updateFile } from "@/lib/files";
 import { invalidateResource } from "@/lib/queryClient";
 
 const AUTOSAVE_DELAY_MS = 600;
@@ -23,11 +24,9 @@ export function FilesPage() {
       setLoadedContent(null);
       setCodeValue("");
       try {
-        const data = await apiGet<{ content: string }>(
-          `/files/file?path=${encodeURIComponent(path)}`,
-        );
-        setLoadedContent(data.content);
-        setCodeValue(data.content);
+        const content = await getFileContent(path);
+        setLoadedContent(content);
+        setCodeValue(content);
       } catch (error) {
         toastApiError(error, "Failed to load file");
         setLoadedContent(null);
@@ -67,10 +66,7 @@ export function FilesPage() {
       saveTimeoutRef.current = window.setTimeout(async () => {
         saveTimeoutRef.current = null;
         try {
-          await apiPut<{ status: string }>("/files/file", {
-            path,
-            content,
-          });
+          await updateFile(path, content);
           setLoadedContent(content);
           invalidateResource("filesStatuses");
         } catch (error) {

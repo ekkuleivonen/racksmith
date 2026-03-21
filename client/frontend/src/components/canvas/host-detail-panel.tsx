@@ -31,12 +31,13 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { SSH_PORT_FALLBACK } from "@/lib/defaults";
 import { hostDisplayLabel, isReachableHost, type Host, type HostInput } from "@/lib/hosts";
 import { hostStatusDotClass } from "@/components/shared/host-status-dot";
 import type { PingStatus } from "@/lib/ssh";
 import type { Group } from "@/lib/groups";
 import { cn } from "@/lib/utils";
-import { useHost, useGroups, usePingStatus } from "@/hooks/queries";
+import { useDefaults, useHost, useGroups, usePingStatus } from "@/hooks/queries";
 import {
   useDeleteHost,
   useRebootHost,
@@ -51,12 +52,21 @@ interface HostDetailPanelProps {
   onClose: () => void;
 }
 
-function buildUpdatePayload(host: Host, patch: Partial<HostInput>): HostInput {
+function useAppSshPort(): number {
+  const { data } = useDefaults();
+  return data?.ssh_port ?? SSH_PORT_FALLBACK;
+}
+
+function buildUpdatePayload(
+  host: Host,
+  patch: Partial<HostInput>,
+  defaultSshPort: number,
+): HostInput {
   return {
     name: host.name ?? "",
     ip_address: host.ip_address ?? "",
     ssh_user: host.ssh_user ?? "",
-    ssh_port: host.ssh_port ?? 22,
+    ssh_port: host.ssh_port ?? defaultSshPort,
     labels: host.labels ?? [],
     groups: host.groups ?? [],
     vars: host.vars ?? {},
@@ -203,6 +213,7 @@ function HostActions({
 function EditableNameSection({ host }: { host: Host }) {
   const [draft, setDraft] = useState(host.name ?? "");
   const updateMutation = useUpdateHost();
+  const defaultSsh = useAppSshPort();
 
   return (
     <EditableSection
@@ -210,7 +221,7 @@ function EditableNameSection({ host }: { host: Host }) {
       onSave={async () => {
         await updateMutation.mutateAsync({
           id: host.id,
-          payload: buildUpdatePayload(host, { name: draft.trim() || "" }),
+          payload: buildUpdatePayload(host, { name: draft.trim() || "" }, defaultSsh),
         });
         toast.success("Display name updated");
       }}
@@ -233,10 +244,11 @@ function EditableNameSection({ host }: { host: Host }) {
 }
 
 function EditableConnectionSection({ host }: { host: Host }) {
+  const defaultSsh = useAppSshPort();
   const [draft, setDraft] = useState({
     ip_address: host.ip_address ?? "",
     ssh_user: host.ssh_user ?? "",
-    ssh_port: host.ssh_port ?? 22,
+    ssh_port: host.ssh_port ?? defaultSsh,
   });
   const updateMutation = useUpdateHost();
 
@@ -248,7 +260,7 @@ function EditableConnectionSection({ host }: { host: Host }) {
         onSave={async () => {
           await updateMutation.mutateAsync({
             id: host.id,
-            payload: buildUpdatePayload(host, draft),
+            payload: buildUpdatePayload(host, draft, defaultSsh),
           });
           toast.success("Connection updated");
         }}
@@ -256,14 +268,14 @@ function EditableConnectionSection({ host }: { host: Host }) {
           setDraft({
             ip_address: host.ip_address ?? "",
             ssh_user: host.ssh_user ?? "",
-            ssh_port: host.ssh_port ?? 22,
+            ssh_port: host.ssh_port ?? defaultSsh,
           })
         }
         onEditCancel={() =>
           setDraft({
             ip_address: host.ip_address ?? "",
             ssh_user: host.ssh_user ?? "",
-            ssh_port: host.ssh_port ?? 22,
+            ssh_port: host.ssh_port ?? defaultSsh,
           })
         }
         renderDisplay={() => (
@@ -295,7 +307,10 @@ function EditableConnectionSection({ host }: { host: Host }) {
                 type="number"
                 value={draft.ssh_port}
                 onChange={(e) =>
-                  setDraft((d) => ({ ...d, ssh_port: Number(e.target.value) || 22 }))
+                  setDraft((d) => ({
+                    ...d,
+                    ssh_port: Number(e.target.value) || defaultSsh,
+                  }))
                 }
                 disabled={saving}
               />
@@ -315,6 +330,7 @@ function EditableLabelsSection({ host }: { host: Host }) {
   const [newLabel, setNewLabel] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
   const updateMutation = useUpdateHost();
+  const defaultSsh = useAppSshPort();
 
   return (
     <EditableSection
@@ -322,7 +338,7 @@ function EditableLabelsSection({ host }: { host: Host }) {
       onSave={async () => {
         await updateMutation.mutateAsync({
           id: host.id,
-          payload: buildUpdatePayload(host, { labels: draft }),
+          payload: buildUpdatePayload(host, { labels: draft }, defaultSsh),
         });
         toast.success("Labels updated");
       }}
@@ -405,6 +421,7 @@ function EditableLabelsSection({ host }: { host: Host }) {
 function EditableGroupsSection({ host, allGroups }: { host: Host; allGroups: Group[] }) {
   const [draft, setDraft] = useState<string[]>(host.groups ?? []);
   const updateMutation = useUpdateHost();
+  const defaultSsh = useAppSshPort();
   const availableGroups = useMemo(
     () => allGroups.filter((g) => !draft.includes(g.id)),
     [allGroups, draft],
@@ -416,7 +433,7 @@ function EditableGroupsSection({ host, allGroups }: { host: Host; allGroups: Gro
       onSave={async () => {
         await updateMutation.mutateAsync({
           id: host.id,
-          payload: buildUpdatePayload(host, { groups: draft }),
+          payload: buildUpdatePayload(host, { groups: draft }, defaultSsh),
         });
         toast.success("Groups updated");
       }}
@@ -492,6 +509,7 @@ function EditableVarsSection({ host }: { host: Host }) {
   const [rows, setRows] = useState<VarRow[]>(() => varsToRows(host.vars ?? {}));
   const [dirty, setDirty] = useState(false);
   const updateMutation = useUpdateHost();
+  const defaultSsh = useAppSshPort();
 
   const handleChange = (next: VarRow[]) => {
     setRows(next);
@@ -500,7 +518,10 @@ function EditableVarsSection({ host }: { host: Host }) {
 
   const save = () => {
     updateMutation.mutate(
-      { id: host.id, payload: buildUpdatePayload(host, { vars: rowsToVars(rows) }) },
+      {
+        id: host.id,
+        payload: buildUpdatePayload(host, { vars: rowsToVars(rows) }, defaultSsh),
+      },
       {
         onSuccess: () => {
           setDirty(false);

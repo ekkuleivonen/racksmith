@@ -1,6 +1,7 @@
 import { useState, useMemo, useCallback } from "react";
 import { Loader2, Radar, Import } from "lucide-react";
-import { useDiscoveryScan, useHosts } from "@/hooks/queries";
+import { SSH_PORT_FALLBACK } from "@/lib/defaults";
+import { useDefaults, useDiscoveryScan, useHosts } from "@/hooks/queries";
 import { useStartScan, useImportDiscoveredHosts } from "@/hooks/mutations";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,6 +18,7 @@ export function DiscoveryPage() {
   const importHosts = useImportDiscoveredHosts();
   const { data: scan } = useDiscoveryScan(scanId);
   const { data: existingHosts } = useHosts();
+  const { data: defaults } = useDefaults();
 
   const defaultSshUser = useMemo(() => {
     if (!existingHosts?.length) return "root";
@@ -72,7 +74,11 @@ export function DiscoveryPage() {
     );
     if (toImport.length === 0) return;
     importHosts.mutate(
-      { devices: toImport, sshUser: sshUser.trim() || "root" },
+      {
+        devices: toImport,
+        sshUser: sshUser.trim() || "root",
+        sshPort: defaults?.ssh_port ?? SSH_PORT_FALLBACK,
+      },
       {
         onSuccess: () => {
           setSelected(new Set());
@@ -80,7 +86,7 @@ export function DiscoveryPage() {
         },
       },
     );
-  }, [devices, selected, importHosts, sshUser]);
+  }, [defaults?.ssh_port, devices, selected, importHosts, sshUser]);
 
   return (
     <PageContainer>

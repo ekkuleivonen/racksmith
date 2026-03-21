@@ -25,15 +25,15 @@ import { toastApiError } from "@/lib/api";
 import { hostDisplayLabel, isManagedHost } from "@/lib/hosts";
 import {
   createPlaybookRun,
-  getPlaybook,
+  getPlaybookRequiredRuntimeVars,
   type PlaybookRun,
   type PlaybookSummary,
-  type RoleCatalogEntry,
   playbookRunStreamUrl,
 } from "@/lib/playbooks";
 import {
   needsRuntimeVarsDialog,
   RuntimeVarsDialog,
+  type RuntimeVarField,
 } from "@/components/playbooks/runtime-vars-dialog";
 
 interface PlaybookRunDialogProps {
@@ -59,8 +59,8 @@ export function PlaybookRunDialog({
   const [activeRun, setActiveRun] = useState<PlaybookRun | null>(null);
   const [selectedPlaybook, setSelectedPlaybook] =
     useState<PlaybookSummary | null>(null);
-  const [rolesCatalog, setRolesCatalog] = useState<RoleCatalogEntry[]>([]);
-  const [playbookBecome, setPlaybookBecome] = useState(false);
+  const [runtimeFields, setRuntimeFields] = useState<RuntimeVarField[]>([]);
+  const [runtimeNeedsBecome, setRuntimeNeedsBecome] = useState(false);
   const [runtimeDialogOpen, setRuntimeDialogOpen] = useState(false);
   const [starting, setStarting] = useState(false);
   const [initialTerminalOutput, setInitialTerminalOutput] = useState("");
@@ -145,8 +145,8 @@ export function PlaybookRunDialog({
       setActiveRun(null);
       setSelectedPlaybook(null);
       setSearch("");
-      setRolesCatalog([]);
-      setPlaybookBecome(false);
+      setRuntimeFields([]);
+      setRuntimeNeedsBecome(false);
       setStarting(false);
       setInitialTerminalOutput("");
       setSelectedHostIds(new Set());
@@ -162,11 +162,10 @@ export function PlaybookRunDialog({
     if (!pb) return;
     setSelectedPlaybook(pb);
     setPhase("pick-hosts");
-    getPlaybook(pb.id)
-      .then((detail) => {
-        const pbRoleIds = new Set(pb.roles);
-        setRolesCatalog(detail.playbook.roles_catalog.filter((r) => pbRoleIds.has(r.id)));
-        setPlaybookBecome(detail.playbook.become ?? false);
+    getPlaybookRequiredRuntimeVars(pb.id)
+      .then((req) => {
+        setRuntimeFields(req.inputs);
+        setRuntimeNeedsBecome(req.needs_become_password);
       })
       .catch(() => {});
   }, [open, preselectedPlaybookId, playbooks]);
@@ -206,15 +205,12 @@ export function PlaybookRunDialog({
     async (pb: PlaybookSummary) => {
       setSelectedPlaybook(pb);
       try {
-        const detail = await getPlaybook(pb.id);
-        const pbRoleIds = new Set(pb.roles);
-        const catalog = detail.playbook.roles_catalog.filter((r) => pbRoleIds.has(r.id));
-        const become = detail.playbook.become ?? false;
-        setRolesCatalog(catalog);
-        setPlaybookBecome(become);
+        const req = await getPlaybookRequiredRuntimeVars(pb.id);
+        setRuntimeFields(req.inputs);
+        setRuntimeNeedsBecome(req.needs_become_password);
         pendingTargetsRef.current = hostIds;
 
-        if (needsRuntimeVarsDialog(catalog, become)) {
+        if (needsRuntimeVarsDialog(req.inputs, req.needs_become_password)) {
           setRuntimeDialogOpen(true);
         } else {
           await startRun(pb.id, hostIds);
@@ -231,12 +227,12 @@ export function PlaybookRunDialog({
     const targets = [...selectedHostIds];
     pendingTargetsRef.current = targets;
 
-    if (needsRuntimeVarsDialog(rolesCatalog, playbookBecome)) {
+    if (needsRuntimeVarsDialog(runtimeFields, runtimeNeedsBecome)) {
       setRuntimeDialogOpen(true);
     } else {
       await startRun(selectedPlaybook.id, targets);
     }
-  }, [selectedPlaybook, selectedHostIds, rolesCatalog, playbookBecome, startRun]);
+  }, [selectedPlaybook, selectedHostIds, runtimeFields, runtimeNeedsBecome, startRun]);
 
   const toggleHost = useCallback((hostId: string) => {
     setSelectedHostIds((prev) => {
@@ -324,8 +320,8 @@ export function PlaybookRunDialog({
     <>
       <RuntimeVarsDialog
         open={runtimeDialogOpen}
-        roles={rolesCatalog}
-        needsBecomePassword={playbookBecome}
+        fields={runtimeFields}
+        needsBecomePassword={runtimeNeedsBecome}
         onConfirm={async (vars, becomePassword) => {
           if (selectedPlaybook)
             await startRun(

@@ -16,14 +16,14 @@ class PlaybookRoleRef(BaseModel):
     role_name: str | None = None
 
 
-class ContributorOut(BaseModel):
+class ContributorResponse(BaseModel):
     username: str
     avatar_url: str
 
     model_config = {"from_attributes": True}
 
 
-class OwnerOut(BaseModel):
+class OwnerResponse(BaseModel):
     username: str
     avatar_url: str
 
@@ -59,7 +59,7 @@ class ConfirmDownloadRequest(BaseModel):
 # ── Responses ─────────────────────────────────────────────────────────────────
 
 
-class PlaybookVersionOut(BaseModel):
+class PlaybookVersionResponse(BaseModel):
     id: UUID
     playbook_id: UUID
     version_number: int
@@ -68,26 +68,26 @@ class PlaybookVersionOut(BaseModel):
     become: bool
     roles: list[PlaybookRoleRef]
     tags: list[str]
-    contributors: list[ContributorOut]
+    contributors: list[ContributorResponse]
     created_at: datetime
     download_event_id: UUID | None = None
 
     model_config = {"from_attributes": True}
 
 
-class PlaybookOut(BaseModel):
+class PlaybookResponse(BaseModel):
     id: UUID
-    owner: OwnerOut
+    owner: OwnerResponse
     download_count: int
     created_at: datetime
     updated_at: datetime | None
-    latest_version: PlaybookVersionOut | None = None
+    latest_version: PlaybookVersionResponse | None = None
 
     model_config = {"from_attributes": True}
 
 
-class PlaybookListOut(BaseModel):
-    items: list[PlaybookOut]
+class PlaybookListResponse(BaseModel):
+    items: list[PlaybookResponse]
     total: int
     page: int
     per_page: int
@@ -98,5 +98,5 @@ class FacetItem(BaseModel):
     count: int
 
 
-class PlaybookFacetsOut(BaseModel):
+class PlaybookFacetsResponse(BaseModel):
     tags: list[FacetItem]

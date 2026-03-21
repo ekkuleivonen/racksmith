@@ -95,28 +95,18 @@ export function PlaybooksPage() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await listPlaybooks();
+      const data = await listPlaybooks(debouncedSearch.trim() || undefined);
       setPlaybooks(data.playbooks);
     } catch (error) {
       toastApiError(error, "Failed to load playbooks");
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [debouncedSearch]);
 
   useEffect(() => {
     void load();
   }, [load]);
-
-  const filtered = useMemo(() => {
-    const q = search.toLowerCase().trim();
-    if (!q) return playbooks;
-    return playbooks.filter(
-      (p) =>
-        p.name.toLowerCase().includes(q) ||
-        p.description?.toLowerCase().includes(q),
-    );
-  }, [playbooks, search]);
 
   const hasSearch = !!debouncedSearch.trim();
 
@@ -178,7 +168,7 @@ export function PlaybooksPage() {
       createPath="/playbooks/create"
       createLabel="Create playbook"
       isLoading={loading}
-      isEmpty={filtered.length === 0}
+      isEmpty={playbooks.length === 0}
       emptyTitle={search ? "No playbooks match your search." : "No playbooks yet."}
       emptySecondaryAction={search ? undefined : { label: "Import from registry", path: "/registry" }}
       searchValue={search}
@@ -197,7 +187,7 @@ export function PlaybooksPage() {
       }
     >
       <div className="space-y-2">
-        {filtered.map((playbook) => (
+        {playbooks.map((playbook) => (
           <button
             key={playbook.id}
             type="button"

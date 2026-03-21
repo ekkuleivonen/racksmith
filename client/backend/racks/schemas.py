@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from pydantic import BaseModel, Field
+from typing import Any, Literal
 
-from hosts.schemas import Host
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class RackCreate(BaseModel):
@@ -42,21 +42,37 @@ class RackSummary(BaseModel):
     created_at: str
 
 
+class RackLayoutHost(BaseModel):
+    """Host on a rack with flat placement fields (layout API)."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    id: str
+    hostname: str = ""
+    name: str = ""
+    ip_address: str = ""
+    ssh_user: str = ""
+    ssh_port: int = 22
+    managed: bool = True
+    groups: list[str] = Field(default_factory=list)
+    labels: list[str] = Field(default_factory=list)
+    os_family: str | None = None
+    mac_address: str = ""
+    subnet: str | None = None
+    vars: dict[str, Any] = Field(default_factory=dict)
+    placement: Literal["rack"] = "rack"
+    position_u_start: int = 1
+    position_u_height: int = 1
+    position_col_start: int = 0
+    position_col_count: int = 1
+
+
 class RackLayout(Rack):
-    hosts: list[Host] = Field(default_factory=list)
+    hosts: list[RackLayoutHost] = Field(default_factory=list)
 
 
 class RackResponse(BaseModel):
     rack: Rack
-
-
-class RackCreateResponse(BaseModel):
-    rack: Rack
-    rack_id: str
-
-
-class RackListResponse(BaseModel):
-    racks: list[RackSummary]
 
 
 class RackLayoutResponse(BaseModel):

@@ -199,7 +199,7 @@ class TestPushPlaybook:
             PlaybookRoleEntry(role="my_role", vars={"port": 80}),
         ])
 
-        upsert_route = respx.put(f"{REGISTRY_URL}/playbooks").mock(
+        upsert_route = respx.post(f"{REGISTRY_URL}/playbooks").mock(
             return_value=httpx.Response(201, json=REGISTRY_PLAYBOOK_RESPONSE)
         )
 
@@ -233,10 +233,10 @@ class TestPushPlaybook:
             "latest_version": None,
         }
 
-        role_upsert_route = respx.put(f"{REGISTRY_URL}/roles").mock(
+        role_upsert_route = respx.post(f"{REGISTRY_URL}/roles").mock(
             return_value=httpx.Response(201, json=role_response),
         )
-        pb_upsert_route = respx.put(f"{REGISTRY_URL}/playbooks").mock(
+        pb_upsert_route = respx.post(f"{REGISTRY_URL}/playbooks").mock(
             return_value=httpx.Response(201, json=REGISTRY_PLAYBOOK_RESPONSE),
         )
 
@@ -261,7 +261,7 @@ class TestPushPlaybook:
     @respx.mock
     @pytest.mark.asyncio
     async def test_push_updates_existing_playbook(self, mock_session, layout, repo_path):
-        """Re-push uses the same upsert endpoint; registry handles create-or-update."""
+        """Re-push uses the same POST /playbooks path; registry returns the playbook."""
         _seed_role(layout, "my_role")
         _mark_role_as_published(layout, "my_role", ROLE_UUID_A)
         _seed_playbook(layout, "test_pb", roles=[
@@ -269,7 +269,7 @@ class TestPushPlaybook:
         ])
         _mark_playbook_as_published(layout, "test_pb", PLAYBOOK_UUID)
 
-        upsert_route = respx.put(f"{REGISTRY_URL}/playbooks").mock(
+        upsert_route = respx.post(f"{REGISTRY_URL}/playbooks").mock(
             return_value=httpx.Response(200, json=REGISTRY_PLAYBOOK_RESPONSE)
         )
 

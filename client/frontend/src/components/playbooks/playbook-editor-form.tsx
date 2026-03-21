@@ -1,3 +1,4 @@
+import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   DndContext,
@@ -53,10 +54,13 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import type {
-  RoleCatalogEntry,
-  PlaybookRoleEntry,
-  PlaybookUpsert,
+import { queryKeys } from "@/lib/queryClient";
+import {
+  getPlaybookAvailableVars,
+  type AvailableVarEntry,
+  type PlaybookRoleEntry,
+  type PlaybookUpsert,
+  type RoleCatalogEntry,
 } from "@/lib/playbooks";
 import type { Host } from "@/lib/hosts";
 import type { Group } from "@/lib/groups";
@@ -72,6 +76,8 @@ interface PlaybookEditorFormProps {
   groups?: Group[];
   onChange: (next: PlaybookUpsert) => void;
   compact?: boolean;
+  /** When set, variable sources are loaded from the API (saved playbook). */
+  savedPlaybookId?: string;
 }
 
 function roleMap(roles: RoleCatalogEntry[]) {
@@ -101,7 +107,8 @@ function defaultVarsForRole(role: RoleCatalogEntry): Record<string, unknown> {
 type VarSource =
   | { kind: "output"; group: string; key: string; description: string; type: string }
   | { kind: "host_var"; group: "Host variables"; key: string }
-  | { kind: "group_var"; group: string; key: string };
+  | { kind: "group_var"; group: string; key: string }
+  | { kind: "role_default"; group: string; key: string };
 
 type Segment =
   | { kind: "text"; value: string }
@@ -173,6 +180,42 @@ function getAvailableVars(
     }
   }
 
+  return result;
+}
+
+function entriesToVarSources(
+  entries: AvailableVarEntry[],
+  currentIndex: number,
+): VarSource[] {
+  const result: VarSource[] = [];
+  for (const e of entries) {
+    if (
+      (e.source === "role_output" || e.source === "role_default") &&
+      e.role_order !== null &&
+      e.role_order >= currentIndex
+    ) {
+      continue;
+    }
+    if (e.source === "role_output") {
+      result.push({
+        kind: "output",
+        group: e.from,
+        key: e.key,
+        description: e.description ?? "",
+        type: e.output_type ?? "string",
+      });
+    } else if (e.source === "host_var") {
+      result.push({ kind: "host_var", group: "Host variables", key: e.key });
+    } else if (e.source === "group_var") {
+      result.push({ kind: "group_var", group: e.from, key: e.key });
+    } else if (e.source === "role_default") {
+      result.push({
+        kind: "role_default",
+        group: `Defaults: ${e.from}`,
+        key: e.key,
+      });
+    }
+  }
   return result;
 }
 
@@ -660,7 +703,15 @@ export function PlaybookEditorForm({
   groups = [],
   onChange,
   compact = false,
+  savedPlaybookId,
 }: PlaybookEditorFormProps) {
+  const { data: apiVarEntries = [] } = useQuery({
+    queryKey: [...queryKeys.playbooks, savedPlaybookId, "available-vars"],
+    queryFn: async () =>
+      (await getPlaybookAvailableVars(savedPlaybookId!)).vars,
+    enabled: !!savedPlaybookId,
+  });
+
   const rolesById = roleMap(roles);
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
@@ -917,13 +968,17 @@ export function PlaybookEditorForm({
                       role={role}
                       index={index}
                       roleEntry={roleEntry}
-                      allVars={getAvailableVars(
-                        draft.roles,
-                        rolesById,
-                        index,
-                        hosts,
-                        groups,
-                      )}
+                      allVars={
+                        savedPlaybookId
+                          ? entriesToVarSources(apiVarEntries, index)
+                          : getAvailableVars(
+                              draft.roles,
+                              rolesById,
+                              index,
+                              hosts,
+                              groups,
+                            )
+                      }
                       updateRole={updateRole}
                       removeRole={removeRole}
                     />

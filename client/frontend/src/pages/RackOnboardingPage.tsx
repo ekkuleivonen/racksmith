@@ -1,10 +1,12 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { toastApiError } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Slider } from "@/components/ui/slider";
+import { useDefaults } from "@/hooks/queries";
+import { rackColsForWidth } from "@/lib/defaults";
 import { createRack, type RackWidthInches } from "@/lib/racks";
 
 type RackOnboardingPageProps = {
@@ -13,11 +15,17 @@ type RackOnboardingPageProps = {
 
 export function RackOnboardingPage({ onCreated }: RackOnboardingPageProps) {
   const navigate = useNavigate();
+  const { data: defaults } = useDefaults();
   const [rackWidth, setRackWidth] = useState<RackWidthInches>(19);
   const [rackUnits, setRackUnits] = useState(12);
   const [rackCols, setRackCols] = useState(12);
   const [rackName, setRackName] = useState("");
   const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (!defaults) return;
+    setRackCols(rackColsForWidth(defaults, rackWidth));
+  }, [defaults, rackWidth]);
 
   const handleCreate = async () => {
     const trimmedRackName = rackName.trim();
@@ -36,9 +44,9 @@ export function RackOnboardingPage({ onCreated }: RackOnboardingPageProps) {
       });
       toast.success("Rack created");
       if (onCreated) {
-        onCreated(result.rack_id);
+        onCreated(result.rack.id);
       } else {
-        navigate(`/racks/view/${result.rack_id}`, { replace: true });
+        navigate(`/racks/view/${result.rack.id}`, { replace: true });
       }
     } catch (error) {
       toastApiError(error, "Failed to create rack");
@@ -74,7 +82,7 @@ export function RackOnboardingPage({ onCreated }: RackOnboardingPageProps) {
               size="sm"
               onClick={() => {
                 setRackWidth(19);
-                setRackCols(12);
+                setRackCols(rackColsForWidth(defaults, 19));
               }}
             >
               19"
@@ -85,7 +93,7 @@ export function RackOnboardingPage({ onCreated }: RackOnboardingPageProps) {
               size="sm"
               onClick={() => {
                 setRackWidth(10);
-                setRackCols(6);
+                setRackCols(rackColsForWidth(defaults, 10));
               }}
             >
               10"

@@ -11,8 +11,8 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 import { useRackEntries } from "@/hooks/queries";
-import { hostToRackLayoutHost, type RackLayoutHost } from "@/lib/racks";
-import { matchesHostFilters, type Host } from "@/lib/hosts";
+import type { RackLayoutHost } from "@/lib/racks";
+import { matchesCanvasHostFilters, type Host } from "@/lib/hosts";
 import { usePingStore } from "@/stores/ping";
 import { useSelection } from "@/stores/selection";
 import type { CanvasFilters } from "@/hooks/use-canvas-params";
@@ -35,15 +35,13 @@ export function RacksOverview({ filters, selectedHostId, onSelectHost }: RacksOv
   const rackDataMap = useMemo(() => {
     const map = new Map<string, { filteredHosts: RackLayoutHost[]; rackHostIds: string[] }>();
     for (const { rack, hosts } of rackEntries) {
-      const layoutHosts: RackLayoutHost[] = hosts
-        .filter((h): h is Host & { placement: NonNullable<Host["placement"]> } =>
-          !!h.placement && h.placement.rack === rack.id,
-        )
-        .map(hostToRackLayoutHost);
+      const layoutHosts: RackLayoutHost[] = hosts;
       const unmanagedHosts = layoutHosts.filter((h) => !h.managed);
       const managedHosts = layoutHosts.filter((h) => h.managed);
       const filteredManaged = hasFilters
-        ? managedHosts.filter((h) => matchesHostFilters(h as unknown as Host, filters, pingStatuses))
+        ? managedHosts.filter((h) =>
+            matchesCanvasHostFilters(h as unknown as Host, filters, pingStatuses),
+          )
         : managedHosts;
       const filteredHosts = [...filteredManaged, ...unmanagedHosts];
       const rackHostIds = filteredManaged.map((h) => h.id);
@@ -123,7 +121,7 @@ export function RacksOverview({ filters, selectedHostId, onSelectHost }: RacksOv
                   </DropdownMenuContent>
                 </DropdownMenu>
               </div>
-              <div className="max-h-[400px] overflow-auto">
+              <div>
                 <RackCanvas
                   rackUnits={rack.rack_units}
                   cols={rack.rack_cols}

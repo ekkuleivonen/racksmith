@@ -9,14 +9,14 @@ from db.models import RegistryRole, User
 from playbooks import managers
 from playbooks.schemas import (
     ConfirmDownloadRequest,
-    ContributorOut,
+    ContributorResponse,
     PlaybookCreate,
-    PlaybookFacetsOut,
-    PlaybookListOut,
-    PlaybookOut,
+    PlaybookFacetsResponse,
+    PlaybookListResponse,
+    PlaybookResponse,
     PlaybookRoleRef,
     PlaybookUpdate,
-    PlaybookVersionOut,
+    PlaybookVersionResponse,
 )
 from rate_limit import limiter
 from roles.managers import _confirmed_download_count, confirm_download
@@ -38,12 +38,12 @@ def _build_role_refs(version) -> list[PlaybookRoleRef]:
     return refs
 
 
-def _build_contributors(version, playbook_owner) -> list[ContributorOut]:
+def _build_contributors(version, playbook_owner) -> list[ContributorResponse]:
     """Compute contributors from role owners + playbook publisher."""
     seen: set[str] = set()
-    contributors: list[ContributorOut] = []
+    contributors: list[ContributorResponse] = []
 
-    contributors.append(ContributorOut(
+    contributors.append(ContributorResponse(
         username=playbook_owner.username,
         avatar_url=playbook_owner.avatar_url,
     ))
@@ -52,7 +52,7 @@ def _build_contributors(version, playbook_owner) -> list[ContributorOut]:
     for entry in version.role_entries:
         role: RegistryRole = entry.role
         if hasattr(role, "owner") and role.owner and role.owner.username not in seen:
-            contributors.append(ContributorOut(
+            contributors.append(ContributorResponse(
                 username=role.owner.username,
                 avatar_url=role.owner.avatar_url,
             ))
@@ -61,9 +61,9 @@ def _build_contributors(version, playbook_owner) -> list[ContributorOut]:
     return contributors
 
 
-def _version_to_out(v, playbook_owner, *, download_event_id: StdUUID | str | None = None) -> PlaybookVersionOut:
+def _version_to_out(v, playbook_owner, *, download_event_id: StdUUID | str | None = None) -> PlaybookVersionResponse:
     eid = StdUUID(str(download_event_id)) if download_event_id is not None else None
-    return PlaybookVersionOut(
+    return PlaybookVersionResponse(
         id=v.id,
         playbook_id=v.playbook_id,
         version_number=v.version_number,
@@ -78,10 +78,10 @@ def _version_to_out(v, playbook_owner, *, download_event_id: StdUUID | str | Non
     )
 
 
-async def _playbook_to_out(playbook, session: AsyncSession) -> PlaybookOut:
+async def _playbook_to_out(playbook, session: AsyncSession) -> PlaybookResponse:
     latest = playbook.versions[0] if playbook.versions else None
     dl_count = await _confirmed_download_count(session, playbook_id=playbook.id)
-    return PlaybookOut(
+    return PlaybookResponse(
         id=playbook.id,
         owner=playbook.owner,
         download_count=dl_count,
@@ -91,7 +91,7 @@ async def _playbook_to_out(playbook, session: AsyncSession) -> PlaybookOut:
     )
 
 
-@router.get("/playbooks/facets", response_model=PlaybookFacetsOut)
+@router.get("/playbooks/facets", response_model=PlaybookFacetsResponse)
 async def get_facets(
     session: AsyncSession = Depends(get_db),
     _user: User = Depends(get_current_user),
@@ -99,7 +99,7 @@ async def get_facets(
     return await managers.get_facets(session)
 
 
-@router.get("/playbooks", response_model=PlaybookListOut)
+@router.get("/playbooks", response_model=PlaybookListResponse)
 async def list_playbooks(
     q: str | None = Query(None),
     tags: str | None = Query(None),
@@ -120,7 +120,7 @@ async def list_playbooks(
         page=page,
         per_page=per_page,
     )
-    return PlaybookListOut(
+    return PlaybookListResponse(
         items=[await _playbook_to_out(p, session) for p in playbooks],
         total=total,
         page=page,
@@ -128,7 +128,7 @@ async def list_playbooks(
     )
 
 
-@router.get("/playbooks/{playbook_id}", response_model=PlaybookOut)
+@router.get("/playbooks/{playbook_id}", response_model=PlaybookResponse)
 async def get_playbook(
     playbook_id: StdUUID,
     session: AsyncSession = Depends(get_db),
@@ -138,7 +138,7 @@ async def get_playbook(
     return await _playbook_to_out(playbook, session)
 
 
-@router.get("/playbooks/{playbook_id}/versions", response_model=list[PlaybookVersionOut])
+@router.get("/playbooks/{playbook_id}/versions", response_model=list[PlaybookVersionResponse])
 async def list_versions(
     playbook_id: StdUUID,
     session: AsyncSession = Depends(get_db),
@@ -148,7 +148,7 @@ async def list_versions(
     return [_version_to_out(v, playbook.owner) for v in playbook.versions]
 
 
-@router.post("/playbooks", response_model=PlaybookOut, status_code=201)
+@router.post("/playbooks", response_model=PlaybookResponse, status_code=201)
 @limiter.limit("10/minute")
 async def create_playbook(
     request: Request,
@@ -160,23 +160,7 @@ async def create_playbook(
     return await _playbook_to_out(playbook, session)
 
 
-@router.put("/playbooks", response_model=PlaybookOut)
-@limiter.limit("20/minute")
-async def upsert_playbook(
-    request: Request,
-    data: PlaybookCreate,
-    session: AsyncSession = Depends(get_db),
-    user: User = Depends(get_current_user),
-):
-    playbook, created = await managers.upsert_playbook(session, data, user)
-    out = await _playbook_to_out(playbook, session)
-    if created:
-        from starlette.responses import JSONResponse
-        return JSONResponse(content=out.model_dump(mode="json"), status_code=201)
-    return out
-
-
-@router.put("/playbooks/{playbook_id}", response_model=PlaybookOut)
+@router.put("/playbooks/{playbook_id}", response_model=PlaybookResponse)
 @limiter.limit("20/minute")
 async def update_playbook(
     request: Request,
@@ -200,7 +184,7 @@ async def delete_playbook(
     await managers.delete_playbook(session, playbook_id, user)
 
 
-@router.post("/playbooks/{playbook_id}/download", response_model=PlaybookVersionOut)
+@router.post("/playbooks/{playbook_id}/download", response_model=PlaybookVersionResponse)
 async def download_playbook(
     playbook_id: StdUUID,
     session: AsyncSession = Depends(get_db),

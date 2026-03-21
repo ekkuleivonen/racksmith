@@ -10,7 +10,14 @@ import {
 import { useSetupStore } from "@/stores/setup";
 import { useCodeTree, useGitStatuses } from "@/hooks/queries";
 import { invalidateResource } from "@/lib/queryClient";
-import { apiDelete, apiPatch, apiPost, toastApiError } from "@/lib/api";
+import { toastApiError } from "@/lib/api";
+import {
+  createFile,
+  createFolder,
+  deleteFile,
+  deleteFolder,
+  moveEntry,
+} from "@/lib/files";
 
 function parseSelectedPathFromPathname(pathname: string): string | null {
   const match = pathname.match(/^\/files\/[^/]+\/[^/]+\/(.+)$/);
@@ -44,8 +51,8 @@ export function SidebarFilesSection() {
   );
 
   const fileStatuses = useMemo<Record<string, FileStatus>>(() => {
-    const modifiedPaths = gitData?.modifiedPaths ?? {};
-    const untrackedPaths = gitData?.untrackedPaths ?? {};
+    const modifiedPaths = gitData?.modified_paths ?? {};
+    const untrackedPaths = gitData?.untracked_paths ?? {};
     const statuses: Record<string, FileStatus> = {};
     for (const path of Object.keys(modifiedPaths)) {
       statuses[path] = "modified";
@@ -54,7 +61,7 @@ export function SidebarFilesSection() {
       statuses[path] = "untracked";
     }
     return statuses;
-  }, [gitData?.modifiedPaths, gitData?.untrackedPaths]);
+  }, [gitData?.modified_paths, gitData?.untracked_paths]);
 
   const filesHref = repo ? `/files/${repo.owner}/${repo.repo}` : "/files";
 
@@ -71,7 +78,7 @@ export function SidebarFilesSection() {
       if (!repo) return;
       if (!window.confirm(`Delete ${path}?`)) return;
       try {
-        await apiDelete(`/files/file?path=${encodeURIComponent(path)}`);
+        await deleteFile(path);
         invalidateFilesQueries();
         if (selectedPath === path) {
           navigate(filesHref);
@@ -104,12 +111,12 @@ export function SidebarFilesSection() {
       setPendingInput(null);
       try {
         if (pendingInput.type === "file") {
-          await apiPost("/files/file", { path: fullPath, content: "" });
+          await createFile(fullPath, "");
           invalidateFilesQueries();
           navigate(`/files/${repo.owner}/${repo.repo}/${fullPath}`);
           toast.success("File created");
         } else {
-          await apiPost("/files/folder", { path: fullPath });
+          await createFolder(fullPath);
           invalidateFilesQueries();
           toast.success("Folder created");
         }
@@ -126,7 +133,7 @@ export function SidebarFilesSection() {
       if (!window.confirm(`Delete folder "${path}" and all its contents?`))
         return;
       try {
-        await apiDelete(`/files/folder?path=${encodeURIComponent(path)}`);
+        await deleteFolder(path);
         invalidateFilesQueries();
         toast.success("Folder deleted");
       } catch (error) {
@@ -143,7 +150,7 @@ export function SidebarFilesSection() {
       const dest = destDir ? `${destDir}/${basename}` : basename;
       if (dest === src) return;
       try {
-        await apiPatch("/files/move", { src, dest });
+        await moveEntry(src, dest);
         invalidateFilesQueries();
         if (selectedPath === src) {
           navigate(`/files/${repo.owner}/${repo.repo}/${dest}`);

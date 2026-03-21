@@ -92,9 +92,8 @@ class GenerateRequest(BaseModel):
     prompt: str
 
 
-class EditGenerateRequest(BaseModel):
-    existing_yaml: str
-    prompt: str
+class RoleAiEditRequest(BaseModel):
+    prompt: str = Field(min_length=1)
 
 
 class RoleResponse(BaseModel):
@@ -105,13 +104,15 @@ class RoleDetailResponse(BaseModel):
     role: RoleDetail
 
 
-class RoleFromYamlResponse(BaseModel):
-    role: RoleSummary
-
-
-class RoleListResponse(BaseModel):
-    roles: list[RoleSummary]
-
-
 class RoleRunResponse(BaseModel):
     run: RoleRun
+
+
+class LocalRoleFacetItem(BaseModel):
+    name: str
+    count: int
+
+
+class RoleFacetsResponse(BaseModel):
+    labels: list[LocalRoleFacetItem] = Field(default_factory=list)
+    platforms: list[LocalRoleFacetItem] = Field(default_factory=list)

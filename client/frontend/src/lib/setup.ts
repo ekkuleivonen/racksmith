@@ -60,14 +60,14 @@ export async function dropLocalRepo(owner: string, repo: string) {
 }
 
 export async function createGithubRepo(name: string, isPrivate = true) {
-  return apiPost<{ repo: ActiveRepo }>("/repos/create", {
+  return apiPost<{ repo: ActiveRepo }>("/repos", {
     name,
     private: isPrivate,
   });
 }
 
 export async function syncRepo() {
-  return apiPost<{ status: string }>("/repos/sync");
+  return apiPost<{ status: string; message?: string }>("/git/sync");
 }
 
 export async function completeOnboarding() {

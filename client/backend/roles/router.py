@@ -8,12 +8,14 @@ import httpx
 import structlog
 import yaml
 from fastapi import APIRouter, Cookie, HTTPException, Query, WebSocket
-from fastapi.responses import StreamingResponse
 from pydantic import ValidationError
 
 import settings
+from _utils.pagination import paginate
+from _utils.schemas import PaginatedResponse
 from _utils.websocket import require_ws_session, ws_error_handler
 from auth.dependencies import CurrentSession
+from hosts.managers import host_manager
 from playbooks.schemas import FolderUpdate
 from roles.managers import role_manager
 from roles.registry import registry_manager
@@ -28,15 +30,14 @@ from roles.registry_schemas import (
     RoleImportResponse,
 )
 from roles.schemas import (
-    EditGenerateRequest,
-    GenerateRequest,
     RoleCreate,
     RoleDetailResponse,
+    RoleFacetsResponse,
     RoleFromYaml,
-    RoleFromYamlResponse,
-    RoleListResponse,
+    RoleResponse,
     RoleRunRequest,
     RoleRunResponse,
+    RoleSummary,
     RoleUpdate,
 )
 
@@ -45,42 +46,31 @@ logger = structlog.get_logger(__name__)
 roles_router = APIRouter()
 
 
-@roles_router.post("/generate")
-async def generate_role(
-    body: GenerateRequest,
+@roles_router.get("", response_model=PaginatedResponse[RoleSummary])
+async def list_roles(
     session: CurrentSession,
-) -> StreamingResponse:
-    """Generate an Ansible role from a natural-language prompt via AI."""
-    if not settings.OPENAI_API_KEY:
-        raise HTTPException(status_code=503, detail="AI generation is not configured (OPENAI_API_KEY missing)")
-    return StreamingResponse(
-        role_manager.generate_with_validation(session, body.prompt),
-        media_type="text/event-stream",
-        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    q: str | None = Query(None, description="Search name, description, labels"),
+    label: str | None = Query(None),
+    platform: str | None = Query(None, description="Filter by compatibility / os_family"),
+    sort: str = Query("name", description="Sort field: name, id, description"),
+    order: str = Query("asc", description="asc or desc"),
+    page: int = Query(1, ge=1),
+    per_page: int = Query(50, ge=1, le=200),
+) -> PaginatedResponse[RoleSummary]:
+    """List roles in the active repo (paginated)."""
+    rows = role_manager.list_roles_filtered(
+        session, q=q, label=label, platform=platform, sort=sort, order=order
     )
+    slice_rows, total = paginate(rows, page=page, per_page=per_page)
+    return PaginatedResponse(items=slice_rows, total=total, page=page, per_page=per_page)
 
 
-@roles_router.post("/edit-generate")
-async def edit_generate_role(
-    body: EditGenerateRequest,
-    session: CurrentSession,
-) -> StreamingResponse:
-    """Edit an existing role YAML via AI from a natural-language prompt."""
-    if not settings.OPENAI_API_KEY:
-        raise HTTPException(status_code=503, detail="AI generation is not configured (OPENAI_API_KEY missing)")
-    return StreamingResponse(
-        role_manager.edit_with_validation(session, body.existing_yaml, body.prompt),
-        media_type="text/event-stream",
-        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
-    )
-
-
-@roles_router.post("/from-yaml", status_code=201, response_model=RoleFromYamlResponse)
+@roles_router.post("", status_code=201, response_model=RoleResponse)
 async def create_role_from_yaml(
     body: RoleFromYaml,
     session: CurrentSession,
-) -> RoleFromYamlResponse:
-    """Parse a single YAML document containing both role metadata and tasks, then create the role."""
+) -> RoleResponse:
+    """Create a role from YAML (metadata + tasks)."""
     try:
         data = yaml.safe_load(body.yaml_text)
     except yaml.YAMLError as exc:
@@ -93,13 +83,7 @@ async def create_role_from_yaml(
     except ValidationError as exc:
         raise HTTPException(status_code=422, detail=exc.errors()) from exc
     role = role_manager.create_role(session, request)
-    return RoleFromYamlResponse(role=role)
-
-
-@roles_router.get("", response_model=RoleListResponse)
-async def list_roles(session: CurrentSession) -> RoleListResponse:
-    """List all roles in the active repo."""
-    return RoleListResponse(roles=role_manager.list_roles(session))
+    return RoleResponse(role=role)
 
 
 @roles_router.websocket("/runs/{run_id}/stream")
@@ -117,13 +101,19 @@ async def stream_run(
         await role_manager.stream_run(run_id, websocket)
 
 
-@roles_router.get("/{role_id}/detail", response_model=RoleDetailResponse)
-async def get_role_detail(role_id: str, session: CurrentSession) -> RoleDetailResponse:
+@roles_router.get("/facets", response_model=RoleFacetsResponse)
+async def get_local_role_facets(session: CurrentSession) -> RoleFacetsResponse:
+    """Return label and platform facet counts for local roles."""
+    return role_manager.get_facets(session)
+
+
+@roles_router.get("/{role_id}", response_model=RoleDetailResponse)
+async def get_role(role_id: str, session: CurrentSession) -> RoleDetailResponse:
     """Get full role detail including raw YAML content."""
     return RoleDetailResponse(role=role_manager.get_role_detail(session, role_id))
 
 
-@roles_router.put("/{role_id}", response_model=RoleDetailResponse)
+@roles_router.patch("/{role_id}", response_model=RoleDetailResponse)
 async def update_role(
     role_id: str,
     body: RoleUpdate,
@@ -216,6 +206,19 @@ async def list_registry_roles(
         sort=sort,
         page=page,
         per_page=per_page,
+    )
+
+
+@registry_router.get("/roles/recommended", response_model=RegistryRoleList)
+async def recommended_roles(session: CurrentSession) -> RegistryRoleList:
+    """Return recommended registry roles based on the user's host platforms."""
+    hosts = host_manager.list_hosts(session)
+    platforms = sorted({h.os_family for h in hosts if h.os_family})
+    ps = ",".join(platforms)
+    if not ps:
+        return RegistryRoleList(items=[], total=0, page=1, per_page=6)
+    return await registry_manager.list_roles(
+        session, platforms=ps, sort="downloads", per_page=6, page=1
     )
 
 

@@ -10,7 +10,7 @@ from core.playbooks import PlaybookData, write_playbook
 from core.playbooks import PlaybookRoleEntry as AnsiblePlaybookRoleEntry
 from core.roles import RoleInput
 from playbooks.managers import playbook_manager
-from playbooks.schemas import PlaybookRoleEntry, PlaybookUpsert, TargetSelection
+from playbooks.schemas import PlaybookCreate, PlaybookRoleEntry, PlaybookUpdate, TargetSelection
 
 
 def _seed_role(layout, slug: str, *, inputs: list[RoleInput] | None = None) -> None:
@@ -79,7 +79,7 @@ class TestPlaybookManagerGetPlaybook:
 class TestPlaybookManagerCreatePlaybook:
     def test_create_playbook(self, with_repo_mock, layout):
         _seed_role(layout, "my_role")
-        body = PlaybookUpsert(
+        body = PlaybookCreate(
             name="New Playbook",
             description="Desc",
             roles=[PlaybookRoleEntry(role_id="my_role")],
@@ -91,7 +91,7 @@ class TestPlaybookManagerCreatePlaybook:
         assert len(pb.role_entries) == 1
 
     def test_create_playbook_unknown_role_raises(self, with_repo_mock):
-        body = PlaybookUpsert(
+        body = PlaybookCreate(
             name="Bad",
             roles=[PlaybookRoleEntry(role_id="nonexistent_role")],
         )
@@ -99,7 +99,7 @@ class TestPlaybookManagerCreatePlaybook:
             playbook_manager.create_playbook(with_repo_mock, body)
 
     def test_create_playbook_no_roles(self, with_repo_mock):
-        body = PlaybookUpsert(name="Empty PB", description="No roles")
+        body = PlaybookCreate(name="Empty PB", description="No roles")
         pb = playbook_manager.create_playbook(with_repo_mock, body)
         assert pb.name == "Empty PB"
         assert pb.role_entries == []
@@ -108,7 +108,7 @@ class TestPlaybookManagerCreatePlaybook:
 class TestPlaybookManagerCreateDuplicateRoles:
     def test_create_playbook_with_duplicate_roles(self, with_repo_mock, layout):
         _seed_role(layout, "storage_discover")
-        body = PlaybookUpsert(
+        body = PlaybookCreate(
             name="Storage Setup",
             description="Discover, format, discover again",
             roles=[
@@ -125,7 +125,7 @@ class TestPlaybookManagerCreateDuplicateRoles:
         _seed_role(layout, "storage_discover")
         _seed_role(layout, "storage_format")
         _seed_playbook(layout, "pb_dup")
-        body = PlaybookUpsert(
+        body = PlaybookUpdate(
             name="Updated",
             roles=[
                 PlaybookRoleEntry(role_id="storage_discover"),
@@ -144,7 +144,7 @@ class TestPlaybookManagerUpdatePlaybook:
     def test_update_playbook(self, with_repo_mock, layout):
         _seed_role(layout, "role_a")
         _seed_playbook(layout, "pb_upd")
-        body = PlaybookUpsert(
+        body = PlaybookUpdate(
             name="Updated Name",
             description="Updated desc",
             roles=[PlaybookRoleEntry(role_id="role_a")],
@@ -155,7 +155,7 @@ class TestPlaybookManagerUpdatePlaybook:
         assert len(pb.role_entries) == 1
 
     def test_update_missing_raises(self, with_repo_mock):
-        body = PlaybookUpsert(name="X")
+        body = PlaybookUpdate(name="X")
         with pytest.raises(FileNotFoundError, match="not found"):
             playbook_manager.update_playbook(with_repo_mock, "missing", body)
 

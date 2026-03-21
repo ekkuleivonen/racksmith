@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -30,11 +30,18 @@ class FolderUpdate(BaseModel):
     folder: str = Field(default="", max_length=500)
 
 
-class PlaybookUpsert(BaseModel):
+class PlaybookCreate(BaseModel):
     name: str = Field(min_length=1, max_length=160)
     description: str = Field(default="", max_length=_MAX_DESCRIPTION_LENGTH)
     roles: list[PlaybookRoleEntry] = Field(default_factory=list)
     become: bool = Field(default=False, description="Requires privilege escalation (sudo)")
+
+
+class PlaybookUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=160)
+    description: str | None = Field(default=None, max_length=_MAX_DESCRIPTION_LENGTH)
+    roles: list[PlaybookRoleEntry] | None = None
+    become: bool | None = Field(default=None, description="Requires privilege escalation (sudo)")
 
 
 class PlaybookSummary(BaseModel):
@@ -91,8 +98,7 @@ class PlaybookRun(BaseModel):
     commit_sha: str | None = None
 
 
-class PlaybookListResponse(BaseModel):
-    playbooks: list[PlaybookSummary]
+class PlaybookCatalogResponse(BaseModel):
     roles: list[RoleCatalogEntry]
 
 
@@ -110,3 +116,32 @@ class GeneratePlaybookRequest(BaseModel):
 
 class EditGeneratePlaybookRequest(BaseModel):
     prompt: str = Field(min_length=1)
+
+
+class AvailableVarEntry(BaseModel):
+    source: Literal["host_var", "group_var", "role_output", "role_default"]
+    key: str
+    var_from: str = Field(serialization_alias="from")
+    role_order: int | None = None
+    description: str = ""
+    output_type: str = ""
+
+
+class AvailableVarsResponse(BaseModel):
+    vars: list[AvailableVarEntry] = Field(default_factory=list)
+
+
+class RequiredRuntimeVarEntry(BaseModel):
+    key: str
+    label: str
+    type: str = "string"
+    required: bool = False
+    options: list[str] = Field(default_factory=list)
+    role_id: str
+    role_name: str
+    secret: bool = False
+
+
+class RequiredRuntimeVarsResponse(BaseModel):
+    inputs: list[RequiredRuntimeVarEntry] = Field(default_factory=list)
+    needs_become_password: bool = False

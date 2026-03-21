@@ -10,12 +10,14 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Slider } from "@/components/ui/slider";
+import { SSH_PORT_FALLBACK } from "@/lib/defaults";
 import {
   deleteRack,
   getRackLayout,
-  hostToRackLayoutHost,
+  unassignAllHostsFromRack as apiUnassignAllHostsFromRack,
   updateRack,
   type RackLayout,
+  type RackLayoutHost,
   type ZoneSelection,
 } from "@/lib/racks";
 import {
@@ -26,9 +28,9 @@ import {
   updateHost,
   type HostInput,
 } from "@/lib/hosts";
-import { useHosts } from "@/hooks/queries";
+import { useDefaults, useHosts } from "@/hooks/queries";
 
-function makePendingHost(zone: ZoneSelection): PendingHost {
+function makePendingHost(zone: ZoneSelection, defaultSshPort: number): PendingHost {
   const bottomU = zone.startU - zone.heightU + 1;
   return {
     id: `pending-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
@@ -42,7 +44,7 @@ function makePendingHost(zone: ZoneSelection): PendingHost {
     position_col_start: zone.startCol,
     position_col_count: zone.colCount,
     ssh_user: "",
-    ssh_port: 22,
+    ssh_port: defaultSshPort,
     labels: [],
     vars: {},
   };
@@ -53,7 +55,7 @@ function pendingToHostInput(pending: PendingHost, rackId: string): HostInput {
     name: pending.name,
     ip_address: "",
     ssh_user: "",
-    ssh_port: 22,
+    ssh_port: pending.ssh_port,
     managed: false,
     labels: [],
     placement: {
@@ -67,7 +69,7 @@ function pendingToHostInput(pending: PendingHost, rackId: string): HostInput {
 }
 
 function layoutHostToHostInput(
-  host: ReturnType<typeof hostToRackLayoutHost>,
+  host: RackLayoutHost,
   rackId: string,
 ): HostInput {
   return {
@@ -99,9 +101,7 @@ export function RackDetailPage() {
   const highlightedHostId = new URLSearchParams(location.search).get("hostId");
 
   const [layout, setLayout] = useState<RackLayout | null>(null);
-  const [layoutHosts, setLayoutHosts] = useState<
-    ReturnType<typeof hostToRackLayoutHost>[]
-  >([]);
+  const [layoutHosts, setLayoutHosts] = useState<RackLayoutHost[]>([]);
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
   const [pending, setPending] = useState<PendingHost | null>(null);
   const [loading, setLoading] = useState(true);
@@ -114,6 +114,8 @@ export function RackDetailPage() {
   const [editingName, setEditingName] = useState(false);
 
   const { data: hostsFromStore = [] } = useHosts();
+  const { data: defaults } = useDefaults();
+  const defaultSshPort = defaults?.ssh_port ?? SSH_PORT_FALLBACK;
 
   const rack = layout;
 
@@ -145,12 +147,14 @@ export function RackDetailPage() {
       setRackWidthDraft(data.rack_width_inches);
       setRackUnitsDraft(data.rack_units);
       setRackColsDraft(data.rack_cols);
-      const hosts = data.hosts.map(hostToRackLayoutHost);
-      setLayoutHosts(hosts);
+      setLayoutHosts(data.hosts);
       setSelectedItemId((prev) => {
         const idToKeep = preserveId ?? prev;
-        if (idToKeep && hosts.some((h) => h.id === idToKeep)) return idToKeep;
-        if (highlightedHostId && hosts.some((h) => h.id === highlightedHostId))
+        if (idToKeep && data.hosts.some((h) => h.id === idToKeep)) return idToKeep;
+        if (
+          highlightedHostId &&
+          data.hosts.some((h) => h.id === highlightedHostId)
+        )
           return highlightedHostId;
         return null;
       });
@@ -229,12 +233,7 @@ export function RackDetailPage() {
     try {
       const frameSaved = await ensureFrameDraftSaved();
       if (!frameSaved) return;
-      await Promise.all(
-        hostsOnRack.map((host) => {
-          const input = layoutHostToHostInput(host, rackIdParam);
-          return updateHost(host.id, { ...input, placement: null });
-        }),
-      );
+      await apiUnassignAllHostsFromRack(rackIdParam);
       await loadRack();
       toast.success("Nodes unassigned. You can now change the rack frame.");
     } catch (error) {
@@ -257,23 +256,21 @@ export function RackDetailPage() {
       if (!rack) return;
       try {
         const { host } = await getHost(hostId);
-        const optimistic = hostToRackLayoutHost({
+        const optimistic: RackLayoutHost = {
           ...host,
-          placement: {
-            rack: rackIdParam,
-            u_start: position.position_u_start,
-            u_height: position.position_u_height,
-            col_start: position.position_col_start,
-            col_count: position.position_col_count,
-          },
-        });
+          placement: "rack",
+          position_u_start: position.position_u_start,
+          position_u_height: position.position_u_height,
+          position_col_start: position.position_col_start,
+          position_col_count: position.position_col_count,
+        };
         setLayoutHosts((prev) => [...prev, optimistic]);
 
         await updateHost(hostId, {
           name: host.name ?? "",
           ip_address: host.ip_address ?? "",
           ssh_user: host.ssh_user ?? "",
-          ssh_port: host.ssh_port ?? 22,
+          ssh_port: host.ssh_port ?? defaultSshPort,
           managed: host.managed ?? true,
           groups: host.groups ?? [],
           labels: host.labels ?? [],
@@ -292,7 +289,7 @@ export function RackDetailPage() {
         toastApiError(error, "Failed to place host");
       }
     },
-    [loadRack, rack, rackIdParam],
+    [defaultSshPort, loadRack, rack, rackIdParam],
   );
 
   const handleUnplaceHost = useCallback(
@@ -360,9 +357,9 @@ export function RackDetailPage() {
         toast.error("Selection does not fit rack height");
         return;
       }
-      setPending(makePendingHost(zone));
+      setPending(makePendingHost(zone, defaultSshPort));
     },
-    [],
+    [defaultSshPort],
   );
 
   const updateItemPosition = useCallback(
