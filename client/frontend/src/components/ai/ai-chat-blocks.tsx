@@ -29,7 +29,7 @@ export function AiToolCallBlock({
   return (
     <div
       className={cn(
-        "rounded-md border px-2.5 py-1.5 text-[10px] mr-8",
+        "rounded-md border px-3.5 py-2.5 text-[10px] mr-8",
         toolCallAccentClass(tool),
       )}
     >
@@ -65,7 +65,7 @@ export function AiToolResultBlock({
   return (
     <div
       className={cn(
-        "rounded-md border px-2.5 py-1.5 text-[10px] mr-8",
+        "rounded-md border px-3.5 py-2.5 text-[10px] mr-8",
         denied
           ? "border-rose-500/35 bg-rose-500/[0.06]"
           : ok
@@ -107,7 +107,7 @@ const thinkingMarkdownClassName = cn(
 export function AiThinkingBlock({ text }: { text: string }) {
   if (!text.trim()) return null;
   return (
-    <div className="mr-8 rounded-md border border-zinc-700/50 bg-zinc-900/40 px-2.5 py-1.5 min-w-0">
+    <div className="mr-8 rounded-md border border-zinc-700/50 bg-zinc-900/40 px-3.5 py-2.5 min-w-0">
       <div className="flex items-center gap-1.5 text-zinc-600 mb-1 text-[10px]">
         <Brain className="size-3" />
         <span className="uppercase tracking-wide">Reasoning</span>

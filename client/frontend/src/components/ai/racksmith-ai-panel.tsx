@@ -37,18 +37,18 @@ import {
 
 const assistantMarkdownClassName = cn(
   "text-zinc-300",
-  "[&_p]:text-[11px] [&_p]:leading-relaxed [&_p]:my-1",
-  "[&_ul]:my-1 [&_ol]:my-1 [&_ul]:pl-4 [&_ol]:pl-4",
-  "[&_li]:text-[11px] [&_li]:leading-relaxed [&_li]:my-0.5",
-  "[&_h1]:text-sm [&_h1]:mt-2 [&_h1]:mb-1",
-  "[&_h2]:text-xs [&_h2]:mt-2 [&_h2]:mb-1",
-  "[&_h3]:text-xs [&_h3]:mt-1.5 [&_h3]:mb-0.5",
+  "[&_p]:text-[12px] [&_p]:leading-relaxed [&_p]:my-1.5",
+  "[&_ul]:my-1.5 [&_ol]:my-1.5 [&_ul]:pl-5 [&_ol]:pl-5",
+  "[&_li]:text-[12px] [&_li]:leading-relaxed [&_li]:my-0.5",
+  "[&_h1]:text-sm [&_h1]:font-semibold [&_h1]:text-zinc-100 [&_h1]:mt-3 [&_h1]:mb-1.5",
+  "[&_h2]:text-[13px] [&_h2]:font-semibold [&_h2]:text-zinc-200 [&_h2]:mt-2.5 [&_h2]:mb-1",
+  "[&_h3]:text-xs [&_h3]:font-medium [&_h3]:text-zinc-200 [&_h3]:mt-2 [&_h3]:mb-1",
   "[&_strong]:text-zinc-100",
-  "[&_:not(pre)>code]:text-[10px]",
-  "[&_pre]:my-1.5 [&_pre]:p-2",
-  "[&_pre_code]:text-[10px]",
+  "[&_:not(pre)>code]:text-[11px]",
+  "[&_pre]:my-2 [&_pre]:p-3 [&_pre]:rounded-md [&_pre]:border [&_pre]:border-zinc-800",
+  "[&_pre_code]:text-[11px]",
   "[&_blockquote]:text-zinc-400",
-  "[&_table]:text-[10px]",
+  "[&_table]:text-[11px]",
 );
 
 function useRepoScope() {
@@ -62,13 +62,13 @@ function MessageRow({ m }: { m: ChatUiMessage }) {
   switch (m.kind) {
     case "user":
       return (
-        <div className="rounded-md px-2.5 py-1.5 text-[11px] whitespace-pre-wrap break-words bg-zinc-800 text-zinc-100 ml-8">
+        <div className="rounded-lg px-3.5 py-2.5 text-[12px] leading-relaxed whitespace-pre-wrap break-words bg-zinc-800 text-zinc-100 ml-12">
           {m.text}
         </div>
       );
     case "assistant":
       return (
-        <div className="rounded-md px-2.5 py-1.5 mr-8 border border-zinc-800 bg-zinc-900 min-w-0">
+        <div className="min-w-0">
           <MarkdownContent className={assistantMarkdownClassName}>
             {m.text}
           </MarkdownContent>
@@ -420,7 +420,7 @@ export function AiBottomPanel() {
                 return (
                   <div
                     key={`lb-${i}`}
-                    className="mr-8 rounded-md border border-violet-500/20 bg-violet-500/5 px-2.5 py-1.5 text-[10px] text-zinc-500 whitespace-pre-wrap"
+                    className="mr-8 rounded-md border border-violet-500/20 bg-violet-500/5 px-3.5 py-2.5 text-[10px] text-zinc-500 whitespace-pre-wrap"
                   >
                     {b.text}
                   </div>
