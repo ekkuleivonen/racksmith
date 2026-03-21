@@ -9,6 +9,7 @@ prefix — see ``hosts_io``.  Group metadata lives in group_vars — see
 
 from __future__ import annotations
 
+import copy
 import threading
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -39,14 +40,15 @@ class RacksmithMeta:
     subnets: dict[str, dict[str, Any]] = field(default_factory=dict)
 
 
+# path → (mtime, parsed meta) — avoids re-parsing YAML on every read
+_cache: dict[str, tuple[float, RacksmithMeta]] = {}
+
+
 def _meta_file(layout: AnsibleLayout) -> Path:
     return layout.racksmith_base / RACKSMITH_META_FILENAME
 
 
-def read_meta(layout: AnsibleLayout) -> RacksmithMeta:
-    path = _meta_file(layout)
-    if not path.is_file():
-        return RacksmithMeta()
+def _parse_meta(path: Path) -> RacksmithMeta:
     try:
         data = _yaml_rt().load(path.read_text(encoding="utf-8"))
     except Exception:
@@ -66,6 +68,29 @@ def read_meta(layout: AnsibleLayout) -> RacksmithMeta:
     )
 
 
+def read_meta(layout: AnsibleLayout) -> RacksmithMeta:
+    path = _meta_file(layout)
+    key = str(path)
+
+    if not path.is_file():
+        _cache.pop(key, None)
+        return RacksmithMeta()
+
+    try:
+        mtime = path.stat().st_mtime
+    except OSError:
+        _cache.pop(key, None)
+        return RacksmithMeta()
+
+    cached = _cache.get(key)
+    if cached is not None and cached[0] == mtime:
+        return copy.deepcopy(cached[1])
+
+    meta = _parse_meta(path)
+    _cache[key] = (mtime, meta)
+    return copy.deepcopy(meta)
+
+
 def write_meta(layout: AnsibleLayout, meta: RacksmithMeta) -> None:
     with _meta_lock:
         path = _meta_file(layout)
@@ -80,6 +105,7 @@ def write_meta(layout: AnsibleLayout, meta: RacksmithMeta) -> None:
             if block:
                 data[section] = dict(block)
         atomic_yaml_dump(data, path)
+        _cache[str(path)] = (path.stat().st_mtime, copy.deepcopy(meta))
 
 
 # ── Per-entity helpers ───────────────────────────────────────────────────────
