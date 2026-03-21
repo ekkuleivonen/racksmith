@@ -82,28 +82,26 @@ class TestRoleManagerCreateRole:
         assert role2.id.startswith("role_")
 
 
-class TestRoleManagerRejectsListDictInputs:
-    def test_rejects_list_input(self, with_repo_mock):
-        from pydantic import ValidationError
+class TestRoleManagerAcceptsListDictInputs:
+    def test_accepts_list_input(self, with_repo_mock):
+        body = RoleCreate(
+            name="Good",
+            description="Has list input",
+            inputs=[{"key": "dirs", "type": "list", "label": "Dirs"}],
+            tasks=[{"name": "noop", "debug": {"msg": "ok"}}],
+        )
+        role = role_manager.create_role(with_repo_mock, body)
+        assert any(i.type == "list" for i in role.inputs)
 
-        with pytest.raises(ValidationError):
-            RoleCreate(
-                name="Bad",
-                description="Has list input",
-                inputs=[{"key": "dirs", "type": "list", "label": "Dirs"}],
-                tasks=[{"name": "noop", "debug": {"msg": "ok"}}],
-            )
-
-    def test_rejects_dict_input(self, with_repo_mock):
-        from pydantic import ValidationError
-
-        with pytest.raises(ValidationError):
-            RoleCreate(
-                name="Bad",
-                description="Has dict input",
-                inputs=[{"key": "opts", "type": "dict", "label": "Opts"}],
-                tasks=[{"name": "noop", "debug": {"msg": "ok"}}],
-            )
+    def test_accepts_dict_input(self, with_repo_mock):
+        body = RoleCreate(
+            name="Good",
+            description="Has dict input",
+            inputs=[{"key": "opts", "type": "dict", "label": "Opts"}],
+            tasks=[{"name": "noop", "debug": {"msg": "ok"}}],
+        )
+        role = role_manager.create_role(with_repo_mock, body)
+        assert any(i.type == "dict" for i in role.inputs)
 
 
 class TestRoleLabelDerivation:
