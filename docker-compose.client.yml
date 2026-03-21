@@ -50,7 +50,7 @@ services:
     depends_on: [redis]
     network_mode: host
     volumes:
-      - daemon_data:/data
+      - ./data:/data
     environment:
       REDIS_URL: redis://127.0.0.1:6379
       DAEMON_SECRET: ${DAEMON_SECRET}
@@ -77,4 +77,3 @@ services:
 volumes:
   redis_data:
   workspace:
-  daemon_data:
