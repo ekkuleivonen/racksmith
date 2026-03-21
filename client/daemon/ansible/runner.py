@@ -16,6 +16,7 @@ from racksmith_shared.logging import get_logger
 from racksmith_shared.runs import RUN_TTL, run_events_channel, run_key
 
 import settings
+from ansible.binaries import resolve_ansible_cli
 from ansible.collections import COLLECTIONS_DIR
 from ssh.misc import _racksmith_ssh_dir
 
@@ -197,8 +198,9 @@ async def execute_playbook_run(
     tmpdir = _materialize_workspace(playbook_yaml, inventory_yaml, host_vars, group_vars, role_files)
 
     try:
+        pb = resolve_ansible_cli("ansible-playbook")
         command = [
-            "ansible-playbook",
+            pb,
             str(tmpdir / "playbook.yml"),
             "-i", str(tmpdir / "inventory"),
             "--limit", ",".join(hosts),
@@ -257,8 +259,9 @@ async def execute_role_run(
     tmpdir = _materialize_workspace(playbook_yaml, inventory_yaml, host_vars, group_vars, role_files)
 
     try:
+        pb = resolve_ansible_cli("ansible-playbook")
         command = [
-            "ansible-playbook",
+            pb,
             str(tmpdir / "playbook.yml"),
             "-i", str(tmpdir / "inventory"),
             "--limit", ",".join(hosts),

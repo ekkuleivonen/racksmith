@@ -8,6 +8,7 @@ from pathlib import Path
 from racksmith_shared.logging import get_logger
 
 import settings
+from ansible.binaries import resolve_ansible_cli
 
 logger = get_logger(__name__)
 
@@ -23,8 +24,9 @@ async def install_ansible_collections_on_startup(
         return
 
     logger.info("ansible_extensions_install_start", collections=collections)
+    galaxy = resolve_ansible_cli("ansible-galaxy")
     process = await asyncio.create_subprocess_exec(
-        "ansible-galaxy", "collection", "install",
+        galaxy, "collection", "install",
         "-p", str(COLLECTIONS_DIR),
         *collections,
         stdout=asyncio.subprocess.PIPE,

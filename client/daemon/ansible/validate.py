@@ -12,6 +12,7 @@ import yaml
 from racksmith_shared.logging import get_logger
 
 import settings
+from ansible.binaries import resolve_ansible_cli
 from ansible.collections import COLLECTIONS_DIR
 from ssh.misc import _racksmith_ssh_dir
 
@@ -61,8 +62,9 @@ async def validate_become_password(
         if priv_key.is_file():
             env["ANSIBLE_PRIVATE_KEY_FILE"] = str(priv_key)
 
+        ansible_bin = resolve_ansible_cli("ansible")
         command = [
-            "ansible",
+            ansible_bin,
             ",".join(hosts),
             "-m", "shell",
             "-a", "whoami",
