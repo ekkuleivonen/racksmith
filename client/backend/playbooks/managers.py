@@ -215,6 +215,17 @@ class PlaybookManager(RunManagerMixin):
                 )
             )
 
+        for k in ("ansible_host", "ansible_user", "ansible_port"):
+            if k not in host_keys:
+                entries.append(
+                    AvailableVarEntry(
+                        source="host_var",
+                        key=k,
+                        var_from="host",
+                        role_order=None,
+                    )
+                )
+
         for g in group_manager.list_groups(session):
             gvars = g.vars or {}
             if not gvars:

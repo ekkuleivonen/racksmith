@@ -505,8 +505,27 @@ function EditableGroupsSection({ host, allGroups }: { host: Host; allGroups: Gro
   );
 }
 
+/** Vars edited in UI; racksmith_* and ansible_* stay hidden (managed elsewhere). */
+function partitionEditableHostVars(vars: Record<string, unknown>): {
+  hidden: Record<string, unknown>;
+  editable: Record<string, unknown>;
+} {
+  const hidden: Record<string, unknown> = {};
+  const editable: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(vars)) {
+    if (k.startsWith("racksmith_") || k.startsWith("ansible_")) {
+      hidden[k] = v;
+    } else {
+      editable[k] = v;
+    }
+  }
+  return { hidden, editable };
+}
+
 function EditableVarsSection({ host }: { host: Host }) {
-  const [rows, setRows] = useState<VarRow[]>(() => varsToRows(host.vars ?? {}));
+  const [rows, setRows] = useState<VarRow[]>(() =>
+    varsToRows(partitionEditableHostVars(host.vars ?? {}).editable),
+  );
   const [dirty, setDirty] = useState(false);
   const updateMutation = useUpdateHost();
   const defaultSsh = useAppSshPort();
@@ -517,10 +536,15 @@ function EditableVarsSection({ host }: { host: Host }) {
   };
 
   const save = () => {
+    const { hidden } = partitionEditableHostVars(host.vars ?? {});
     updateMutation.mutate(
       {
         id: host.id,
-        payload: buildUpdatePayload(host, { vars: rowsToVars(rows) }, defaultSsh),
+        payload: buildUpdatePayload(
+          host,
+          { vars: { ...hidden, ...rowsToVars(rows) } },
+          defaultSsh,
+        ),
       },
       {
         onSuccess: () => {
@@ -607,7 +631,7 @@ export function HostDetailPanel({ hostId, onClose }: HostDetailPanelProps) {
         <Separator />
         <EditableGroupsSection host={host} allGroups={allGroups} />
         <Separator />
-        <EditableVarsSection host={host} />
+        <EditableVarsSection key={host.id} host={host} />
       </div>
     </div>
   );

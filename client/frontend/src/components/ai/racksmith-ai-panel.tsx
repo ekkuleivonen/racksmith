@@ -21,6 +21,7 @@ import { useHosts, usePlaybooks, useRoles, useRackEntries } from "@/hooks/querie
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { toastApiError } from "@/lib/api";
+import { invalidateQueriesForRacksmithAgentTool } from "@/lib/queryClient";
 import { MarkdownContent } from "@/components/shared/markdown-content";
 import { AiChatComposer, type MentionCandidate } from "./ai-chat-composer";
 import {
@@ -268,6 +269,7 @@ export function AiBottomPanel() {
               ]);
             }
             if (ev.type === "tool_result" && ev.tool) {
+              invalidateQueriesForRacksmithAgentTool(ev.tool);
               setLiveBlocks((s) => [
                 ...s,
                 { kind: "result", tool: ev.tool!, result: ev.result ?? "" },

@@ -37,3 +37,19 @@ export function invalidateResource(...keys: StaticQueryKey[]) {
     });
   }
 }
+
+/** Backend AI tool names from `_utils/ai.py` — keep in sync with lib/roles.ts / lib/playbooks.ts invalidation. */
+export function invalidateQueriesForRacksmithAgentTool(tool: string) {
+  switch (tool) {
+    case "create_role":
+    case "update_role":
+      invalidateResource("roles", "playbooks", "filesStatuses", "filesTree");
+      break;
+    case "create_playbook":
+    case "update_playbook":
+      invalidateResource("playbooks", "roles", "filesStatuses", "filesTree");
+      break;
+    default:
+      break;
+  }
+}

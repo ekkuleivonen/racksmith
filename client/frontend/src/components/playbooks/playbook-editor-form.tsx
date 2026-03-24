@@ -174,6 +174,11 @@ function getAvailableVars(
   for (const k of Array.from(hostKeys).sort()) {
     result.push({ kind: "host_var", group: "Host variables", key: k });
   }
+  for (const k of ["ansible_host", "ansible_user", "ansible_port"] as const) {
+    if (!hostKeys.has(k)) {
+      result.push({ kind: "host_var", group: "Host variables", key: k });
+    }
+  }
 
   for (const g of groups) {
     const keys = Object.keys(g.vars ?? {});
