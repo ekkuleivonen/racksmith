@@ -34,7 +34,10 @@ async def ws_error_handler(websocket: WebSocket):
     except KeyError as exc:
         await websocket.send_json({"type": "error", "message": str(exc)})
         await websocket.close(code=4404)
+        return
     except Exception:
         logger.exception("ws_unhandled_error")
         await websocket.send_json({"type": "error", "message": "Internal error"})
         await websocket.close(code=1011)
+        return
+    await websocket.close(code=1000)

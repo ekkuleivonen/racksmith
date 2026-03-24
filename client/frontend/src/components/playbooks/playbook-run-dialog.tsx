@@ -298,6 +298,10 @@ export function PlaybookRunDialog({
     }
   }, []);
 
+  const handlePlaybookError = useCallback(() => {
+    // Suppress — the run already completed; server just closed the socket.
+  }, []);
+
   useTerminalWebSocket({
     containerRef: terminalHostRef,
     url: activeRun && (phase === "running" || phase === "done")
@@ -306,6 +310,7 @@ export function PlaybookRunDialog({
     interactive: false,
     initialOutput: initialTerminalOutput,
     onMessage: handlePlaybookMessage,
+    onError: handlePlaybookError,
   });
 
   const statusLabel = activeRun
