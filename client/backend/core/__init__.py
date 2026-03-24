@@ -2,12 +2,11 @@
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import tempfile
 from pathlib import Path
-
-import json
 
 import yaml as pyyaml
 from ruamel.yaml import YAML
