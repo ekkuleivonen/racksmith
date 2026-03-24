@@ -47,6 +47,7 @@ def _load_host_vars(
             stripped = k[len(_RACKSMITH_PREFIX):]
             if stripped not in HOST_META_ONLY_KEYS:
                 racksmith_vars[stripped] = v
+            ansible_vars[k] = v
         else:
             ansible_vars[k] = v
     return ansible_vars, racksmith_vars
