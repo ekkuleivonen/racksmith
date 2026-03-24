@@ -518,8 +518,7 @@ class TestAtomicWrites:
         path = tmp_path / "test.yml"
         path.write_text("original: data\n", encoding="utf-8")
 
-        with patch("core.yaml_rt") as mock_rt:
-            mock_rt.return_value.dump.side_effect = RuntimeError("bad data")
+        with patch("core.pyyaml.safe_dump", side_effect=RuntimeError("bad data")):
             with pytest.raises(RuntimeError, match="bad data"):
                 atomic_yaml_dump({"broken": True}, path)
 

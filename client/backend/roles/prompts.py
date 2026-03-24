@@ -63,7 +63,15 @@ Free-form module rules (command, shell, raw, script):
   CORRECT:   {"ansible.builtin.command": {"cmd": "some-command --flag"}}
   CORRECT:   {"ansible.builtin.command": {"argv": ["some-command", "--flag"]}}
   WRONG:     {"ansible.builtin.command": ["some-command", "--flag"]}
-  Always use the dict form with "cmd" (string) or "argv" (list)."""
+  Always use the dict form with "cmd" (string) or "argv" (list).
+
+Jinja2 booleans in lineinfile / templates:
+  A bool variable interpolated as {{ my_flag }} becomes the string True or False
+  (Python spelling). OpenSSH sshd_config and many other daemons require yes/no.
+  NEVER write e.g. PasswordAuthentication {{ allow_password }} when allow_password
+  is a bool. Use {{ 'yes' if allow_password else 'no' }}, or
+  {{ allow_password | ternary('yes', 'no') }}, or use a string input with values
+  yes/no only."""
 
 ROLE_SYSTEM_PROMPT = f"""\
 You are Racksmith, an Ansible role generator.

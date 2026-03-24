@@ -61,6 +61,10 @@ ROLE CREATION RULES (when calling create_role):
     Use the dict form: {"cmd": "..."} or {"argv": [...]}.
     NEVER pass a bare list as the module value.
 
+  Jinja2 booleans in lineinfile / templates: {{ my_bool }} renders as True/False,
+    which breaks sshd_config (expects yes/no). Use ternary or string inputs:
+    {{ 'yes' if my_bool else 'no' }} or {{ my_bool | ternary('yes', 'no') }}.
+
 PLAYBOOK DESCRIPTION RULES:
   Write the playbook description in Markdown. Explain what it accomplishes
   end-to-end, prerequisites, safety notes, and a summary of key variables."""
@@ -123,6 +127,10 @@ ROLE CREATION / UPDATE RULES (when calling create_role or update_role):
   Free-form module rules (command, shell, raw, script):
     Use the dict form: {"cmd": "..."} or {"argv": [...]}.
     NEVER pass a bare list as the module value.
+
+  Jinja2 booleans in lineinfile / templates: {{ my_bool }} renders as True/False,
+    which breaks sshd_config (expects yes/no). Use ternary or string inputs:
+    {{ 'yes' if my_bool else 'no' }} or {{ my_bool | ternary('yes', 'no') }}.
 
 PLAYBOOK DESCRIPTION RULES:
   Write the playbook description in Markdown. Explain what it accomplishes
