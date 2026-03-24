@@ -6,7 +6,8 @@ import { getHost, listHosts, type ListHostsParams } from "@/lib/hosts";
 import { hostStatusKey, type PingStatus } from "@/lib/ssh";
 import { usePingStore } from "@/stores/ping";
 import {
-  listRacksWithLayouts,
+  listRacks,
+  hostToLayoutHost,
   type RackLayoutHost,
   type RackSummary,
 } from "@/lib/racks";
@@ -85,19 +86,23 @@ export function usePingStatus(hostId: string | undefined) {
 
 export function useRackEntries() {
   return useQuery({
-    queryKey: queryKeys.racks,
+    queryKey: [...queryKeys.racks, "entries"],
     queryFn: async () => {
-      const layouts = await listRacksWithLayouts();
-      const entries: RackNavEntry[] = layouts.map((layout) => ({
-        rack: {
-          id: layout.id,
-          name: layout.name,
-          rack_width_inches: layout.rack_width_inches,
-          rack_units: layout.rack_units,
-          rack_cols: layout.rack_cols,
-          created_at: layout.created_at,
-        },
-        hosts: layout.hosts,
+      const [racks, hosts] = await Promise.all([listRacks(), listHosts()]);
+
+      const hostsByRack = new Map<string, RackLayoutHost[]>();
+      for (const h of hosts) {
+        const lh = hostToLayoutHost(h);
+        if (!lh) continue;
+        const rackId = h.placement!.rack;
+        const arr = hostsByRack.get(rackId);
+        if (arr) arr.push(lh);
+        else hostsByRack.set(rackId, [lh]);
+      }
+
+      const entries: RackNavEntry[] = racks.map((rack) => ({
+        rack,
+        hosts: hostsByRack.get(rack.id) ?? [],
       }));
       return entries;
     },

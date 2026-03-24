@@ -76,17 +76,6 @@ class RackManager:
         filtered.sort(key=sort_key, reverse=rev)
         return filtered
 
-    def list_rack_layouts_filtered(
-        self,
-        session: SessionData,
-        *,
-        q: str | None,
-        sort: str,
-        order: str,
-    ) -> list[RackLayout]:
-        summaries = self.list_racks_filtered(session, q=q, sort=sort, order=order)
-        return [self.get_layout(session, s.id) for s in summaries]
-
     def get_rack(self, session: SessionData, rack_id: str) -> Rack:
         layout = get_layout(session)
         rack_data = read_rack(layout, rack_id)

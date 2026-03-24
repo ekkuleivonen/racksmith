@@ -59,14 +59,21 @@ export async function listRacks() {
   return data.items;
 }
 
-export async function listRacksWithLayouts() {
-  const data = await apiGet<{
-    items: RackLayout[];
-    total: number;
-    page: number;
-    per_page: number;
-  }>(`/racks?include=layout&page=1&per_page=${RACKS_PER_PAGE}`);
-  return data.items;
+/** Convert a Host with rack placement to flat RackLayoutHost for RackCanvas. */
+export function hostToLayoutHost(host: Host): RackLayoutHost | null {
+  const p = host.placement;
+  if (!p) return null;
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const { placement: _placement, ...rest } = host;
+  return {
+    ...rest,
+    id: host.id,
+    placement: "rack" as const,
+    position_u_start: p.u_start,
+    position_u_height: p.u_height ?? 1,
+    position_col_start: p.col_start ?? 0,
+    position_col_count: p.col_count ?? 1,
+  };
 }
 
 export async function getRack(id: string) {
