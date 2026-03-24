@@ -7,6 +7,8 @@ import re
 import tempfile
 from pathlib import Path
 
+import json
+
 import yaml as pyyaml
 from ruamel.yaml import YAML
 
@@ -39,8 +41,11 @@ def atomic_yaml_dump(data: object, path: Path) -> None:
     via ``os.replace``.  If the dump or write fails, the original file is
     left untouched.
     """
+    # Round-trip through JSON to strip ruamel.yaml CommentedMap/CommentedSeq
+    # wrappers that PyYAML's SafeDumper cannot represent.
+    plain = json.loads(json.dumps(data, default=str))
     content = pyyaml.safe_dump(
-        data, sort_keys=False, allow_unicode=True, default_flow_style=False
+        plain, sort_keys=False, allow_unicode=True, default_flow_style=False
     )
 
     path.parent.mkdir(parents=True, exist_ok=True)
