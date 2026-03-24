@@ -204,20 +204,11 @@ export function PlaybookDetailPage() {
     return () => window.removeEventListener("beforeunload", handler);
   }, [draft, playbookId, isDirty]);
 
-  const handleFormBlur = useCallback(
-    (e: React.FocusEvent<HTMLDivElement>) => {
-      if (e.currentTarget.contains(e.relatedTarget as Node)) return;
-      void saveIfDirty();
-    },
-    [saveIfDirty],
-  );
-
   if (loading || !draft) return <DetailLoading message="Loading playbook..." />;
 
   return (
     <>
     <PageContainer wide>
-      <div onBlur={handleFormBlur}>
         <div className="space-y-4">
         <section className="border border-zinc-800 bg-zinc-900/30 p-4">
           <div className="flex flex-wrap items-start justify-between gap-3">
@@ -237,13 +228,14 @@ export function PlaybookDetailPage() {
               >
                 <Star className={`size-3.5 ${isPinned ? "fill-current" : ""}`} />
               </Button>
-              {saving ? (
-                <span className="text-xs text-zinc-500">Saving...</span>
-              ) : isDirty() ? (
-                <Button size="sm" variant="outline" onClick={() => void saveIfDirty()}>
-                  Save
-                </Button>
-              ) : null}
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={saving || !isDirty()}
+                onClick={() => void saveIfDirty()}
+              >
+                {saving ? "Saving..." : "Save edits"}
+              </Button>
               <Badge variant="outline">{draft.roles.length} roles</Badge>
               <Button
                 size="sm"
@@ -296,7 +288,6 @@ export function PlaybookDetailPage() {
           onChange={setDraft}
         />
         </div>
-      </div>
     </PageContainer>
 
       <PlaybookRunDialog
