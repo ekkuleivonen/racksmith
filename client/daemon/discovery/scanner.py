@@ -27,36 +27,37 @@ async def execute_network_scan(
     subnet: str,
     known_hosts: list[dict[str, str]],
 ) -> None:
-    """ARP-scan the subnet, enrich, cross-reference against known_hosts from payload."""
+    """nmap -sn the subnet, enrich hostnames, cross-reference known_hosts (IP / MAC)."""
     redis = ctx["redis"]
     logger.info("network_scan_started", scan_id=scan_id, subnet=subnet)
     await _update_scan(redis, scan_id, {"status": "running"})
 
     try:
-        from discovery.misc import arp_scan, lookup_vendors, reverse_dns
+        from discovery.misc import nmap_scan, reverse_dns
 
         loop = asyncio.get_running_loop()
-        raw_devices = await loop.run_in_executor(None, arp_scan, subnet)
+        raw_devices = await loop.run_in_executor(None, nmap_scan, subnet)
 
         if not raw_devices:
             await _update_scan(redis, scan_id, {"status": "completed", "devices": "[]"})
             logger.info("network_scan_completed", scan_id=scan_id, found=0)
             return
 
-        devices: list[dict[str, Any]] = [{"ip": ip, "mac": mac} for ip, mac in raw_devices]
+        devices: list[dict[str, Any]] = [
+            {"ip": ip, "mac": "", "hostname": hostname} for ip, hostname in raw_devices
+        ]
         await _update_scan(redis, scan_id, {"devices": json.dumps(devices)})
-
-        macs = [mac for _, mac in raw_devices]
-        vendors = await loop.run_in_executor(None, lookup_vendors, macs)
-        for d in devices:
-            d["vendor"] = vendors.get(d["mac"], "")
 
         async def _rdns(ip: str) -> str:
             return await loop.run_in_executor(None, reverse_dns, ip)
 
-        hostnames = await asyncio.gather(*[_rdns(ip) for ip, _ in raw_devices])
-        for d, hostname in zip(devices, hostnames):
-            d["hostname"] = hostname
+        need_rdns = [d["ip"] for d in devices if not d["hostname"]]
+        if need_rdns:
+            hostnames = await asyncio.gather(*[_rdns(ip) for ip in need_rdns])
+            rdns_by_ip = dict(zip(need_rdns, hostnames, strict=True))
+            for d in devices:
+                if not d["hostname"]:
+                    d["hostname"] = rdns_by_ip.get(d["ip"], "")
 
         await _update_scan(redis, scan_id, {"devices": json.dumps(devices)})
 
@@ -69,8 +70,8 @@ async def execute_network_scan(
                 ip_map[kh["ip"]] = kh["host_id"]
 
         for d in devices:
-            mac_lower = d["mac"].lower()
-            existing_id = mac_map.get(mac_lower) or ip_map.get(d["ip"])
+            mac = (d.get("mac") or "").strip().lower()
+            existing_id = ip_map.get(d["ip"]) or (mac_map.get(mac) if mac else None)
             if existing_id:
                 d["already_imported"] = True
                 d["existing_host_id"] = existing_id

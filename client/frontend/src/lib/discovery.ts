@@ -2,8 +2,7 @@ import { apiGet, apiPost } from "@/lib/api";
 
 export type DiscoveredDevice = {
   ip: string;
-  mac: string;
-  vendor: string;
+  mac?: string;
   hostname: string;
   already_imported: boolean;
   existing_host_id: string | null;

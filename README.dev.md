@@ -58,7 +58,7 @@ registry/
 │                         │ uvicorn+arq │  (Arq consumer)         │
 │                         │ host net L2 │                        │
 │                         └──────┬──────┘                        │
-│                                │ SSH, Ansible, arp-scan        │
+│                                │ SSH, Ansible, nmap            │
 │                                ▼                                │
 │                          Target hosts                           │
 └─────────────────────────────────────────────────────────────────┘

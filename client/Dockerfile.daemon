@@ -9,13 +9,11 @@ WORKDIR /app/daemon
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     openssh-client \
-    arp-scan \
+    nmap \
     iputils-ping \
-    libcap2-bin \
     curl \
     supervisor \
-    && rm -rf /var/lib/apt/lists/* \
-    && setcap cap_net_raw+ep /usr/sbin/arp-scan
+    && rm -rf /var/lib/apt/lists/*
 
 # Shared library (editable dep: ../shared from /app/daemon)
 COPY client/shared/ /app/shared/

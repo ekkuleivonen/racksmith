@@ -10,7 +10,7 @@ Depends on [**racksmith-shared**](../shared/README.md) (path dependency).
 |------------|--------|
 | Read/write repo under `REPOS_WORKSPACE` | Executes `ansible-playbook` from serialized payloads |
 | `POST` run → serialize layout → Arq job | Arq worker: `execute_playbook_run`, `execute_role_run`, `execute_network_scan` |
-| Proxy WebSocket terminal, ping, keys, probes | Actual SSH / ping / arp-scan / key files on disk |
+| Proxy WebSocket terminal, ping, keys, probes | Actual SSH / ping / nmap / key files on disk |
 
 ## Development
 

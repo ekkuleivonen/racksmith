@@ -43,7 +43,7 @@ Open **`APP_URL`** (default in compose: `http://localhost:8080`), sign in with G
 Browser → frontend (nginx) → API (FastAPI)
                               ↓ Redis (Arq + pub/sub)
                               ↓ HTTP + WS (DAEMON_SECRET)
-                           daemon (Ansible, SSH, arp-scan) → your LAN
+                           daemon (Ansible, SSH, nmap) → your LAN
 ```
 
 - **Frontend** → only talks to the **API** (same origin `/api`).
@@ -96,7 +96,7 @@ Rough namespaces under `/api/` (see Swagger on the API for the full list):
 | `SSH_DISABLE_HOST_KEY_CHECK` | `true` | Ansible / SSH host key checking |
 | `LOG_LEVEL` | `INFO` | Logging level |
 
-> **Host networking on the daemon:** Compose uses `network_mode: host` so **arp-scan** works. **Redis** publishes **`127.0.0.1:6379`** so the daemon can keep `REDIS_URL=redis://127.0.0.1:6379` without exposing Redis on your LAN. The **API** container calls the daemon at **`http://host.docker.internal:8001`** (`extra_hosts: host-gateway`); do not set `DAEMON_URL=http://daemon:8001` in `.env` or the API cannot reach a host-network daemon.
+> **Host networking on the daemon:** Compose uses `network_mode: host` so **nmap -sn** (and similar LAN ops) work. **Redis** publishes **`127.0.0.1:6379`** so the daemon can keep `REDIS_URL=redis://127.0.0.1:6379` without exposing Redis on your LAN. The **API** container calls the daemon at **`http://host.docker.internal:8001`** (`extra_hosts: host-gateway`); do not set `DAEMON_URL=http://daemon:8001` in `.env` or the API cannot reach a host-network daemon.
 
 ---
 

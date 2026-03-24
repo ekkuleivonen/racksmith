@@ -30,7 +30,7 @@ Environment highlights:
 | `DAEMON_SECRET` | Shared secret with the API (optional in dev, required in prod) |
 | `DAEMON_PORT` | HTTP port (default `8001`) |
 
-System tools expected in production images: `ansible-playbook`, `arp-scan`, `ping`, `openssh-client`.
+System tools expected in production images: `ansible-playbook`, `nmap`, `ping`, `openssh-client`.
 
 ## Tests
 

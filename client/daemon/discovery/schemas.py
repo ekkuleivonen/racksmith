@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class DiscoveredDevice(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
     ip: str
-    mac: str
-    vendor: str = ""
+    mac: str = ""
     hostname: str = ""
     already_imported: bool = False
     existing_host_id: str | None = None

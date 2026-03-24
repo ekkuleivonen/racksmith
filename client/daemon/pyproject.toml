@@ -11,7 +11,6 @@ dependencies = [
     "arq>=0.25.0",
     "asyncssh>=2.22.0",
     "fastapi[standard]>=0.135.1",
-    "mac-vendor-lookup>=0.1.15",
     "pyyaml>=6.0.3",
     "racksmith-shared",
 ]

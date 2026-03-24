@@ -213,7 +213,6 @@ export function useImportDiscoveredHosts() {
       return bulkImportDiscovered(
         devices.map((d) => ({
           ip: d.ip,
-          mac: d.mac,
           hostname: d.hostname,
         })),
         sshUser,

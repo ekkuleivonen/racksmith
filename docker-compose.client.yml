@@ -4,7 +4,7 @@
 #   APP_URL      — Public URL of the client (e.g. http://localhost:8080)
 #   DAEMON_SECRET — Shared secret between API and daemon
 #
-# Daemon uses network_mode: host (arp-scan). Therefore:
+# Daemon uses network_mode: host (nmap -sn / LAN ops). Therefore:
 #   - Redis publishes 127.0.0.1:6379 so the daemon can reach it via REDIS_URL=redis://127.0.0.1:6379
 #   - API uses host.docker.internal:8001 to reach the daemon (not the service name "daemon")
 #

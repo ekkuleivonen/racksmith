@@ -507,8 +507,7 @@ function ScannerTab({ onDone }: { onDone?: () => void }) {
                     </TableHead>
                   )}
                   <TableHead className="text-xs">IP Address</TableHead>
-                  <TableHead className="text-xs">Vendor</TableHead>
-                  <TableHead className="text-xs">MAC</TableHead>
+                  <TableHead className="text-xs">Hostname</TableHead>
                   <TableHead className="text-xs">Status</TableHead>
                 </TableRow>
               </TableHeader>
@@ -568,10 +567,7 @@ function DeviceRow({
       )}
       <TableCell className="font-mono text-xs py-1.5">{device.ip}</TableCell>
       <TableCell className="text-xs py-1.5 truncate max-w-[200px]">
-        {device.vendor || <span className="text-zinc-600">&mdash;</span>}
-      </TableCell>
-      <TableCell className="font-mono text-xs text-zinc-500 py-1.5">
-        {device.mac}
+        {device.hostname || <span className="text-zinc-600">&mdash;</span>}
       </TableCell>
       <TableCell className="py-1.5">
         {device.already_imported ? (

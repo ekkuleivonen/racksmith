@@ -50,18 +50,7 @@ export function DeviceTable({
             </TableHead>
           )}
           <TableHead className={compact ? "text-xs" : undefined}>IP Address</TableHead>
-          {compact ? (
-            <>
-              <TableHead className="text-xs">Vendor</TableHead>
-              <TableHead className="text-xs">MAC</TableHead>
-            </>
-          ) : (
-            <>
-              <TableHead>MAC Address</TableHead>
-              <TableHead>Vendor</TableHead>
-              <TableHead>Hostname</TableHead>
-            </>
-          )}
+          <TableHead className={compact ? "text-xs" : undefined}>Hostname</TableHead>
           <TableHead className={compact ? "text-xs" : undefined}>Status</TableHead>
         </TableRow>
       </TableHeader>
@@ -84,24 +73,9 @@ export function DeviceTable({
             <TableCell className={compact ? "font-mono text-xs py-1.5" : "font-mono"}>
               {device.ip}
             </TableCell>
-            {compact ? (
-              <>
-                <TableCell className="text-xs py-1.5 truncate max-w-[200px]">
-                  {device.vendor || <Dim />}
-                </TableCell>
-                <TableCell className="font-mono text-xs text-zinc-500 py-1.5">
-                  {device.mac}
-                </TableCell>
-              </>
-            ) : (
-              <>
-                <TableCell className="font-mono text-zinc-500">
-                  {device.mac}
-                </TableCell>
-                <TableCell>{device.vendor || <Dim>—</Dim>}</TableCell>
-                <TableCell>{device.hostname || <Dim>—</Dim>}</TableCell>
-              </>
-            )}
+            <TableCell className={compact ? "text-xs py-1.5" : undefined}>
+              {device.hostname || <Dim>—</Dim>}
+            </TableCell>
             <TableCell className={compact ? "py-1.5" : undefined}>
               {device.already_imported ? (
                 <Badge variant="secondary" className={compact ? "text-[10px]" : undefined}>

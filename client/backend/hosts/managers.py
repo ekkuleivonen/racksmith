@@ -491,7 +491,7 @@ class HostManager:
         host_id: str,
         subnet: str | None = None,
     ) -> tuple[Host, str, str, bool]:
-        """ARP-scan via daemon to find a host's new IP by MAC address."""
+        """Ping-scan (nmap -sn) via daemon; match by current IP or MAC when present in scan."""
         host = self.get_host(session, host_id)
         if not host.managed:
             raise ValueError("Only managed hosts can be relocated")
@@ -534,13 +534,19 @@ class HostManager:
         target_mac = host.mac_address.lower()
         new_ip: str | None = None
         for d in devices:
-            if d.get("mac", "").lower() == target_mac:
+            if d.get("existing_host_id") == host_id:
                 new_ip = d["ip"]
                 break
+        if new_ip is None:
+            for d in devices:
+                if d.get("mac", "").lower() == target_mac:
+                    new_ip = d["ip"]
+                    break
 
         if new_ip is None:
             raise NotFoundError(
-                f"MAC {host.mac_address} not found on subnet {subnet}"
+                f"Host {host_id} not found on subnet {subnet} "
+                "(no scan row matched by IP or MAC; if the IP changed across a routed VLAN, set it manually)"
             )
 
         previous_ip = host.ip_address

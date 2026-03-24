@@ -1,4 +1,4 @@
-"""Low-level network scanning helpers: ARP, vendor lookup, reverse DNS."""
+"""Low-level network scanning helpers: nmap ping scan, reverse DNS."""
 
 from __future__ import annotations
 
@@ -11,9 +11,9 @@ from racksmith_shared.logging import get_logger
 
 logger = get_logger(__name__)
 
-_ARP_SCAN_LINE = re.compile(
-    r"^(\d+\.\d+\.\d+\.\d+)\s+"
-    r"([0-9a-fA-F:]{17})"
+# nmap -oG (greppable) lines: Host: 192.168.1.1 (hostname or empty)	Status: Up
+_NMAP_GREP_HOST = re.compile(
+    r"^Host:\s+(\d+\.\d+\.\d+\.\d+)\s+\(([^)]*)\)\s+Status:\s+Up"
 )
 
 
@@ -39,49 +39,42 @@ def detect_subnet() -> str:
     return "192.168.1.0/24"
 
 
-def arp_scan(subnet: str, timeout: int = 3) -> list[tuple[str, str]]:
+def nmap_scan(subnet: str, timeout: int = 180) -> list[tuple[str, str]]:
+    """Ping-scan subnet with nmap -sn; returns (ip, hostname) per live host.
+
+    Hostname comes from nmap's resolution when available; empty string otherwise.
+    Works across routed VLANs (L3), unlike ARP.
+    """
     try:
-        out = subprocess.check_output(
-            ["arp-scan", f"--timeout={timeout * 1000}", subnet],
+        result = subprocess.run(
+            ["nmap", "-sn", "-T4", "-oG", "-", subnet],
+            capture_output=True,
             text=True,
-            timeout=timeout + 10,
-            stderr=subprocess.STDOUT,
+            timeout=timeout,
+            check=False,
         )
-    except subprocess.CalledProcessError as exc:
-        logger.error("arp_scan_failed", exit_code=exc.returncode, output=exc.output[:500])
-        raise
     except FileNotFoundError:
-        raise RuntimeError("arp-scan is not installed")
+        raise RuntimeError("nmap is not installed")
+    except subprocess.TimeoutExpired:
+        logger.error("nmap_scan_timeout", subnet=subnet, timeout=timeout)
+        raise
+
+    if result.returncode != 0:
+        err_tail = (result.stderr or "")[-500:]
+        logger.error(
+            "nmap_scan_failed",
+            exit_code=result.returncode,
+            stderr=err_tail,
+        )
+        raise RuntimeError(f"nmap failed with exit code {result.returncode}")
 
     devices: list[tuple[str, str]] = []
-    for line in out.splitlines():
-        m = _ARP_SCAN_LINE.match(line)
+    for line in (result.stdout or "").splitlines():
+        m = _NMAP_GREP_HOST.match(line)
         if m:
-            devices.append((m.group(1), m.group(2)))
+            ip, hostname = m.group(1), m.group(2).strip()
+            devices.append((ip, hostname))
     return devices
-
-
-def lookup_vendor(mac: str) -> str:
-    try:
-        from mac_vendor_lookup import MacLookup
-        return MacLookup().lookup(mac)
-    except Exception:
-        return ""
-
-
-def lookup_vendors(macs: list[str]) -> dict[str, str]:
-    try:
-        from mac_vendor_lookup import MacLookup
-        ml = MacLookup()
-        result: dict[str, str] = {}
-        for mac in macs:
-            try:
-                result[mac] = ml.lookup(mac)
-            except Exception:
-                result[mac] = ""
-        return result
-    except Exception:
-        return {m: "" for m in macs}
 
 
 def reverse_dns(ip: str) -> str:
