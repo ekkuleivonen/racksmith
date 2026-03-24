@@ -241,8 +241,8 @@ all:
         assert updated.name == "Renamed"
         assert updated.vars["keep_me"] == "yes"
 
-    def test_system_vars_not_leaked_into_vars(self, with_repo_mock, layout):
-        """ansible_host, ansible_user, racksmith_ keys must not appear in vars."""
+    def test_connection_vars_not_in_vars_racksmith_keys_exposed(self, with_repo_mock, layout):
+        """ansible_* connection keys stay top-level; racksmith_* keys appear in vars for linking."""
         layout.inventory_path.mkdir(parents=True, exist_ok=True)
         (layout.inventory_path / "hosts.yml").write_text("""
 all:
@@ -255,4 +255,4 @@ all:
         host = host_manager.get_host(with_repo_mock, "web1")
         for k in host.vars:
             assert not k.startswith("ansible_")
-            assert not k.startswith("racksmith_")
+        assert host.vars.get("racksmith_name") == "Web"

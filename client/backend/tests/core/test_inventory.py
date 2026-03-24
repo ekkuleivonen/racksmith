@@ -168,7 +168,10 @@ racksmith_name: Data Node 1
         assert h.id == "data1"
         assert h.ansible_host == "10.0.0.10"
         assert h.ansible_user == "deploy"
-        assert h.ansible_vars == {"custom_var": "from_host_vars"}
+        assert h.ansible_vars == {
+            "custom_var": "from_host_vars",
+            "racksmith_name": "Data Node 1",
+        }
         assert h.racksmith["name"] == "Data Node 1"
         assert "data" in h.groups
 
@@ -280,7 +283,10 @@ class TestWriteHost:
         assert h.ansible_host == original.ansible_host
         assert h.ansible_user == original.ansible_user
         assert h.ansible_port == original.ansible_port
-        assert h.ansible_vars == original.ansible_vars
+        assert h.ansible_vars == {
+            **original.ansible_vars,
+            "racksmith_name": original.racksmith["name"],
+        }
         assert h.racksmith == original.racksmith
         assert set(h.groups) == set(original.groups)
 
@@ -579,7 +585,12 @@ class TestHostAnsibleVarsRoundtrip:
         write_host(layout, original)
         h = read_host(layout, "h1")
         assert h is not None
-        assert h.ansible_vars == {"http_port": 8080, "debug": True, "name": "hello"}
+        assert h.ansible_vars == {
+            "http_port": 8080,
+            "debug": True,
+            "name": "hello",
+            "racksmith_name": "H1",
+        }
 
     def test_empty_vars_roundtrip(self, layout) -> None:
         original = HostData(
@@ -592,10 +603,10 @@ class TestHostAnsibleVarsRoundtrip:
         write_host(layout, original)
         h = read_host(layout, "h2")
         assert h is not None
-        assert h.ansible_vars == {}
+        assert h.ansible_vars == {"racksmith_name": "H2"}
 
-    def test_system_keys_excluded_from_ansible_vars(self, layout) -> None:
-        """ansible_host/user/port and racksmith_ keys are never in ansible_vars."""
+    def test_inventory_connection_vars_excluded_racksmith_mirrored(self, layout) -> None:
+        """ansible_host/user/port stay top-level; racksmith_* also mirrored in ansible_vars."""
         layout.inventory_path.mkdir(parents=True, exist_ok=True)
         layout.host_vars_path.mkdir(parents=True, exist_ok=True)
         (layout.inventory_path / "hosts.yml").write_text("""
@@ -616,8 +627,7 @@ custom_key: hello
         assert h.ansible_user == "admin"
         assert h.ansible_port == 2222
         assert h.racksmith["name"] == "Node X"
-        assert h.ansible_vars == {"custom_key": "hello"}
-
+        assert h.ansible_vars == {"custom_key": "hello", "racksmith_name": "Node X"}
 
     def test_user_vars_not_in_hosts_yml(self, layout) -> None:
         """User-defined vars should only appear in host_vars/, not hosts.yml."""
