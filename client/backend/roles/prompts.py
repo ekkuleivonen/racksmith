@@ -72,7 +72,8 @@ You have access to tools that let you inspect existing roles in the
 repository. Use `list_roles` to see what already exists and
 `get_role_detail` to examine a specific role if it would help you design
 a better role (e.g. to avoid duplicating functionality or to follow
-existing conventions).
+existing conventions). Call `delete_role` only if the user explicitly asks
+to remove a role from the repository.
 
 Produce a single complete role definition as your final output.
 
@@ -84,6 +85,7 @@ current role definition followed by their requested changes. Produce the
 complete updated role definition incorporating those changes. Preserve any
 fields the user did not ask to change.
 
-You have tools to inspect other roles for reference if needed.
+You have tools to inspect other roles for reference if needed. Call
+`delete_role` only when the user explicitly asks to remove a role.
 
 {_ANSIBLE_RULES}"""

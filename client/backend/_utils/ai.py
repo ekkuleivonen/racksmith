@@ -15,6 +15,9 @@ from racksmith_shared.runs import run_events_channel
 
 import settings
 from _utils.agent_stream import AgentDeps
+from _utils.exceptions import AlreadyExistsError, NotFoundError, RepoNotAvailableError
+from groups.schemas import GroupCreate, GroupUpdate
+from hosts.schemas import HostCreate, HostUpdate
 from playbooks.schemas import PlaybookCreate, PlaybookUpdate
 from roles.schemas import RoleCreate
 
@@ -275,13 +278,229 @@ async def run_role(
 
 
 # ---------------------------------------------------------------------------
+# Host & group tools
+# ---------------------------------------------------------------------------
+
+
+def _repo_err(exc: Exception) -> str:
+    if isinstance(exc, RepoNotAvailableError):
+        return "No active repository or Ansible layout is not available."
+    if isinstance(exc, NotFoundError):
+        return str(exc)
+    if isinstance(exc, AlreadyExistsError):
+        return str(exc)
+    if isinstance(exc, FileNotFoundError):
+        return str(exc)
+    if isinstance(exc, ValueError):
+        return str(exc)
+    return f"Error: {exc!s}"
+
+
+async def list_hosts(ctx: RunContext[AgentDeps]) -> str:
+    """List all hosts (managed inventory + rack nodes) in the active repo: id, name, IP, managed flag, groups."""
+    from hosts.managers import host_manager
+
+    try:
+        hosts = host_manager.list_hosts(ctx.deps.session)
+    except RepoNotAvailableError as exc:
+        return _repo_err(exc)
+    if not hosts:
+        return "No hosts in the repository."
+    lines: list[str] = []
+    for h in hosts:
+        lines.append(
+            f"- id={h.id} | name={h.name!r} | ip={h.ip_address!r} | "
+            f"managed={h.managed} | groups={h.groups} | labels={h.labels}"
+        )
+    return f"{len(hosts)} host(s):\n" + "\n".join(lines)
+
+
+async def get_host(ctx: RunContext[AgentDeps], host_id: str) -> str:
+    """Get full JSON for one host by id (connection info, groups, labels, placement, vars)."""
+    from hosts.managers import host_manager
+
+    try:
+        h = host_manager.get_host(ctx.deps.session, host_id)
+    except (NotFoundError, RepoNotAvailableError) as exc:
+        return _repo_err(exc)
+    return json.dumps(h.model_dump(), indent=2)
+
+
+async def create_host(ctx: RunContext[AgentDeps], host: HostCreate) -> str:
+    """Create a host (managed SSH target or unmanaged rack placement). Probes SSH when managed with IP and user."""
+    from hosts.managers import host_manager
+
+    try:
+        h = await host_manager.create_host(ctx.deps.session, host)
+    except (RepoNotAvailableError, ValueError) as exc:
+        return _repo_err(exc)
+    return json.dumps({"created": h.model_dump()}, indent=2)
+
+
+async def update_host(
+    ctx: RunContext[AgentDeps], host_id: str, update: HostUpdate
+) -> str:
+    """Patch an existing host. Only set fields you intend to change."""
+    from hosts.managers import host_manager
+
+    try:
+        h = host_manager.update_host(ctx.deps.session, host_id, update)
+    except (NotFoundError, RepoNotAvailableError, ValueError) as exc:
+        return _repo_err(exc)
+    return json.dumps({"updated": h.model_dump()}, indent=2)
+
+
+async def delete_host(ctx: RunContext[AgentDeps], host_id: str) -> str:
+    """Remove a host from inventory and/or rack nodes."""
+    from hosts.managers import host_manager
+
+    try:
+        host_manager.delete_host(ctx.deps.session, host_id)
+    except (NotFoundError, RepoNotAvailableError) as exc:
+        return _repo_err(exc)
+    return f"Deleted host {host_id!r}."
+
+
+async def probe_managed_host(ctx: RunContext[AgentDeps], host_id: str) -> str:
+    """Re-run SSH probe on a managed host to refresh hostname, OS family, etc."""
+    from hosts.managers import host_manager
+
+    try:
+        h = await host_manager.probe_host(ctx.deps.session, host_id)
+    except (NotFoundError, RepoNotAvailableError, ValueError) as exc:
+        return _repo_err(exc)
+    return json.dumps({"probed": h.model_dump()}, indent=2)
+
+
+async def list_groups(ctx: RunContext[AgentDeps]) -> str:
+    """List all host groups in the active repo (id, name, description)."""
+    from groups.managers import group_manager
+
+    try:
+        groups = group_manager.list_groups(ctx.deps.session)
+    except RepoNotAvailableError as exc:
+        return _repo_err(exc)
+    if not groups:
+        return "No groups in the repository."
+    lines = [f"- id={g.id} | name={g.name!r} | {g.description[:120]}" for g in groups]
+    return f"{len(groups)} group(s):\n" + "\n".join(lines)
+
+
+async def get_group(ctx: RunContext[AgentDeps], group_id: str) -> str:
+    """Get one group by id as JSON, including member host summaries."""
+    from groups.managers import group_manager
+
+    try:
+        g = group_manager.get_group(ctx.deps.session, group_id)
+    except (NotFoundError, RepoNotAvailableError) as exc:
+        return _repo_err(exc)
+    return json.dumps(g.model_dump(), indent=2)
+
+
+async def create_group(ctx: RunContext[AgentDeps], body: GroupCreate) -> str:
+    """Create a new inventory group (name, optional description and group_vars)."""
+    from groups.managers import group_manager
+
+    try:
+        g = group_manager.create_group(ctx.deps.session, body)
+    except (AlreadyExistsError, RepoNotAvailableError, FileNotFoundError) as exc:
+        return _repo_err(exc)
+    return json.dumps({"created": g.model_dump()}, indent=2)
+
+
+async def update_group(
+    ctx: RunContext[AgentDeps], group_id: str, body: GroupUpdate
+) -> str:
+    """Update group display name, description, and/or Ansible vars."""
+    from groups.managers import group_manager
+
+    try:
+        g = group_manager.update_group(ctx.deps.session, group_id, body)
+    except (NotFoundError, RepoNotAvailableError) as exc:
+        return _repo_err(exc)
+    return json.dumps({"updated": g.model_dump()}, indent=2)
+
+
+async def delete_group(ctx: RunContext[AgentDeps], group_id: str) -> str:
+    """Delete a group from inventory (does not delete member hosts)."""
+    from groups.managers import group_manager
+
+    try:
+        group_manager.delete_group(ctx.deps.session, group_id)
+    except (NotFoundError, RepoNotAvailableError) as exc:
+        return _repo_err(exc)
+    return f"Deleted group {group_id!r}."
+
+
+async def add_hosts_to_group(
+    ctx: RunContext[AgentDeps], group_id: str, host_ids: list[str]
+) -> str:
+    """Add one or more inventory hosts to a group (skips unknown host ids)."""
+    from groups.managers import group_manager
+
+    try:
+        group_manager.add_members(ctx.deps.session, group_id, host_ids)
+    except (NotFoundError, RepoNotAvailableError) as exc:
+        return _repo_err(exc)
+    return f"Added {len(host_ids)} host id(s) to group {group_id!r} (existing members unchanged)."
+
+
+async def remove_host_from_group(
+    ctx: RunContext[AgentDeps], group_id: str, host_id: str
+) -> str:
+    """Remove a host from a group."""
+    from groups.managers import group_manager
+
+    try:
+        group_manager.remove_member(ctx.deps.session, group_id, host_id)
+    except (NotFoundError, RepoNotAvailableError) as exc:
+        return _repo_err(exc)
+    return f"Removed host {host_id!r} from group {group_id!r}."
+
+
+# ---------------------------------------------------------------------------
+# Delete tools
+# ---------------------------------------------------------------------------
+
+
+async def delete_role(ctx: RunContext[AgentDeps], role_id: str) -> str:
+    """Permanently delete a role directory from the repo. Fails if the role is still referenced by playbooks."""
+    from roles.managers import role_manager
+
+    try:
+        role_manager.delete_role(ctx.deps.session, role_id)
+    except FileNotFoundError:
+        return f"Role {role_id!r} not found."
+    except (RepoNotAvailableError, ValueError) as exc:
+        return _repo_err(exc)
+    return f"Deleted role {role_id!r}."
+
+
+async def delete_playbook(
+    ctx: RunContext[AgentDeps], playbook_id: str, cascade_roles: bool = False
+) -> str:
+    """Delete a playbook file. If cascade_roles is true, also delete roles only used by this playbook."""
+    from playbooks.managers import playbook_manager
+
+    try:
+        playbook_manager.delete_playbook(
+            ctx.deps.session, playbook_id, cascade_roles=cascade_roles
+        )
+    except RepoNotAvailableError as exc:
+        return _repo_err(exc)
+    return f"Deleted playbook {playbook_id!r}" + (
+        " and orphaned roles." if cascade_roles else "."
+    )
+
+
+# ---------------------------------------------------------------------------
 # Agent definitions
 # ---------------------------------------------------------------------------
 
 role_agent: Agent[AgentDeps, RoleCreate] = Agent(
     output_type=RoleCreate,
     retries=2,
-    tools=[list_roles, get_role_detail, update_role],
+    tools=[list_roles, get_role_detail, update_role, delete_role],
 )
 
 playbook_agent: Agent[AgentDeps, str] = Agent(
@@ -292,9 +511,24 @@ playbook_agent: Agent[AgentDeps, str] = Agent(
         get_role_detail,
         create_role,
         update_role,
+        delete_role,
         create_playbook,
         get_playbook,
         update_playbook,
+        delete_playbook,
+        list_hosts,
+        get_host,
+        create_host,
+        update_host,
+        delete_host,
+        probe_managed_host,
+        list_groups,
+        get_group,
+        create_group,
+        update_group,
+        delete_group,
+        add_hosts_to_group,
+        remove_host_from_group,
         run_ssh_command,
         run_playbook,
         run_role,
@@ -304,7 +538,7 @@ playbook_agent: Agent[AgentDeps, str] = Agent(
 # Unified chat uses the same tool surface as playbook assembly (full Racksmith repo + optional SSH).
 racksmith_agent = playbook_agent
 
-RACKSMITH_CHAT_INSTRUCTIONS = """Racksmith AI: help with infra here—Ansible roles/playbooks in the active Git repo, managed hosts, runs, and racks. Use the tools as needed.
+RACKSMITH_CHAT_INSTRUCTIONS = """Racksmith AI: help with infra here—Ansible roles/playbooks in the active Git repo, managed hosts and groups, runs, and racks. You can list/create/update/delete hosts and groups, delete roles or playbooks when appropriate, and use the other tools as needed.
 
 Stay dry and technical—no filler or buddy chat. Act as a mentor: be direct and precise, and push back when you see logical slips, weak reasoning, or bad technical assumptions (say what is wrong and why)."""
 
@@ -315,9 +549,24 @@ debug_run_agent: Agent[AgentDeps, str] = Agent(
         run_ssh_command,
         get_role_detail,
         update_role,
+        delete_role,
         get_playbook,
         update_playbook,
+        delete_playbook,
         run_playbook,
         run_role,
+        list_hosts,
+        get_host,
+        create_host,
+        update_host,
+        delete_host,
+        probe_managed_host,
+        list_groups,
+        get_group,
+        create_group,
+        update_group,
+        delete_group,
+        add_hosts_to_group,
+        remove_host_from_group,
     ],
 )

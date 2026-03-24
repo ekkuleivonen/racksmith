@@ -1,19 +1,43 @@
 import { Wrench, CheckCircle2, XCircle, Ban, Brain, ChevronRight } from "lucide-react";
 import { MarkdownContent } from "@/components/shared/markdown-content";
+import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 
-function toolCallAccentClass(tool: string): string {
+type ToolUiCategory = "read" | "write" | "delete" | "run";
+
+function toolUiCategory(tool: string): ToolUiCategory {
   const t = tool.toLowerCase();
-  if (t.startsWith("list_") || t.startsWith("get_")) {
-    return "border-sky-500/35 bg-sky-500/[0.06]";
+  if (t.startsWith("delete_")) return "delete";
+  if (t.includes("ssh") || t.startsWith("run_") || t === "probe_managed_host") {
+    return "run";
   }
-  if (t.includes("create") || t.includes("update")) {
-    return "border-amber-500/35 bg-amber-500/[0.06]";
-  }
-  if (t.includes("ssh") || t.startsWith("run_")) {
-    return "border-emerald-500/35 bg-emerald-500/[0.06]";
-  }
-  return "border-violet-500/35 bg-violet-500/[0.06]";
+  if (t.startsWith("list_") || t.startsWith("get_")) return "read";
+  return "write";
+}
+
+const categoryAccent: Record<ToolUiCategory, string> = {
+  read: "border-sky-500/35 bg-sky-500/[0.06]",
+  write: "border-amber-500/35 bg-amber-500/[0.06]",
+  run: "border-emerald-500/35 bg-emerald-500/[0.06]",
+  delete: "border-rose-500/35 bg-rose-500/[0.06]",
+};
+
+const categoryBadgeClass: Record<ToolUiCategory, string> = {
+  read: "border-sky-500/40 text-sky-400/90 bg-transparent",
+  write: "border-amber-500/40 text-amber-400/90 bg-transparent",
+  run: "border-emerald-500/40 text-emerald-400/90 bg-transparent",
+  delete: "border-rose-500/40 text-rose-400/90 bg-transparent",
+};
+
+const categoryLabel: Record<ToolUiCategory, string> = {
+  read: "Read",
+  write: "Write",
+  run: "Run",
+  delete: "Delete",
+};
+
+function toolCallAccentClass(tool: string): string {
+  return categoryAccent[toolUiCategory(tool)];
 }
 
 export function AiToolCallBlock({
@@ -26,6 +50,7 @@ export function AiToolCallBlock({
   compact?: boolean;
 }) {
   const hasArgs = args && Object.keys(args).length > 0;
+  const cat = toolUiCategory(tool);
   return (
     <details
       className={cn(
@@ -36,6 +61,15 @@ export function AiToolCallBlock({
       <summary className="flex items-center gap-1.5 text-zinc-300 font-medium px-3 py-2 cursor-pointer select-none list-none [&::-webkit-details-marker]:hidden">
         <ChevronRight className="size-3 shrink-0 text-zinc-500 transition-transform group-open/tc:rotate-90" />
         <Wrench className="size-3 shrink-0 text-zinc-500" />
+        <Badge
+          variant="outline"
+          className={cn(
+            "h-4 rounded-sm px-1 py-0 text-[8px] font-semibold uppercase tracking-wide",
+            categoryBadgeClass[cat],
+          )}
+        >
+          {categoryLabel[cat]}
+        </Badge>
         <span className="font-mono truncate">{tool}</span>
       </summary>
       {hasArgs ? (
@@ -63,6 +97,7 @@ export function AiToolResultBlock({
 }) {
   const ok = (outcome ?? "success") === "success";
   const denied = outcome === "denied";
+  const cat = toolUiCategory(tool);
   return (
     <details
       className={cn(
@@ -83,6 +118,15 @@ export function AiToolResultBlock({
         ) : (
           <XCircle className="size-3 shrink-0 text-orange-400/80" />
         )}
+        <Badge
+          variant="outline"
+          className={cn(
+            "h-4 rounded-sm px-1 py-0 text-[8px] font-semibold uppercase tracking-wide",
+            categoryBadgeClass[cat],
+          )}
+        >
+          {categoryLabel[cat]}
+        </Badge>
         <span className="font-mono truncate">{tool}</span>
         {outcome ? (
           <span className="text-zinc-600 uppercase tracking-wide">{outcome}</span>

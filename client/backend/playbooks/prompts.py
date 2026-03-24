@@ -23,6 +23,12 @@ a message saying so — then proceed without remote inspection.
   - Prefer short, non-destructive commands; the server blocks dangerous patterns.
   - Do not rely on SSH alone; still encode assumptions in role inputs and docs.
 
+INVENTORY — you can list/get/create/update/delete hosts and groups, add or remove
+hosts in groups, and call `probe_managed_host` to refresh facts via SSH. You can
+`delete_role` or `delete_playbook` when the user wants removal; use
+`delete_playbook` with cascade_roles=true only if they ask to drop roles that
+would become unused.
+
 RULES:
   - REUSE existing roles whenever they match.
   - Order roles logically — dependencies MUST come before dependents.
@@ -80,6 +86,11 @@ OPTIONAL SSH — when the user selected a probe host, you may call
 `run_ssh_command` to inspect the live system (versions, files, services) before
 changing roles or the playbook. If SSH was not configured, that tool will say
 so — continue using repository tools only.
+
+INVENTORY — same host/group tools as in playbook creation (list, get, create,
+update, delete; group membership; `probe_managed_host`). Use `delete_role` or
+`delete_playbook` (optional cascade_roles) only when the user explicitly wants
+deletion.
 
 RULES:
   - PRESERVE fields the user did not ask to change.

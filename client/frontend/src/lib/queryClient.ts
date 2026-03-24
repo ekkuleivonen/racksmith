@@ -38,16 +38,31 @@ export function invalidateResource(...keys: StaticQueryKey[]) {
   }
 }
 
-/** Backend AI tool names from `_utils/ai.py` — keep in sync with lib/roles.ts / lib/playbooks.ts invalidation. */
+/** Backend AI tool names from `_utils/ai.py` — keep in sync with agent tools. */
 export function invalidateQueriesForRacksmithAgentTool(tool: string) {
   switch (tool) {
     case "create_role":
     case "update_role":
+    case "delete_role":
       invalidateResource("roles", "playbooks", "filesStatuses", "filesTree");
       break;
     case "create_playbook":
     case "update_playbook":
+    case "delete_playbook":
       invalidateResource("playbooks", "roles", "filesStatuses", "filesTree");
+      break;
+    case "create_host":
+    case "update_host":
+    case "delete_host":
+    case "probe_managed_host":
+      invalidateResource("hosts", "racks", "discovery");
+      break;
+    case "create_group":
+    case "update_group":
+    case "delete_group":
+    case "add_hosts_to_group":
+    case "remove_host_from_group":
+      invalidateResource("hosts", "groups");
       break;
     default:
       break;
