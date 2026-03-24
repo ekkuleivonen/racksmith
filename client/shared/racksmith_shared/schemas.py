@@ -50,6 +50,10 @@ class RoleInputSpec(BaseModel):
                     ("yes" if v else "no") if isinstance(v, bool) else str(v)
                     for v in d[field]
                 ]
+        # Keep defaults aligned with coerced yes/no options (str fields often use YAML bools).
+        opts = list(d.get("options") or d.get("choices") or [])
+        if isinstance(d.get("default"), bool) and "yes" in opts and "no" in opts:
+            d["default"] = "yes" if d["default"] else "no"
         return d
 
 

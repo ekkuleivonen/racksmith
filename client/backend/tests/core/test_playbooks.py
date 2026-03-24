@@ -243,6 +243,23 @@ class TestWritePlaybook:
         assert pb.roles[2].role == "storage_discover"
         assert pb.roles[2].vars == {"disk": "/dev/sda", "refresh": True}
 
+    def test_role_var_no_roundtrips_as_string_not_yaml_bool(self, layout) -> None:
+        """Unquoted 'no' in YAML 1.1 is a boolean; we quote so sshd-style values persist."""
+        original = PlaybookData(
+            id="sshvars",
+            path=Path("playbooks/sshvars.yml"),
+            name="SSH vars",
+            description="",
+            hosts="all",
+            roles=[
+                PlaybookRoleEntry("debian_ssh", vars={"ssh_permit_root_login": "no"}),
+            ],
+        )
+        write_playbook(layout, original)
+        pb = read_playbook(layout.playbooks_path / "sshvars.yml", layout.repo_path)
+        assert pb.roles[0].vars == {"ssh_permit_root_login": "no"}
+        assert isinstance(pb.roles[0].vars["ssh_permit_root_login"], str)
+
 
 class TestRemovePlaybook:
     """remove_playbook(layout, playbook_id)."""

@@ -101,6 +101,22 @@ function defaultVarsForRole(role: RoleCatalogEntry): Record<string, unknown> {
   );
 }
 
+/** Radix Select value must match an option; API may send bool after YAML 1.1 bool coercion. */
+function optionSelectControlValue(
+  raw: unknown,
+  options: string[],
+): string {
+  if (
+    typeof raw === "boolean" &&
+    options.includes("yes") &&
+    options.includes("no")
+  ) {
+    return raw ? "yes" : "no";
+  }
+  if (raw === undefined || raw === null) return "";
+  return String(raw);
+}
+
 // ---------------------------------------------------------------------------
 // Unified variable sources
 // ---------------------------------------------------------------------------
@@ -624,7 +640,7 @@ function SortableRoleCard({
                     return (
                       <div className="flex gap-1">
                         <Select
-                          value={rawStr}
+                          value={optionSelectControlValue(rawValue, field.options!)}
                           onValueChange={(value) => setVar(field.key, value)}
                           disabled={isSecret}
                         >

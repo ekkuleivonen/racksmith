@@ -34,7 +34,7 @@ from core.racksmith_meta import (
     set_playbook_meta,
     write_meta,
 )
-from core.roles import RoleData, list_roles
+from core.roles import RoleData, RoleInput, list_roles
 from core.serialize import serialize_group_vars, serialize_host_vars, serialize_inventory, serialize_run_payload
 from daemon.client import daemon_post
 from groups.managers import group_manager
@@ -96,8 +96,20 @@ def _role_data_to_catalog(r: RoleData) -> RoleCatalogEntry:
     )
 
 
-def _role_default_vars(role: RoleData) -> dict:
-    return {inp.key: inp.default for inp in role.inputs if inp.default is not None}
+def _coerced_role_input_spec(inp: RoleInput) -> RoleInputSpec:
+    """Match catalog/API coercion (e.g. bool options → yes/no, default aligned)."""
+    d = dict(inp.__dict__)
+    d["label"] = inp.racksmith_label or humanize_key(inp.key)
+    return RoleInputSpec.model_validate(d)
+
+
+def _role_default_vars(role: RoleData) -> dict[str, Any]:
+    out: dict[str, Any] = {}
+    for inp in role.inputs:
+        spec = _coerced_role_input_spec(inp)
+        if spec.default is not None:
+            out[inp.key] = spec.default
+    return out
 
 
 def _merged_role_vars(role: RoleData, supplied_vars: dict | None) -> dict:

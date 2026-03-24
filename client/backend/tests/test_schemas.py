@@ -42,3 +42,15 @@ class TestRoleInputSpecTypes:
     def test_rejects_unknown_type(self) -> None:
         with pytest.raises(ValidationError):
             RoleInputSpec.model_validate({"key": "x", "type": "foobar"})
+
+    def test_bool_default_aligns_with_yes_no_options(self) -> None:
+        spec = RoleInputSpec.model_validate(
+            {
+                "key": "permit_root",
+                "type": "str",
+                "default": False,
+                "options": [True, False, "prohibit-password"],
+            }
+        )
+        assert spec.default == "no"
+        assert spec.options == ["yes", "no", "prohibit-password"]

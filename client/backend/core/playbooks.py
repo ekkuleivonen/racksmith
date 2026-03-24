@@ -8,8 +8,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 import yaml
+from ruamel.yaml.scalarstring import DoubleQuotedScalarString
 
 from _utils.logging import get_logger
 
@@ -150,6 +152,22 @@ def list_playbooks(layout: AnsibleLayout) -> list[PlaybookData]:
     return results
 
 
+# YAML 1.1 parses these unquoted scalars as booleans; quote so role vars round-trip as strings.
+_YAML_11_BOOL_WORDS = frozenset(
+    w.lower() for w in ("y", "yes", "n", "no", "true", "false", "on", "off")
+)
+
+
+def _quote_yaml_ambiguous_scalars(obj: Any) -> Any:
+    if isinstance(obj, dict):
+        return {k: _quote_yaml_ambiguous_scalars(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_quote_yaml_ambiguous_scalars(v) for v in obj]
+    if isinstance(obj, str) and obj.lower() in _YAML_11_BOOL_WORDS:
+        return DoubleQuotedScalarString(obj)
+    return obj
+
+
 def write_playbook(layout: AnsibleLayout, playbook: PlaybookData) -> Path:
     """Serialize to standard Ansible playbook YAML. No racksmith keys in play vars."""
     validate_safe_id(playbook.id)
@@ -166,7 +184,9 @@ def write_playbook(layout: AnsibleLayout, playbook: PlaybookData) -> Path:
 
     for re in playbook.roles:
         if re.vars:
-            play["roles"].append({"role": re.role, "vars": re.vars})
+            play["roles"].append(
+                {"role": re.role, "vars": _quote_yaml_ambiguous_scalars(re.vars)}
+            )
         else:
             play["roles"].append(re.role)
 
