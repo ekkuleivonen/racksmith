@@ -523,11 +523,11 @@ class HostManager:
             raise ValueError("Host has no MAC address — probe the host first")
 
         if not subnet:
-            try:
-                resp = await daemon_post("/discovery/subnet", timeout=5.0)
-                subnet = resp.get("subnet", "192.168.1.0/24")
-            except Exception:
-                subnet = "192.168.1.0/24"
+            subnet = host.subnet or _infer_ipv4_subnet_24(host.ip_address)
+        if not subnet:
+            raise ValueError(
+                "Cannot determine subnet for this host — pass a subnet explicitly"
+            )
 
         from arq import create_pool
         from arq.connections import RedisSettings
