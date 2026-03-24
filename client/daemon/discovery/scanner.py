@@ -44,7 +44,7 @@ async def execute_network_scan(
             return
 
         devices: list[dict[str, Any]] = [
-            {"ip": ip, "mac": "", "hostname": hostname} for ip, hostname in raw_devices
+            {"ip": ip, "mac": mac, "hostname": hostname} for ip, hostname, mac in raw_devices
         ]
         await _update_scan(redis, scan_id, {"devices": json.dumps(devices)})
 
@@ -71,7 +71,7 @@ async def execute_network_scan(
 
         for d in devices:
             mac = (d.get("mac") or "").strip().lower()
-            existing_id = ip_map.get(d["ip"]) or (mac_map.get(mac) if mac else None)
+            existing_id = (mac_map.get(mac) if mac else None) or ip_map.get(d["ip"])
             if existing_id:
                 d["already_imported"] = True
                 d["existing_host_id"] = existing_id

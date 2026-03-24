@@ -2,19 +2,14 @@
 
 from __future__ import annotations
 
-import re
 import socket
 import subprocess
+import xml.etree.ElementTree as ET
 from ipaddress import IPv4Network
 
 from racksmith_shared.logging import get_logger
 
 logger = get_logger(__name__)
-
-# nmap -oG (greppable) lines: Host: 192.168.1.1 (hostname or empty)	Status: Up
-_NMAP_GREP_HOST = re.compile(
-    r"^Host:\s+(\d+\.\d+\.\d+\.\d+)\s+\(([^)]*)\)\s+Status:\s+Up"
-)
 
 
 def detect_subnet() -> str:
@@ -39,15 +34,16 @@ def detect_subnet() -> str:
     return "192.168.1.0/24"
 
 
-def nmap_scan(subnet: str, timeout: int = 180) -> list[tuple[str, str]]:
-    """Ping-scan subnet with nmap -sn; returns (ip, hostname) per live host.
+def nmap_scan(subnet: str, timeout: int = 180) -> list[tuple[str, str, str]]:
+    """Ping-scan subnet with nmap -sn; returns (ip, hostname, mac) per live host.
 
-    Hostname comes from nmap's resolution when available; empty string otherwise.
-    Works across routed VLANs (L3), unlike ARP.
+    Uses XML output to capture MAC addresses (available when running as root
+    on the same L2 segment). Works across routed VLANs for IP/hostname, but
+    MACs will only be present for hosts on the local broadcast domain.
     """
     try:
         result = subprocess.run(
-            ["nmap", "-sn", "-T4", "-oG", "-", subnet],
+            ["nmap", "-sn", "-T4", "-oX", "-", subnet],
             capture_output=True,
             text=True,
             timeout=timeout,
@@ -68,12 +64,32 @@ def nmap_scan(subnet: str, timeout: int = 180) -> list[tuple[str, str]]:
         )
         raise RuntimeError(f"nmap failed with exit code {result.returncode}")
 
-    devices: list[tuple[str, str]] = []
-    for line in (result.stdout or "").splitlines():
-        m = _NMAP_GREP_HOST.match(line)
-        if m:
-            ip, hostname = m.group(1), m.group(2).strip()
-            devices.append((ip, hostname))
+    devices: list[tuple[str, str, str]] = []
+    try:
+        root = ET.fromstring(result.stdout or "<nmaprun/>")
+    except ET.ParseError:
+        logger.error("nmap_xml_parse_failed", stdout_tail=(result.stdout or "")[-500:])
+        return devices
+
+    for host_el in root.findall("host"):
+        status_el = host_el.find("status")
+        if status_el is not None and status_el.get("state") != "up":
+            continue
+        ip = ""
+        mac = ""
+        hostname = ""
+        for addr in host_el.findall("address"):
+            if addr.get("addrtype") == "ipv4":
+                ip = addr.get("addr", "")
+            elif addr.get("addrtype") == "mac":
+                mac = addr.get("addr", "")
+        hostnames_el = host_el.find("hostnames")
+        if hostnames_el is not None:
+            hn = hostnames_el.find("hostname")
+            if hn is not None:
+                hostname = hn.get("name", "")
+        if ip:
+            devices.append((ip, hostname, mac))
     return devices
 
 

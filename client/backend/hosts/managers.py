@@ -557,20 +557,36 @@ class HostManager:
         devices = json.loads(raw.get("devices", "[]")) if raw else []
         target_mac = host.mac_address.lower()
         new_ip: str | None = None
+        # MAC match first — most reliable when IPs have moved between hosts
         for d in devices:
-            if d.get("existing_host_id") == host_id:
+            if d.get("mac", "").lower() == target_mac:
                 new_ip = d["ip"]
                 break
+
+        # Cross-VLAN fallback: nmap can't see MACs across L3 boundaries.
+        # SSH-probe candidate IPs to identify the host by its MAC.
+        if new_ip is None and devices:
+            has_any_mac = any(d.get("mac") for d in devices)
+            if not has_any_mac:
+                logger.info(
+                    "relocate_no_macs_in_scan",
+                    host_id=host_id,
+                    candidate_count=len(devices),
+                )
+                new_ip = await self._ssh_probe_for_mac(
+                    devices, host, target_mac
+                )
+
         if new_ip is None:
             for d in devices:
-                if d.get("mac", "").lower() == target_mac:
+                if d.get("existing_host_id") == host_id:
                     new_ip = d["ip"]
                     break
 
         if new_ip is None:
             raise NotFoundError(
                 f"Host {host_id} not found on subnet {subnet} "
-                "(no scan row matched by IP or MAC; if the IP changed across a routed VLAN, set it manually)"
+                "(no scan row matched by IP or MAC)"
             )
 
         previous_ip = host.ip_address
@@ -592,6 +608,37 @@ class HostManager:
             logger.info("host_ip_unchanged", host_id=host_id, ip=new_ip)
 
         return host, previous_ip, new_ip, changed
+
+    @staticmethod
+    async def _ssh_probe_for_mac(
+        devices: list[dict],
+        host: Host,
+        target_mac: str,
+    ) -> str | None:
+        """SSH-probe discovered IPs to find matching MAC (cross-VLAN fallback)."""
+        import asyncio
+
+        candidate_ips = [d["ip"] for d in devices]
+
+        async def _try_ip(ip: str) -> str | None:
+            try:
+                probe = await daemon_post(
+                    "/ssh/probe",
+                    {"ip": ip, "ssh_user": host.ssh_user, "ssh_port": host.ssh_port},
+                    timeout=10.0,
+                )
+                if probe.get("mac_address", "").lower() == target_mac:
+                    return ip
+            except Exception:
+                pass
+            return None
+
+        results = await asyncio.gather(*[_try_ip(ip) for ip in candidate_ips])
+        for ip in results:
+            if ip is not None:
+                logger.info("relocate_mac_matched_via_ssh_probe", host_id=host.id, ip=ip)
+                return ip
+        return None
 
     def bulk_add_label(self, session: SessionData, host_ids: list[str], label: str) -> int:
         layout = get_layout(session)
