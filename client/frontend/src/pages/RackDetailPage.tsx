@@ -122,8 +122,7 @@ export function RackDetailPage() {
   const unplacedHosts = useMemo(() => {
     if (!rackIdParam) return [];
     return hostsFromStore.filter(
-      (h) =>
-        isManagedHost(h) && (!h.placement || h.placement.rack !== rackIdParam),
+      (h) => isManagedHost(h) && !h.placement,
     );
   }, [hostsFromStore, rackIdParam]);
 
