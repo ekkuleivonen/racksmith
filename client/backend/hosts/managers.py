@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from ipaddress import IPv4Address, IPv4Network
+from ipaddress import IPv4Address, IPv4Interface, IPv4Network
 
 import httpx
 
@@ -77,6 +77,31 @@ def _subnet_for_ip(ip: str | None, cidrs: list[str]) -> str | None:
         except ValueError:
             continue
     return None
+
+
+_CGNAT = IPv4Network("100.64.0.0/10", strict=False)
+
+
+def _infer_ipv4_subnet_24(ip: str | None) -> str | None:
+    """Classless /24 bucket for private IPv4 (RFC1918 + CGNAT); None for public or invalid."""
+    if not ip:
+        return None
+    try:
+        addr = IPv4Address(ip.split("/")[0].strip())
+    except ValueError:
+        return None
+    if not addr.is_private and addr not in _CGNAT:
+        return None
+    return str(IPv4Interface(f"{addr}/24").network)
+
+
+def _effective_subnet_for_ip(ip: str | None, layout: AnsibleLayout | None) -> str | None:
+    """Racksmith meta subnet if IP matches a configured CIDR, else inferred /24 for private IPv4."""
+    if layout is not None:
+        meta = _subnet_for_ip(ip, _meta_subnet_cidrs(layout))
+        if meta:
+            return meta
+    return _infer_ipv4_subnet_24(ip)
 
 
 def _host_data_to_host(h: HostData, *, subnet: str | None = None) -> Host:
@@ -219,10 +244,9 @@ class HostManager:
         layout = get_layout_or_none(session)
         if layout is None:
             return []
-        cidrs = _meta_subnet_cidrs(layout)
         hosts = [
             _host_data_to_host(
-                h, subnet=_subnet_for_ip(h.ansible_host, cidrs)
+                h, subnet=_effective_subnet_for_ip(h.ansible_host, layout)
             )
             for h in read_hosts(layout)
         ]
@@ -320,12 +344,11 @@ class HostManager:
 
     def get_host(self, session: SessionData, host_id: str) -> Host:
         layout = get_layout(session)
-        cidrs = _meta_subnet_cidrs(layout)
         host_data = read_host(layout, host_id)
         if host_data is not None:
             return _host_data_to_host(
                 host_data,
-                subnet=_subnet_for_ip(host_data.ansible_host, cidrs),
+                subnet=_effective_subnet_for_ip(host_data.ansible_host, layout),
             )
         node_data = read_rack_node(layout, host_id)
         if node_data is not None:
@@ -341,7 +364,10 @@ class HostManager:
             host_id = _generate_host_id(layout)
             host_data = _host_input_to_host_data(host_id, data)
             write_host(layout, host_data)
-            host = _host_data_to_host(host_data)
+            host = _host_data_to_host(
+                host_data,
+                subnet=_effective_subnet_for_ip(host_data.ansible_host, layout),
+            )
             if host.ip_address and host.ssh_user:
                 try:
                     host = await self.probe_host(session, host_id)
@@ -391,7 +417,6 @@ class HostManager:
             labels = data.labels if data.labels is not None else existing.labels
             os_family = data.os_family if data.os_family is not None else existing.os_family
             vars_ = data.vars if data.vars is not None else existing.vars
-            cidrs = _meta_subnet_cidrs(layout)
             host = Host(
                 id=host_id,
                 hostname=existing.hostname,
@@ -405,7 +430,7 @@ class HostManager:
                 os_family=os_family,
                 placement=placement,
                 mac_address=existing.mac_address,
-                subnet=_subnet_for_ip(ip_address, cidrs),
+                subnet=_effective_subnet_for_ip(ip_address, layout),
                 vars=vars_,
             )
             write_host(layout, _host_to_host_data(host))
@@ -464,7 +489,6 @@ class HostManager:
             raise ValueError(f"SSH probe failed: {exc}") from exc
         os_family = _os_to_family(probe.get("os", "")) or host.os_family
         layout = get_layout(session)
-        cidrs = _meta_subnet_cidrs(layout)
         new_ip = probe.get("ip_address", host.ip_address)
         updated = Host(
             id=host.id,
@@ -479,7 +503,7 @@ class HostManager:
             os_family=os_family,
             placement=host.placement,
             mac_address=probe.get("mac_address", ""),
-            subnet=_subnet_for_ip(new_ip, cidrs),
+            subnet=_effective_subnet_for_ip(new_ip, layout),
             vars=host.vars,
         )
         write_host(layout, _host_to_host_data(updated))
@@ -622,6 +646,7 @@ class HostManager:
     async def preview_host(self, session: SessionData, data: HostCreate) -> Host:
         """Probe via daemon without saving. Returns Host with id='preview'."""
         if not data.managed or not data.ip_address or not data.ssh_user:
+            layout = get_layout(session)
             return Host(
                 id="preview",
                 hostname="",
@@ -635,7 +660,7 @@ class HostManager:
                 os_family=data.os_family,
                 placement=data.placement,
                 mac_address=data.mac_address or "",
-                subnet=None,
+                subnet=_effective_subnet_for_ip(data.ip_address, layout),
                 vars=data.vars,
             )
         probe = await daemon_post("/ssh/probe", {
@@ -645,7 +670,6 @@ class HostManager:
         }, timeout=30.0)
         os_family = _os_to_family(probe.get("os", "")) or data.os_family
         layout = get_layout(session)
-        cidrs = _meta_subnet_cidrs(layout)
         prev_ip = probe.get("ip_address", data.ip_address)
         return Host(
             id="preview",
@@ -660,7 +684,7 @@ class HostManager:
             os_family=os_family,
             placement=data.placement,
             mac_address=probe.get("mac_address", ""),
-            subnet=_subnet_for_ip(prev_ip, cidrs),
+            subnet=_effective_subnet_for_ip(prev_ip, layout),
             vars=data.vars,
         )
 

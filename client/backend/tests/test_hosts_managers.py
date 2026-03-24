@@ -76,6 +76,7 @@ all:
         host = next(h for h in result if h.id == "web1")
         assert host.ip_address == "192.168.1.10"
         assert host.name == "Web Server 1"
+        assert host.subnet == "192.168.1.0/24"
 
 
 class TestHostManagerCreateHost:

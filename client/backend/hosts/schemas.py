@@ -62,7 +62,11 @@ class Host(BaseModel):
     placement: HostPlacement | None = None
     mac_address: str = ""
     subnet: str | None = Field(
-        default=None, description="Configured subnet CIDR containing this host IP, if any"
+        default=None,
+        description=(
+            "Subnet CIDR for grouping (canvas/filters): matches racksmith meta `subnets` if any, "
+            "else inferred as host IPv4 /24 when private (RFC1918 + CGNAT 100.64.0.0/10)"
+        ),
     )
     vars: dict[str, Any] = Field(default_factory=dict)
 
