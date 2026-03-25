@@ -1,5 +1,4 @@
 import { type ReactNode, useCallback, useEffect, useMemo } from "react";
-import { useLocation } from "react-router-dom";
 import { Copy, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { BottomBarLayout } from "@/components/bottom-bar/bottom-bar-layout";
@@ -137,23 +136,16 @@ type AppShellProps = {
   title: string;
 };
 
-/** Hosts canvas (`/`) embeds {@link BottomBarLayout} in the left column so the dock does not cover host details. */
-function isHostsCanvasRoute(pathname: string): boolean {
-  return pathname === "/" || pathname === "";
-}
-
 export function AppShell({ children }: AppShellProps) {
   const { loading, publicKeyDialog } = useAppShellState();
-  const location = useLocation();
   const tabs = useBottomBarStore((s) => s.tabs);
-  const embedDockInPage = isHostsCanvasRoute(location.pathname);
 
   const mainContent = (
     <main className="h-full flex-1 min-w-0 flex flex-col min-h-0">{children}</main>
   );
 
   const mainArea =
-    !embedDockInPage && tabs.length > 0 ? (
+    tabs.length > 0 ? (
       <BottomBarLayout>{mainContent}</BottomBarLayout>
     ) : (
       mainContent
