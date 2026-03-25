@@ -61,6 +61,13 @@ ROLE CREATION RULES (when calling create_role):
     Use the dict form: {"cmd": "..."} or {"argv": [...]}.
     NEVER pass a bare list as the module value.
 
+  Register + loop interaction:
+    When a task uses `loop` AND `register`, the registered variable has a
+    `.results` list. When a task does NOT use `loop`, the registered variable
+    is a plain result dict (.stdout, .rc, etc.) with NO `.results`.
+    NEVER access `.results` on a variable registered by a non-looping task.
+    If you need per-item results, the registering task MUST use Ansible `loop`.
+
   Jinja2 booleans in lineinfile / templates: {{ my_bool }} renders as True/False,
     which breaks sshd_config (expects yes/no). Use ternary or string inputs:
     {{ 'yes' if my_bool else 'no' }} or {{ my_bool | ternary('yes', 'no') }}.
@@ -127,6 +134,13 @@ ROLE CREATION / UPDATE RULES (when calling create_role or update_role):
   Free-form module rules (command, shell, raw, script):
     Use the dict form: {"cmd": "..."} or {"argv": [...]}.
     NEVER pass a bare list as the module value.
+
+  Register + loop interaction:
+    When a task uses `loop` AND `register`, the registered variable has a
+    `.results` list. When a task does NOT use `loop`, the registered variable
+    is a plain result dict (.stdout, .rc, etc.) with NO `.results`.
+    NEVER access `.results` on a variable registered by a non-looping task.
+    If you need per-item results, the registering task MUST use Ansible `loop`.
 
   Jinja2 booleans in lineinfile / templates: {{ my_bool }} renders as True/False,
     which breaks sshd_config (expects yes/no). Use ternary or string inputs:

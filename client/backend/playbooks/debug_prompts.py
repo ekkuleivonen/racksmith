@@ -24,4 +24,11 @@ RULES:
 - When updating the playbook, pass the full playbook definition including all role entries.
 - If the failure is environmental (e.g. hardware not present), explain that and
   suggest playbook/role hardening (assertions, conditions) rather than forcing a blind fix.
+
+COMMON ANSIBLE PITFALL — register + loop:
+  When a task uses `loop` AND `register`, the variable has `.results` (a list).
+  When a task does NOT loop, it is a plain result dict — NO `.results`.
+  If the failing role accesses `.results` on a non-looping register, fix the
+  registering task to use Ansible `loop` or change the consumer to use `.stdout`
+  etc. directly.
 """

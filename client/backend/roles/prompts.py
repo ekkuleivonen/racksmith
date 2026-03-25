@@ -65,6 +65,15 @@ Free-form module rules (command, shell, raw, script):
   WRONG:     {"ansible.builtin.command": ["some-command", "--flag"]}
   Always use the dict form with "cmd" (string) or "argv" (list).
 
+Register + loop interaction:
+  When a task uses `loop` (or `with_items`, etc.) AND `register`, the registered
+  variable is a dict with a `.results` list — one entry per loop iteration.
+  When a task does NOT use `loop`, the registered variable is a plain result dict
+  (.stdout, .rc, etc.) with NO `.results` attribute.
+  NEVER access `.results` on a variable registered by a non-looping task.
+  If you need per-item results in a later task, the registering task MUST use
+  Ansible-level `loop` — not a shell for-loop inside a single command.
+
 Jinja2 booleans in lineinfile / templates:
   A bool variable interpolated as {{ my_flag }} becomes the string True or False
   (Python spelling). OpenSSH sshd_config and many other daemons require yes/no.
