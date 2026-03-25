@@ -55,9 +55,46 @@ from playbooks.schemas import (
     ResolveTargetsResponse,
     RoleCatalogEntry,
     TargetSelection,
+    VarFilter,
 )
 
 logger = get_logger(__name__)
+
+
+def _var_values_equal(actual: Any, wanted: str) -> bool:
+    """Compare inventory var `actual` to user-entered filter string `wanted`."""
+    w = wanted.strip()
+    if actual is None:
+        return False
+    if isinstance(actual, bool):
+        lw = w.lower()
+        if actual:
+            return lw in ("true", "1", "yes", "y", "on")
+        return lw in ("false", "0", "no", "n", "off")
+    if isinstance(actual, int):
+        try:
+            return actual == int(w, 10)
+        except ValueError:
+            return str(actual) == w
+    if isinstance(actual, float):
+        try:
+            return actual == float(w)
+        except ValueError:
+            return str(actual) == w
+    if isinstance(actual, str):
+        return actual.strip() == w
+    return str(actual) == w
+
+
+def _var_filter_matches_host(host_vars: dict[str, Any], vf: VarFilter) -> bool:
+    key = vf.key.strip()
+    if not key:
+        return True
+    hv = host_vars or {}
+    want_raw = vf.value if vf.value is None else vf.value.strip()
+    if want_raw is None or want_raw == "":
+        return key in hv
+    return _var_values_equal(hv.get(key), want_raw)
 
 
 def _agent_deps_with_optional_ssh(session: SessionData, probe_host: Host | None):
@@ -623,6 +660,11 @@ class PlaybookManager(RunManagerMixin):
             filtered = [
                 h for h in filtered if h.placement and h.placement.rack in wanted_racks
             ]
+
+        for vf in targets.var_filters or []:
+            if not (vf.key or "").strip():
+                continue
+            filtered = [h for h in filtered if _var_filter_matches_host(h.vars or {}, vf)]
 
         hosts = sorted({h.id for h in filtered})
         return ResolveTargetsResponse(hosts=hosts)

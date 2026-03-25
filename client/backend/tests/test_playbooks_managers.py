@@ -11,7 +11,7 @@ from core.playbooks import PlaybookData, write_playbook
 from core.playbooks import PlaybookRoleEntry as AnsiblePlaybookRoleEntry
 from core.roles import RoleInput
 from playbooks.managers import playbook_manager
-from playbooks.schemas import PlaybookCreate, PlaybookRoleEntry, PlaybookUpdate, TargetSelection
+from playbooks.schemas import PlaybookCreate, PlaybookRoleEntry, PlaybookUpdate, TargetSelection, VarFilter
 
 
 def _seed_role(layout, slug: str, *, inputs: list[RoleInput] | None = None) -> None:
@@ -192,9 +192,12 @@ all:
         layout.host_vars_path.mkdir(parents=True, exist_ok=True)
         layout.host_vars_file("web1").write_text(yaml.safe_dump({
             "racksmith_name": "Web 1", "racksmith_managed": True, "racksmith_labels": ["prod"],
+            "docker_enabled": True,
+            "region": "eu",
         }))
         layout.host_vars_file("web2").write_text(yaml.safe_dump({
             "racksmith_name": "Web 2", "racksmith_managed": True, "racksmith_labels": ["staging"],
+            "region": "us",
         }))
 
     def test_resolve_all(self, with_repo_mock, layout):
@@ -222,6 +225,35 @@ all:
             with_repo_mock, TargetSelection(groups=["nonexistent"])
         )
         assert result.hosts == []
+
+    def test_resolve_by_var_filter_is_set(self, with_repo_mock, layout):
+        self._add_hosts(layout)
+        result = playbook_manager.resolve_targets(
+            with_repo_mock,
+            TargetSelection(var_filters=[VarFilter(key="docker_enabled", value=None)]),
+        )
+        assert result.hosts == ["web1"]
+
+    def test_resolve_by_var_filter_equals(self, with_repo_mock, layout):
+        self._add_hosts(layout)
+        result = playbook_manager.resolve_targets(
+            with_repo_mock,
+            TargetSelection(var_filters=[VarFilter(key="region", value="us")]),
+        )
+        assert result.hosts == ["web2"]
+
+    def test_resolve_var_filters_and_logic(self, with_repo_mock, layout):
+        self._add_hosts(layout)
+        result = playbook_manager.resolve_targets(
+            with_repo_mock,
+            TargetSelection(
+                groups=["web"],
+                var_filters=[
+                    VarFilter(key="region", value="eu"),
+                ],
+            ),
+        )
+        assert result.hosts == ["web1"]
 
 
 class TestPlaybookManagerRolesCatalog:

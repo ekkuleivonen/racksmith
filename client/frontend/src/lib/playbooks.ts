@@ -37,12 +37,29 @@ export type PlaybookDetail = PlaybookSummary & {
   become: boolean;
 };
 
+export type VarFilter = {
+  key: string;
+  /** Omit or null = key must be present (is set). */
+  value?: string | null;
+};
+
 export type TargetSelection = {
   groups: string[];
   labels: string[];
   hosts: string[];
   racks: string[];
+  var_filters: VarFilter[];
 };
+
+export function emptyTargetSelection(): TargetSelection {
+  return {
+    groups: [],
+    labels: [],
+    hosts: [],
+    racks: [],
+    var_filters: [],
+  };
+}
 
 export type PlaybookUpsert = {
   name: string;

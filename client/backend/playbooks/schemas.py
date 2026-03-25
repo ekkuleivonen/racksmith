@@ -63,11 +63,22 @@ class PlaybookDetail(PlaybookSummary):
     become: bool = Field(default=False, description="Requires privilege escalation (sudo)")
 
 
+class VarFilter(BaseModel):
+    """AND-matched host var condition: key must exist; optional value match."""
+
+    key: str = Field(min_length=1, max_length=256)
+    value: str | None = Field(
+        default=None,
+        description="When None or blank, host must have `key` in vars (is set). Otherwise value must match.",
+    )
+
+
 class TargetSelection(BaseModel):
     groups: list[str] = Field(default_factory=list)
     labels: list[str] = Field(default_factory=list)
     hosts: list[str] = Field(default_factory=list)
     racks: list[str] = Field(default_factory=list)
+    var_filters: list[VarFilter] = Field(default_factory=list)
 
 
 class ResolveTargetsRequest(BaseModel):

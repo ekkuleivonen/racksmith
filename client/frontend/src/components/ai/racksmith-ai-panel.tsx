@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Loader2, Minus, Plus, Sparkles, X } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -44,6 +44,50 @@ function getActiveToolCallIndex(blocks: LiveStreamBlock[]): number | null {
   return stack.length ? stack[stack.length - 1]! : null;
 }
 
+type PendingRunChunk = { chunk: string; tool: string; runId: string };
+
+function patchSingleRunOutput(
+  s: LiveStreamBlock[],
+  chunk: string,
+  tool: string,
+  runId: string,
+): LiveStreamBlock[] {
+  const next = [...s];
+  const tryPatch = (idx: number): boolean => {
+    const b = next[idx];
+    if (b?.kind !== "call") return false;
+    if (tool && b.tool !== tool) return false;
+    const prev = b.runOutput ?? "";
+    let merged = prev + chunk;
+    if (merged.length > MAX_RUN_OUTPUT_CHARS) {
+      merged =
+        "…(truncated for UI)\n" + merged.slice(-MAX_RUN_OUTPUT_CHARS);
+    }
+    next[idx] = {
+      ...b,
+      runOutput: merged,
+      runId: runId || b.runId,
+    };
+    return true;
+  };
+  for (let i = next.length - 1; i >= 0; i--) {
+    const b = next[i];
+    if (b?.kind !== "call") continue;
+    if (tool && b.tool === tool && tryPatch(i)) return next;
+  }
+  for (let i = next.length - 1; i >= 0; i--) {
+    const b = next[i];
+    if (
+      b?.kind === "call" &&
+      (b.tool === "run_playbook" || b.tool === "run_role") &&
+      tryPatch(i)
+    ) {
+      return next;
+    }
+  }
+  return s;
+}
+
 const assistantMarkdownClassName = cn(
   "text-zinc-300",
   "[&_p]:text-[12px] [&_p]:leading-relaxed [&_p]:my-1.5",
@@ -67,7 +111,7 @@ function useRepoScope() {
   return { userId, repoFull, repoReady: Boolean(status?.repo_ready && userId && repoFull) };
 }
 
-function MessageRow({ m }: { m: ChatUiMessage }) {
+const MessageRow = memo(function MessageRow({ m }: { m: ChatUiMessage }) {
   switch (m.kind) {
     case "user":
       return (
@@ -117,7 +161,7 @@ function MessageRow({ m }: { m: ChatUiMessage }) {
         </div>
       );
   }
-}
+});
 
 function attachmentsToContext(items: MentionCandidate[]): ChatStreamContext {
   const ctx: ChatStreamContext = {};
@@ -145,7 +189,51 @@ export function AiBottomPanel() {
   const [sending, setSending] = useState(false);
   const [liveBlocks, setLiveBlocks] = useState<LiveStreamBlock[]>([]);
   const [attachments, setAttachments] = useState<MentionCandidate[]>([]);
+  const attachmentsRef = useRef<MentionCandidate[]>([]);
+  attachmentsRef.current = attachments;
+  const pendingRunOutputRef = useRef<PendingRunChunk[]>([]);
+  const runOutputRafRef = useRef<number>(0);
   const scrollEndRef = useRef<HTMLDivElement | null>(null);
+
+  const applyPendingRunOutputBatch = () => {
+    const batch = pendingRunOutputRef.current;
+    pendingRunOutputRef.current = [];
+    if (batch.length === 0) return;
+    setLiveBlocks((prev) => {
+      let next = prev;
+      for (const item of batch) {
+        next = patchSingleRunOutput(next, item.chunk, item.tool, item.runId);
+      }
+      return next;
+    });
+  };
+
+  const scheduleRunOutputFlush = () => {
+    if (runOutputRafRef.current) return;
+    runOutputRafRef.current = requestAnimationFrame(() => {
+      runOutputRafRef.current = 0;
+      applyPendingRunOutputBatch();
+    });
+  };
+
+  const flushRunOutputSync = () => {
+    if (runOutputRafRef.current) {
+      cancelAnimationFrame(runOutputRafRef.current);
+      runOutputRafRef.current = 0;
+    }
+    applyPendingRunOutputBatch();
+  };
+
+  useEffect(
+    () => () => {
+      if (runOutputRafRef.current) {
+        cancelAnimationFrame(runOutputRafRef.current);
+        runOutputRafRef.current = 0;
+      }
+      pendingRunOutputRef.current = [];
+    },
+    [],
+  );
 
   const { data: hosts = [] } = useHosts();
   const { data: playbooks = [] } = usePlaybooks();
@@ -233,11 +321,11 @@ export function AiBottomPanel() {
     }
   };
 
-  const context = useMemo(() => attachmentsToContext(attachments), [attachments]);
-
   const handleSend = async () => {
     const text = input.trim();
     if (!text || !activeChatId || sending) return;
+    const ctx = attachmentsToContext(attachmentsRef.current);
+    setAttachments([]);
     setInput("");
     setSending(true);
     setLiveBlocks([{ kind: "user", text }]);
@@ -245,7 +333,7 @@ export function AiBottomPanel() {
     try {
       const res = await streamAiChatTurn(
         activeChatId,
-        { content: text, context },
+        { content: text, context: ctx },
         controller.signal,
       );
       const reader = res.body!.getReader();
@@ -301,46 +389,12 @@ export function AiBottomPanel() {
               ]);
             }
             if (ev.type === "run_output") {
-              const chunk = ev.chunk ?? "";
-              const tool = ev.tool ?? "";
-              const runId = ev.run_id ?? "";
-              setLiveBlocks((s) => {
-                const next = [...s];
-                const tryPatch = (idx: number) => {
-                  const b = next[idx];
-                  if (b?.kind !== "call") return false;
-                  if (tool && b.tool !== tool) return false;
-                  const prev = b.runOutput ?? "";
-                  let merged = prev + chunk;
-                  if (merged.length > MAX_RUN_OUTPUT_CHARS) {
-                    merged =
-                      "…(truncated for UI)\n" +
-                      merged.slice(-MAX_RUN_OUTPUT_CHARS);
-                  }
-                  next[idx] = {
-                    ...b,
-                    runOutput: merged,
-                    runId: runId || b.runId,
-                  };
-                  return true;
-                };
-                for (let i = next.length - 1; i >= 0; i--) {
-                  const b = next[i];
-                  if (b?.kind !== "call") continue;
-                  if (tool && b.tool === tool && tryPatch(i)) return next;
-                }
-                for (let i = next.length - 1; i >= 0; i--) {
-                  const b = next[i];
-                  if (
-                    b?.kind === "call" &&
-                    (b.tool === "run_playbook" || b.tool === "run_role") &&
-                    tryPatch(i)
-                  ) {
-                    return next;
-                  }
-                }
-                return s;
+              pendingRunOutputRef.current.push({
+                chunk: ev.chunk ?? "",
+                tool: ev.tool ?? "",
+                runId: ev.run_id ?? "",
               });
+              scheduleRunOutputFlush();
             }
             if (ev.type === "tool_result" && ev.tool) {
               invalidateQueriesForRacksmithAgentTool(ev.tool);
@@ -389,21 +443,27 @@ export function AiBottomPanel() {
           }
         }
       }
+      flushRunOutputSync();
       await queryClient.invalidateQueries({ queryKey: ["ai-chat-messages", activeChatId] });
       setLiveBlocks([]);
     } catch (e) {
       if (e instanceof DOMException && e.name === "AbortError") return;
       toastApiError(e, "Send failed");
     } finally {
+      flushRunOutputSync();
       setSending(false);
     }
   };
 
   useEffect(() => {
-    scrollEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
-  }, [messagesQuery.data?.items?.length, liveBlocks]);
+    scrollEndRef.current?.scrollIntoView({
+      behavior: sending ? "auto" : "smooth",
+      block: "end",
+    });
+  }, [messagesQuery.data?.items?.length, liveBlocks.length, sending]);
 
   const items = messagesQuery.data?.items ?? [];
+  const activeCallIdx = getActiveToolCallIndex(liveBlocks);
 
   const mentionCandidates = useMemo(
     () => [
@@ -532,8 +592,7 @@ export function AiBottomPanel() {
                 return <AiThinkingBlock key={`lb-${i}`} text={b.text} />;
               }
               if (b.kind === "call") {
-                const activeIdx = getActiveToolCallIndex(liveBlocks);
-                const active = i === activeIdx;
+                const active = i === activeCallIdx;
                 return (
                   <AiToolCallBlock
                     key={`lb-${i}`}

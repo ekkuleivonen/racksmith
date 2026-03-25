@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   Wrench,
@@ -10,7 +10,6 @@ import {
   Loader2,
   Terminal,
 } from "lucide-react";
-import { MarkdownContent } from "@/components/shared/markdown-content";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 
@@ -79,15 +78,24 @@ export function AiRunOutputBlock({
   done?: boolean;
 }) {
   const preRef = useRef<HTMLPreElement>(null);
+  const lineCount = useMemo(() => {
+    let count = 1;
+    for (let i = 0; i < text.length; i++) {
+      if (text[i] === "\n") count++;
+    }
+    return count;
+  }, [text]);
+  const capped = lineCount > 200;
+  const display = useMemo(() => {
+    if (!capped) return text;
+    return text.split("\n").slice(-200).join("\n");
+  }, [text, capped]);
   useEffect(() => {
     const el = preRef.current;
     if (!el) return;
     el.scrollTop = el.scrollHeight;
   }, [text]);
   if (!text.trim()) return null;
-  const lines = text.split("\n");
-  const capped = lines.length > 200;
-  const display = capped ? lines.slice(-200).join("\n") : text;
   return (
     <div
       className={cn(
@@ -440,15 +448,6 @@ export function AiToolResultBlock({
   );
 }
 
-const thinkingMarkdownClassName = cn(
-  "text-zinc-500",
-  "[&_p]:text-[10px] [&_p]:leading-relaxed [&_p]:my-1",
-  "[&_ul]:my-1 [&_ol]:my-1 [&_ul]:pl-4 [&_ol]:pl-4",
-  "[&_li]:text-[10px] [&_li]:my-0.5",
-  "[&_strong]:text-zinc-400",
-  "[&_:not(pre)>code]:text-[9px]",
-);
-
 export function AiThinkingBlock({ text }: { text: string }) {
   if (!text.trim()) return null;
   return (
@@ -457,7 +456,9 @@ export function AiThinkingBlock({ text }: { text: string }) {
         <Brain className="size-3" />
         <span className="uppercase tracking-wide">Reasoning</span>
       </div>
-      <MarkdownContent className={thinkingMarkdownClassName}>{text}</MarkdownContent>
+      <pre className="text-zinc-500 text-[10px] leading-relaxed whitespace-pre-wrap break-words">
+        {text}
+      </pre>
     </div>
   );
 }
