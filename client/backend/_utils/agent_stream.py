@@ -51,14 +51,6 @@ class AgentDeps:
     session: SessionData
     created_playbook_id: str | None = field(default=None, repr=False)
     updated_playbook_id: str | None = field(default=None, repr=False)
-    # Hosts @-attached in chat (order preserved, deduped). Used for run_playbook / run_role targets.
-    attached_host_ids: list[str] = field(default_factory=list, repr=False)
-    # When set (e.g. failed-run debug or playbook generate with probe host), run_ssh_command works.
-    host_id: str = ""
-    host_ip: str = ""
-    host_ssh_user: str = ""
-    host_ssh_port: int = 22
-    # Optional: agent tools push Ansible run output here for real-time chat SSE (see ai/router).
     run_output_sink: Callable[[dict[str, Any]], Awaitable[None]] | None = field(
         default=None, repr=False
     )
@@ -182,9 +174,10 @@ def _summarize_tool_args(tool_name: str, raw_json: str) -> dict[str, Any]:
         pid = str(args.get("playbook_id", ""))
         return with_summary({"playbook_id": pid}, f"Load playbook {pid}")
     if tool_name == "run_ssh_command":
+        hid = str(args.get("host_id", ""))
         cmd = str(args.get("command", ""))
         short = cmd[:160] + ("…" if len(cmd) > 160 else "")
-        return with_summary({"command": short}, f"SSH: {short}")
+        return with_summary({"host_id": hid, "command": short}, f"SSH {hid}: {short}")
     if tool_name == "run_playbook":
         pid = str(args.get("playbook_id", ""))
         return with_summary({"playbook_id": pid}, f"Run playbook {pid}")

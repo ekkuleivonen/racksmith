@@ -97,19 +97,6 @@ def _var_filter_matches_host(host_vars: dict[str, Any], vf: VarFilter) -> bool:
     return _var_values_equal(hv.get(key), want_raw)
 
 
-def _agent_deps_with_optional_ssh(session: SessionData, probe_host: Host | None):
-    """Build AgentDeps; populate SSH fields when a probe host is supplied."""
-    from _utils.agent_stream import AgentDeps
-
-    if probe_host is None:
-        return AgentDeps(session=session)
-    return AgentDeps(
-        session=session,
-        host_ip=(probe_host.ip_address or "").strip(),
-        host_ssh_user=(probe_host.ssh_user or "").strip(),
-        host_ssh_port=int(probe_host.ssh_port or 22),
-    )
-
 
 def _generate_playbook_id(layout: AnsibleLayout) -> str:
     existing = {p.id for p in list_playbooks(layout)}
@@ -494,12 +481,15 @@ class PlaybookManager(RunManagerMixin):
         probe_host: Host | None = None,
     ) -> AsyncGenerator[str]:
         """Generate a playbook via an LLM agent that creates roles and assembles them."""
-        from _utils.agent_stream import stream_agent
+        from _utils.agent_stream import AgentDeps, stream_agent
         from _utils.ai import playbook_agent
         from playbooks.prompts import PLAYBOOK_SYSTEM_PROMPT
 
-        deps = _agent_deps_with_optional_ssh(session, probe_host)
-        async for event in stream_agent(playbook_agent, prompt, deps, instructions=PLAYBOOK_SYSTEM_PROMPT):
+        user_prompt = prompt
+        if probe_host is not None:
+            user_prompt = f"[Probe host id={probe_host.id} name={probe_host.name} ip={probe_host.ip_address}]\n\n{prompt}"
+        deps = AgentDeps(session=session)
+        async for event in stream_agent(playbook_agent, user_prompt, deps, instructions=PLAYBOOK_SYSTEM_PROMPT):
             yield event
 
     async def edit_generate_playbook(
@@ -511,11 +501,11 @@ class PlaybookManager(RunManagerMixin):
         probe_host: Host | None = None,
     ) -> AsyncGenerator[str]:
         """Edit a playbook via an LLM agent using natural-language instructions."""
-        from _utils.agent_stream import stream_agent
+        from _utils.agent_stream import AgentDeps, stream_agent
         from _utils.ai import playbook_agent
         from playbooks.prompts import PLAYBOOK_EDIT_SYSTEM_PROMPT
 
-        deps = _agent_deps_with_optional_ssh(session, probe_host)
+        deps = AgentDeps(session=session)
         detail = self.get_playbook(session, playbook_id)
         catalog_by_id = {r.id: r for r in detail.roles_catalog}
 
@@ -540,7 +530,11 @@ class PlaybookManager(RunManagerMixin):
             },
             indent=2,
         )
+        probe_prefix = ""
+        if probe_host is not None:
+            probe_prefix = f"[Probe host id={probe_host.id} name={probe_host.name} ip={probe_host.ip_address}]\n\n"
         user_prompt = (
+            f"{probe_prefix}"
             f"Playbook ID: {playbook_id}\n\n"
             f"Current playbook:\n{existing_json}\n\n"
             f"Requested changes:\n{prompt}"
@@ -577,16 +571,11 @@ class PlaybookManager(RunManagerMixin):
             f"- playbook_name: {run.playbook_name}\n"
             f"- run_id: {run.id}\n"
             f"- first_target_host_id: {run.hosts[0]}\n"
-            f"- SSH target: {host.ip_address}:{host.ssh_port} as {host.ssh_user}\n\n"
+            f"- SSH host: id={host.id} ip={host.ip_address} port={host.ssh_port} user={host.ssh_user}\n\n"
             f"ansible-playbook output:\n{output}\n"
         )
 
-        deps = AgentDeps(
-            session=session,
-            host_ip=(host.ip_address or "").strip(),
-            host_ssh_user=(host.ssh_user or "").strip(),
-            host_ssh_port=int(host.ssh_port or 22),
-        )
+        deps = AgentDeps(session=session)
         async for event in stream_agent(
             debug_run_agent,
             user_prompt,

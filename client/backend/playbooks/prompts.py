@@ -15,10 +15,11 @@ WORKFLOW — follow these steps in order:
      them in the correct order.
   4. Return a brief summary of what you built.
 
-OPTIONAL SSH — `run_ssh_command` uses the session probe host when set, else @-attached
-hosts, else the first managed inventory host with SSH. You may run read-only or
-investigative commands to see OS, packages, paths, services, or hardware facts.
-If no such host exists, the tool returns an error — then proceed without remote inspection.
+OPTIONAL SSH — `run_ssh_command(host_id, command)` runs a command on a managed host.
+You must pass the host_id explicitly. If a probe host is mentioned in the context,
+use its id. You may run read-only or investigative commands to see OS, packages,
+paths, services, or hardware facts. If no host is available, proceed without
+remote inspection.
   - Prefer short, non-destructive commands; the server blocks dangerous patterns.
   - Do not rely on SSH alone; still encode assumptions in role inputs and docs.
 
@@ -92,10 +93,10 @@ WORKFLOW — follow these steps in order:
      Include ALL role entries — not just the ones that changed.
   6. Return a brief summary of what you changed.
 
-OPTIONAL SSH — `run_ssh_command` uses the probe host when set, else @-attached
-hosts, else the first managed inventory host with SSH. Use it to inspect the live
-system before changing roles or the playbook. If no host is available, continue
-with repository tools only.
+OPTIONAL SSH — `run_ssh_command(host_id, command)` runs a command on a managed host.
+You must pass the host_id explicitly. If a probe host is mentioned in the context,
+use its id. Use it to inspect the live system before changing roles or the playbook.
+If no host is available, continue with repository tools only.
 
 INVENTORY — same host/group tools as in playbook creation (list, get, create,
 update, delete; group membership; `probe_managed_host`). Use `delete_role` or

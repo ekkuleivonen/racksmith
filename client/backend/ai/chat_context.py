@@ -8,7 +8,6 @@ from _utils.agent_stream import AgentDeps
 from _utils.exceptions import NotFoundError
 from auth.session import SessionData
 from hosts.managers import host_manager
-from hosts.schemas import Host
 from playbooks.managers import playbook_manager
 from roles.managers import role_manager
 
@@ -28,11 +27,8 @@ async def build_agent_deps_and_prefix(
     session: SessionData,
     ctx: ChatAttachmentContext,
 ) -> tuple[AgentDeps, str]:
-    """Return deps (SSH from first eligible host or first run's target) and a text prefix for the user turn."""
+    """Return deps and a text prefix summarising @-attached context for the agent."""
     prefix_lines: list[str] = []
-    ssh_host: Host | None = None
-    attached_host_ids: list[str] = []
-    seen_attached: set[str] = set()
 
     for hid in ctx.host_ids:
         hid = (hid or "").strip()
@@ -45,11 +41,6 @@ async def build_agent_deps_and_prefix(
         prefix_lines.append(
             f"[Attached host id={h.id} name={h.name or h.id} ip={h.ip_address or 'n/a'} managed={h.managed}]"
         )
-        if h.id not in seen_attached:
-            seen_attached.add(h.id)
-            attached_host_ids.append(h.id)
-        if ssh_host is None and h.managed and (h.ip_address or "").strip() and (h.ssh_user or "").strip():
-            ssh_host = h
 
     for pid in ctx.playbook_ids:
         pid = (pid or "").strip()
@@ -87,14 +78,6 @@ async def build_agent_deps_and_prefix(
         if len(out) > 8000:
             out = "…\n" + out[-8000:]
         prefix_lines.append(f"[Run output]\n{out}")
-        if ssh_host is None and run.hosts:
-            try:
-                h = host_manager.get_host(session, run.hosts[0])
-            except NotFoundError:
-                pass
-            else:
-                if h.managed and (h.ip_address or "").strip() and (h.ssh_user or "").strip():
-                    ssh_host = h
 
     for rack_id in ctx.rack_ids:
         rack_id = (rack_id or "").strip()
@@ -102,13 +85,7 @@ async def build_agent_deps_and_prefix(
             continue
         prefix_lines.append(f"[Attached rack id={rack_id} — use rack APIs if you need layout details.]")
 
-    deps = AgentDeps(session=session, attached_host_ids=attached_host_ids)
-    if ssh_host is not None:
-        deps.host_id = ssh_host.id
-        deps.host_ip = (ssh_host.ip_address or "").strip()
-        deps.host_ssh_user = (ssh_host.ssh_user or "").strip()
-        deps.host_ssh_port = int(ssh_host.ssh_port or 22)
-
+    deps = AgentDeps(session=session)
     prefix = "\n".join(prefix_lines).strip()
     if prefix:
         prefix = prefix + "\n\n"

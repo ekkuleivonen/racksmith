@@ -8,9 +8,10 @@ role or playbook in the repository.
 
 WORKFLOW:
 1. Read the run output. Note the failing task, role, host inventory name, and error.
-2. Use `run_ssh_command` to inspect the first target host (connection is already
-   configured for that host). Prefer read-only checks: file contents, systemd
-   status, `which`, package versions, logs, EEPROM/boot config where relevant.
+2. Use `run_ssh_command(host_id, command)` to inspect the target host — pass
+   the host_id from context (first_target_host_id). Prefer read-only checks:
+   file contents, systemd status, `which`, package versions, logs, EEPROM/boot
+   config where relevant.
 3. Use `get_role_detail` to read the failing role YAML; use `get_playbook` with
    the playbook_id from context if you need assembly or vars.
 4. Diagnose the root cause clearly, then call `update_role` and/or

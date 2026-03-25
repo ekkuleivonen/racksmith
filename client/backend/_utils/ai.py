@@ -125,14 +125,22 @@ async def get_playbook(ctx: RunContext[AgentDeps], playbook_id: str) -> str:
     )
 
 
-async def run_ssh_command(ctx: RunContext[AgentDeps], command: str) -> str:
-    """Run a shell command via the daemon (non-interactive). Uses explicit / @-attached SSH context when present; otherwise the first managed inventory host with SSH (same pool as an unrestricted playbook run)."""
+async def run_ssh_command(ctx: RunContext[AgentDeps], host_id: str, command: str) -> str:
+    """Run a shell command on a host via SSH. You must pass the host_id of a managed host with SSH credentials."""
     from daemon.client import daemon_post
+    from hosts.managers import host_manager
 
-    conn = _resolve_ssh_connection_for_agent(ctx.deps)
-    if conn is None:
-        return "Cannot run SSH: no managed host with SSH credentials in inventory."
-    ip, ssh_user, ssh_port = conn
+    try:
+        h = host_manager.get_host(ctx.deps.session, host_id)
+    except NotFoundError:
+        return f"Host {host_id!r} not found."
+    if not h.managed:
+        return f"Host {host_id!r} is not managed — cannot SSH."
+    ip = (h.ip_address or "").strip()
+    ssh_user = (h.ssh_user or "").strip()
+    if not ip or not ssh_user:
+        return f"Host {host_id!r} is missing ip_address or ssh_user."
+    ssh_port = int(h.ssh_port or 22)
     try:
         result = await daemon_post(
             "/ssh/exec",
@@ -185,53 +193,6 @@ async def update_playbook(
 _RUN_TIMEOUT = 300  # 5 minutes
 _OUTPUT_TAIL = 8000
 
-
-def _resolve_run_targets(
-    deps: AgentDeps,
-    explicit_host_ids: list[str] | None,
-) -> list[str] | None:
-    """Resolve host targets for run_playbook / run_role.
-
-    Priority: explicit tool arg > @-attached hosts > single SSH context host.
-    Returns None when nothing can be resolved (caller should error).
-    Never falls back to "all managed hosts".
-    """
-    if explicit_host_ids:
-        return list(explicit_host_ids)
-    if deps.attached_host_ids:
-        return list(deps.attached_host_ids)
-    if deps.host_id:
-        return [deps.host_id]
-    return None
-
-
-def _resolve_ssh_connection_for_agent(deps: AgentDeps) -> tuple[str, str, int] | None:
-    """IP / SSH user / port for run_ssh_command.
-
-    Priority: explicit deps > first @-attached SSH-capable host > single SSH context host.
-    Never falls back to "all managed hosts".
-    """
-    ip, user = (deps.host_ip or "").strip(), (deps.host_ssh_user or "").strip()
-    if ip and user:
-        return ip, user, int(deps.host_ssh_port or 22)
-
-    from hosts.managers import host_manager
-
-    candidates = list(deps.attached_host_ids) if deps.attached_host_ids else []
-    if not candidates and deps.host_id:
-        candidates = [deps.host_id]
-
-    for hid in candidates:
-        try:
-            h = host_manager.get_host(deps.session, hid)
-        except NotFoundError:
-            continue
-        hip = (h.ip_address or "").strip()
-        hu = (h.ssh_user or "").strip()
-        if h.managed and hip and hu:
-            return hip, hu, int(h.ssh_port or 22)
-
-    return None
 
 
 async def _wait_for_run(
@@ -301,24 +262,18 @@ async def _wait_for_run(
 async def run_playbook(
     ctx: RunContext[AgentDeps],
     playbook_id: str,
-    host_ids: list[str] | None = None,
+    host_ids: list[str],
     runtime_vars: dict[str, str] | None = None,
 ) -> str:
-    """Run a playbook on specific hosts and wait for completion.
-
-    host_ids: explicit list of host IDs to target. When omitted, uses the
-    @-attached hosts from the conversation context. You MUST provide host_ids
-    or have hosts attached — the tool will NOT default to all inventory hosts.
-    """
+    """Run a playbook on the given hosts and wait for completion. You must pass host_ids explicitly."""
     from playbooks.managers import playbook_manager
     from playbooks.schemas import PlaybookRunRequest, TargetSelection
 
-    targets = _resolve_run_targets(ctx.deps, host_ids)
-    if not targets:
-        return "Cannot run playbook: no target hosts. Pass host_ids explicitly or @-attach hosts to the conversation."
+    if not host_ids:
+        return "Cannot run playbook: host_ids is required and must not be empty."
 
     body = PlaybookRunRequest(
-        targets=TargetSelection(hosts=targets),
+        targets=TargetSelection(hosts=list(host_ids)),
         runtime_vars=runtime_vars or {},
     )
     run = await playbook_manager.create_run(ctx.deps.session, playbook_id, body)
@@ -333,26 +288,20 @@ async def run_playbook(
 async def run_role(
     ctx: RunContext[AgentDeps],
     role_id: str,
-    host_ids: list[str] | None = None,
+    host_ids: list[str],
     vars: dict[str, str] | None = None,
     become: bool = False,
 ) -> str:
-    """Run a single role on specific hosts and wait for completion.
-
-    host_ids: explicit list of host IDs to target. When omitted, uses the
-    @-attached hosts from the conversation context. You MUST provide host_ids
-    or have hosts attached — the tool will NOT default to all inventory hosts.
-    """
+    """Run a single role on the given hosts and wait for completion. You must pass host_ids explicitly."""
     from playbooks.schemas import TargetSelection
     from roles.managers import role_manager
     from roles.schemas import RoleRunRequest
 
-    targets = _resolve_run_targets(ctx.deps, host_ids)
-    if not targets:
-        return "Cannot run role: no target hosts. Pass host_ids explicitly or @-attach hosts to the conversation."
+    if not host_ids:
+        return "Cannot run role: host_ids is required and must not be empty."
 
     body = RoleRunRequest(
-        targets=TargetSelection(hosts=targets),
+        targets=TargetSelection(hosts=list(host_ids)),
         vars=vars or {},
         become=become,
     )
@@ -628,12 +577,13 @@ racksmith_agent = playbook_agent
 
 RACKSMITH_CHAT_INSTRUCTIONS = """Racksmith AI: help with infra here—Ansible roles/playbooks in the active Git repo, managed hosts and groups, runs, and racks. You can list/create/update/delete hosts and groups, delete roles or playbooks when appropriate, and use the other tools as needed.
 
-TARGETING HOSTS FOR RUNS: `run_playbook` and `run_role` accept an explicit
-`host_ids` list. When the user names specific hosts, you MUST pass their IDs in
-`host_ids`. @-attached hosts in the conversation are used as a fallback when
-`host_ids` is omitted. The tools will NEVER default to all inventory hosts—if
-no targets can be resolved the tool returns an error. Always confirm which hosts
-you will target before executing a run.
+EXPLICIT HOST TARGETING — every tool that touches hosts requires explicit IDs:
+  - `run_ssh_command(host_id, command)` — pass the host_id you want to SSH into.
+  - `run_playbook(playbook_id, host_ids, ...)` — pass the list of target host IDs.
+  - `run_role(role_id, host_ids, ...)` — pass the list of target host IDs.
+None of these tools have fallback behaviour. If you don't pass the IDs, they fail.
+When the user names specific hosts, resolve their IDs (via list_hosts / get_host)
+and pass them. Always confirm which hosts you will target before executing a run.
 
 Stay dry and technical—no filler or buddy chat. Act as a mentor: be direct and precise, and push back when you see logical slips, weak reasoning, or bad technical assumptions (say what is wrong and why)."""
 
