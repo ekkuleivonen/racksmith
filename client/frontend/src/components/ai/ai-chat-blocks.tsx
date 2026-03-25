@@ -10,8 +10,12 @@ import {
   Loader2,
   Terminal,
 } from "lucide-react";
+import { AnsiUp } from "ansi_up";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+
+const ansiUp = new AnsiUp();
+ansiUp.use_classes = false;
 
 type ToolUiCategory = "read" | "write" | "delete" | "run";
 
@@ -90,6 +94,7 @@ export function AiRunOutputBlock({
     if (!capped) return text;
     return text.split("\n").slice(-200).join("\n");
   }, [text, capped]);
+  const displayHtml = useMemo(() => ansiUp.ansi_to_html(display), [display]);
   useEffect(() => {
     const el = preRef.current;
     if (!el) return;
@@ -116,9 +121,8 @@ export function AiRunOutputBlock({
       <pre
         ref={preRef}
         className="max-h-[32rem] overflow-y-auto whitespace-pre-wrap break-all px-2.5 py-2"
-      >
-        {display}
-      </pre>
+        dangerouslySetInnerHTML={{ __html: displayHtml }}
+      />
     </div>
   );
 }
@@ -238,13 +242,15 @@ function ToolResultDetails({
 
   if (rt === "run") {
     const ansible = extractAnsibleOutput(preview);
+    const ansibleHtml = ansiUp.ansi_to_html(ansible);
     return (
       <div className="space-y-2 text-[10px]">
         <RunToolMetaBadges exitCode={exitCode} entityId={entityId} runStatus={runStatus} />
         {ansible ? (
-          <pre className="max-h-40 overflow-y-auto rounded-md border border-zinc-800 bg-zinc-950/80 p-2 font-mono text-[9px] whitespace-pre-wrap break-all text-zinc-400">
-            {ansible}
-          </pre>
+          <pre
+            className="max-h-40 overflow-y-auto rounded-md border border-zinc-800 bg-zinc-950/80 p-2 font-mono text-[9px] whitespace-pre-wrap break-all text-zinc-400"
+            dangerouslySetInnerHTML={{ __html: ansibleHtml }}
+          />
         ) : null}
       </div>
     );
