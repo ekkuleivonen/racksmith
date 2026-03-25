@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { useNavigate, NavLink, useLocation } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { GitBranch, KeyRound, Package, RefreshCw, Search, Sparkles, Terminal } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -84,18 +84,21 @@ export function SidebarFooter() {
   const userId = status?.user?.id ?? "";
   const repoFull = status?.repo?.full_name ?? "";
 
-  const sshTabs = useBottomBarStore((s) =>
-    s.tabs.filter((t) => t.kind === "ssh"),
+  const hasSshTabs = useBottomBarStore((s) =>
+    s.tabs.some((t) => t.kind === "ssh"),
   );
   const panelOpen = useBottomBarStore((s) => s.panelOpen);
   const openSshSession = useBottomBarStore((s) => s.openSshSession);
   const togglePanel = useBottomBarStore((s) => s.togglePanel);
-  const activeTabId = useBottomBarStore((s) => s.activeTabId);
-  const activeTab = useBottomBarStore((s) =>
-    s.tabs.find((t) => t.id === s.activeTabId),
-  );
-  const aiPanelOpen =
-    panelOpen && activeTab?.kind === "ai-chat";
+  const activeTabKind = useBottomBarStore((s) => {
+    const active = s.tabs.find((t) => t.id === s.activeTabId);
+    return active?.kind ?? null;
+  });
+  const isActiveSsh = useBottomBarStore((s) => {
+    const active = s.tabs.find((t) => t.id === s.activeTabId);
+    return active?.kind === "ssh";
+  });
+  const aiPanelOpen = panelOpen && activeTabKind === "ai-chat";
 
   const [hostPickerOpen, setHostPickerOpen] = useState(false);
 
@@ -107,7 +110,7 @@ export function SidebarFooter() {
   const isRegistryActive = pathname.startsWith("/registry");
 
   const handleSshClick = () => {
-    if (sshTabs.length > 0) {
+    if (hasSshTabs) {
       togglePanel();
     } else {
       setHostPickerOpen(true);
@@ -133,11 +136,10 @@ export function SidebarFooter() {
                   ? "border-amber-600/60 text-amber-200 bg-amber-500/10"
                   : "text-zinc-400",
               )}
-              asChild
+              onClick={() => navigate("/registry")}
+              aria-label="Registry"
             >
-              <NavLink to="/registry" aria-label="Registry">
-                <Package className="size-3" />
-              </NavLink>
+              <Package className="size-3" />
             </Button>
           </TooltipTrigger>
           <TooltipContent side="top" className="text-xs">
@@ -174,9 +176,7 @@ export function SidebarFooter() {
                   size="icon"
                   className={cn(
                     "size-7 shrink-0",
-                    panelOpen &&
-                      sshTabs.some((t) => t.id === activeTabId) &&
-                      "border-zinc-600 text-zinc-100",
+                    panelOpen && isActiveSsh && "border-zinc-600 text-zinc-100",
                   )}
                   onClick={handleSshClick}
                   aria-label="SSH Terminal"
