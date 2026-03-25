@@ -16,6 +16,7 @@ from pydantic_ai.messages import (
     ModelMessage,
     PartDeltaEvent,
     PartStartEvent,
+    RetryPromptPart,
     TextPart,
     TextPartDelta,
 )
@@ -26,6 +27,21 @@ from auth.session import SessionData
 logger = get_logger(__name__)
 
 _RESULT_TOOL_PREFIX = "final_result"
+
+
+def _tool_result_for_sse(
+    tool_event: FunctionToolResultEvent,
+) -> tuple[str, str] | None:
+    """Map a streaming tool result event to (tool_name, content text), or None to skip SSE."""
+    result_part = tool_event.result
+    if isinstance(result_part, RetryPromptPart):
+        return None
+    tool_name = getattr(result_part, "tool_name", None)
+    if not tool_name or str(tool_name).startswith(_RESULT_TOOL_PREFIX):
+        return None
+    content = getattr(result_part, "content", None)
+    text = str(content) if content is not None else ""
+    return str(tool_name), text
 
 
 @dataclass
@@ -257,15 +273,12 @@ async def stream_agent(
                                 )
 
                 elif Agent.is_call_tools_node(node):
-                    current_tool: str | None = None
                     async with node.stream(run.ctx) as handle_stream:
                         async for tool_event in handle_stream:
                             if isinstance(tool_event, FunctionToolCallEvent):
                                 name = tool_event.part.tool_name
                                 if name.startswith(_RESULT_TOOL_PREFIX):
-                                    current_tool = None
                                     continue
-                                current_tool = name
                                 yield _sse(
                                     {
                                         "type": "tool_call",
@@ -277,33 +290,29 @@ async def stream_agent(
                                     }
                                 )
                             elif isinstance(tool_event, FunctionToolResultEvent):
-                                if current_tool:
-                                    content = (
-                                        tool_event.result.content
-                                        if hasattr(tool_event, "result")
-                                        else str(tool_event)
-                                    )
-                                    text = str(content)
-                                    meta = tool_result_ui_metadata(current_tool, text)
-                                    payload: dict[str, Any] = {
-                                        "type": "tool_result",
-                                        "tool": current_tool,
-                                        "result": text[:2000],
-                                        **{
-                                            k: v
-                                            for k, v in meta.items()
-                                            if v is not None
-                                            and k in (
-                                                "result_type",
-                                                "exit_code",
-                                                "entity_id",
-                                                "entity_name",
-                                                "run_status",
-                                            )
-                                        },
-                                    }
-                                    yield _sse(payload)
-                                    current_tool = None
+                                pair = _tool_result_for_sse(tool_event)
+                                if pair is None:
+                                    continue
+                                tool_name, text = pair
+                                meta = tool_result_ui_metadata(tool_name, text)
+                                payload: dict[str, Any] = {
+                                    "type": "tool_result",
+                                    "tool": tool_name,
+                                    "result": text[:2000],
+                                    **{
+                                        k: v
+                                        for k, v in meta.items()
+                                        if v is not None
+                                        and k in (
+                                            "result_type",
+                                            "exit_code",
+                                            "entity_id",
+                                            "entity_name",
+                                            "run_status",
+                                        )
+                                    },
+                                }
+                                yield _sse(payload)
 
             # Build the done payload from the agent's final output.
             if run.result is None:
@@ -384,15 +393,12 @@ async def stream_racksmith_turn(
                                 )
 
                 elif Agent.is_call_tools_node(node):
-                    current_tool: str | None = None
                     async with node.stream(run.ctx) as handle_stream:
                         async for tool_event in handle_stream:
                             if isinstance(tool_event, FunctionToolCallEvent):
                                 name = tool_event.part.tool_name
                                 if name.startswith(_RESULT_TOOL_PREFIX):
-                                    current_tool = None
                                     continue
-                                current_tool = name
                                 yield _sse(
                                     {
                                         "type": "tool_call",
@@ -404,33 +410,29 @@ async def stream_racksmith_turn(
                                     }
                                 )
                             elif isinstance(tool_event, FunctionToolResultEvent):
-                                if current_tool:
-                                    content = (
-                                        tool_event.result.content
-                                        if hasattr(tool_event, "result")
-                                        else str(tool_event)
-                                    )
-                                    text = str(content)
-                                    meta = tool_result_ui_metadata(current_tool, text)
-                                    payload2: dict[str, Any] = {
-                                        "type": "tool_result",
-                                        "tool": current_tool,
-                                        "result": text[:2000],
-                                        **{
-                                            k: v
-                                            for k, v in meta.items()
-                                            if v is not None
-                                            and k in (
-                                                "result_type",
-                                                "exit_code",
-                                                "entity_id",
-                                                "entity_name",
-                                                "run_status",
-                                            )
-                                        },
-                                    }
-                                    yield _sse(payload2)
-                                    current_tool = None
+                                pair2 = _tool_result_for_sse(tool_event)
+                                if pair2 is None:
+                                    continue
+                                tool_name2, text2 = pair2
+                                meta2 = tool_result_ui_metadata(tool_name2, text2)
+                                payload2: dict[str, Any] = {
+                                    "type": "tool_result",
+                                    "tool": tool_name2,
+                                    "result": text2[:2000],
+                                    **{
+                                        k: v
+                                        for k, v in meta2.items()
+                                        if v is not None
+                                        and k in (
+                                            "result_type",
+                                            "exit_code",
+                                            "entity_id",
+                                            "entity_name",
+                                            "run_status",
+                                        )
+                                    },
+                                }
+                                yield _sse(payload2)
 
             if run.result is None:
                 yield _sse({"type": "error", "message": "Agent finished without producing a result."})

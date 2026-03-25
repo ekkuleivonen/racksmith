@@ -15,8 +15,10 @@ import {
   FolderOpen,
   FolderPlus,
   GripVertical,
+  Pencil,
   Star,
 } from "lucide-react";
+import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import {
   ContextMenu,
@@ -113,6 +115,61 @@ function buildTree<T>(
   return root;
 }
 
+function folderRenameCollides<T>(
+  oldPath: string,
+  newPath: string,
+  items: T[],
+  itemFolder: (item: T) => string,
+  emptyFolderPaths: string[],
+): boolean {
+  const underOld = (p: string) => p === oldPath || p.startsWith(oldPath + "/");
+  const usesNew = (p: string) => p === newPath || p.startsWith(newPath + "/");
+  const paths = new Set<string>();
+  for (const item of items) {
+    const f = itemFolder(item).replace(/^\/|\/$/g, "");
+    if (f) paths.add(f);
+  }
+  for (const ef of emptyFolderPaths) {
+    const f = ef.replace(/^\/|\/$/g, "");
+    if (f) paths.add(f);
+  }
+  for (const p of paths) {
+    if (usesNew(p) && !underOld(p)) return true;
+  }
+  return false;
+}
+
+function RenameFolderInput({
+  initialName,
+  onCommit,
+  onCancel,
+}: {
+  initialName: string;
+  onCommit: (name: string) => void;
+  onCancel: () => void;
+}) {
+  return (
+    <input
+      autoFocus
+      defaultValue={initialName}
+      className="flex-1 min-w-0 bg-transparent text-[11px] text-zinc-100 outline-none border-b border-zinc-500"
+      onKeyDown={(e) => {
+        if (e.key === "Enter") {
+          const v = e.currentTarget.value.trim();
+          if (v) onCommit(v);
+          else onCancel();
+        }
+        if (e.key === "Escape") onCancel();
+      }}
+      onBlur={(e) => {
+        const v = e.currentTarget.value.trim();
+        if (v) onCommit(v);
+        else onCancel();
+      }}
+    />
+  );
+}
+
 function DraggableItem<T>({
   item,
   itemKey,
@@ -207,6 +264,10 @@ function DroppableFolder<T>({
   onToggleStar,
   isStarred,
   onNewFolder,
+  renamingPath,
+  onRequestRename,
+  onRenameCommit,
+  onRenameCancel,
   depth,
 }: {
   node: FolderNode<T>;
@@ -218,6 +279,10 @@ function DroppableFolder<T>({
   onToggleStar?: (itemPath: string, itemLabel: string) => void;
   isStarred?: (itemPath: string) => boolean;
   onNewFolder?: () => void;
+  renamingPath: string | null;
+  onRequestRename: (path: string) => void;
+  onRenameCommit: (oldPath: string, name: string) => void;
+  onRenameCancel: () => void;
   depth: number;
 }) {
   const isOpen = expanded[node.path] ?? false;
@@ -235,6 +300,68 @@ function DroppableFolder<T>({
     data: { folderPath: node.path, label: node.name },
   });
   const hasContent = node.children.length > 0 || node.items.length > 0;
+  const isRenaming = renamingPath === node.path;
+
+  const rowPaddingLeft = depth * 8;
+  const rowClass = cn(
+    "flex flex-1 items-center gap-1 rounded py-0.5 px-1.5 text-[11px] text-zinc-500 min-w-0",
+    !isRenaming && "hover:bg-zinc-800/50 hover:text-zinc-300 transition-colors",
+    isOver && "bg-zinc-700/60 ring-1 ring-zinc-500",
+  );
+
+  const folderIcons = (
+    <>
+      {hasContent ? (
+        isOpen ? (
+          <ChevronDown className="size-3 shrink-0" />
+        ) : (
+          <ChevronRight className="size-3 shrink-0" />
+        )
+      ) : (
+        <span className="size-3 shrink-0" />
+      )}
+      {isOpen ? (
+        <FolderOpen className="size-3 shrink-0 text-zinc-500" />
+      ) : (
+        <Folder className="size-3 shrink-0 text-zinc-500" />
+      )}
+    </>
+  );
+
+  const folderRowNormal = (
+    <button
+      ref={(el) => {
+        setDropRef(el);
+        setDragRef(el);
+      }}
+      type="button"
+      onClick={() => onToggle(node.path)}
+      className={rowClass}
+      style={{ paddingLeft: rowPaddingLeft }}
+    >
+      {folderIcons}
+      <span className="truncate">{node.name}</span>
+    </button>
+  );
+
+  const folderRowRenaming = (
+    <div
+      ref={(el) => {
+        setDropRef(el);
+        setDragRef(el);
+      }}
+      className={rowClass}
+      style={{ paddingLeft: rowPaddingLeft }}
+    >
+      {folderIcons}
+      <RenameFolderInput
+        key={node.path}
+        initialName={node.name}
+        onCommit={(name) => onRenameCommit(node.path, name)}
+        onCancel={onRenameCancel}
+      />
+    </div>
+  );
 
   return (
     <div style={{ opacity: isDragging ? 0.3 : undefined }}>
@@ -248,35 +375,19 @@ function DroppableFolder<T>({
         >
           <GripVertical className="size-3" />
         </button>
-        <button
-          ref={(el) => {
-            setDropRef(el);
-            setDragRef(el);
-          }}
-          type="button"
-          onClick={() => onToggle(node.path)}
-          className={cn(
-            "flex flex-1 items-center gap-1 rounded py-0.5 px-1.5 text-[11px] text-zinc-500 hover:bg-zinc-800/50 hover:text-zinc-300 transition-colors min-w-0",
-            isOver && "bg-zinc-700/60 ring-1 ring-zinc-500",
-          )}
-          style={{ paddingLeft: depth * 8 }}
-        >
-          {hasContent ? (
-            isOpen ? (
-              <ChevronDown className="size-3 shrink-0" />
-            ) : (
-              <ChevronRight className="size-3 shrink-0" />
-            )
-          ) : (
-            <span className="size-3 shrink-0" />
-          )}
-          {isOpen ? (
-            <FolderOpen className="size-3 shrink-0 text-zinc-500" />
-          ) : (
-            <Folder className="size-3 shrink-0 text-zinc-500" />
-          )}
-          <span className="truncate">{node.name}</span>
-        </button>
+        {isRenaming ? (
+          folderRowRenaming
+        ) : (
+          <ContextMenu>
+            <ContextMenuTrigger asChild>{folderRowNormal}</ContextMenuTrigger>
+            <ContextMenuContent>
+              <ContextMenuItem onClick={() => onRequestRename(node.path)}>
+                <Pencil className="size-3.5" />
+                Rename folder
+              </ContextMenuItem>
+            </ContextMenuContent>
+          </ContextMenu>
+        )}
       </div>
 
       {isOpen && (
@@ -293,6 +404,10 @@ function DroppableFolder<T>({
               onToggleStar={onToggleStar}
               isStarred={isStarred}
               onNewFolder={onNewFolder}
+              renamingPath={renamingPath}
+              onRequestRename={onRequestRename}
+              onRenameCommit={onRenameCommit}
+              onRenameCancel={onRenameCancel}
               depth={depth + 1}
             />
           ))}
@@ -361,6 +476,7 @@ export function SidebarFolderTree<T>({
   const [expanded, setExpanded] = useState(() => loadExpanded(storageKey));
   const [draggingLabel, setDraggingLabel] = useState<string | null>(null);
   const [creatingFolder, setCreatingFolder] = useState(false);
+  const [renamingFolderPath, setRenamingFolderPath] = useState<string | null>(null);
   const [emptyFolders, setEmptyFolders] = useState<string[]>([]);
 
   const activeEmptyFolders = useMemo(() => {
@@ -412,6 +528,75 @@ export function SidebarFolderTree<T>({
     [items, itemKey, itemFolder],
   );
 
+  const applyFolderMove = useCallback(
+    (srcFolder: string, newFolderPath: string) => {
+      if (newFolderPath === srcFolder) return;
+      if (newFolderPath.startsWith(srcFolder + "/")) return;
+
+      const childItems = collectItemsUnderFolder(srcFolder);
+      for (const child of childItems) {
+        const relativePath = child.folder.slice(srcFolder.length);
+        const newItemFolder = newFolderPath + relativePath;
+        onMoveToFolder(child.key, newItemFolder);
+      }
+
+      setEmptyFolders((prev) => {
+        const prefix = srcFolder + "/";
+        return prev.map((f) => {
+          if (f === srcFolder) return newFolderPath;
+          if (f.startsWith(prefix)) return newFolderPath + f.slice(srcFolder.length);
+          return f;
+        });
+      });
+
+      setExpanded((prev) => {
+        const next = { ...prev };
+        const prefix = srcFolder + "/";
+        for (const key of Object.keys(next)) {
+          if (key === srcFolder || key.startsWith(prefix)) {
+            const newKey =
+              key === srcFolder ? newFolderPath : newFolderPath + key.slice(srcFolder.length);
+            next[newKey] = next[key];
+            delete next[key];
+          }
+        }
+        saveExpanded(storageKey, next);
+        return next;
+      });
+    },
+    [collectItemsUnderFolder, onMoveToFolder, storageKey],
+  );
+
+  const handleRenameCommit = useCallback(
+    (oldPath: string, rawName: string) => {
+      const trimmed = rawName.trim();
+      if (!trimmed) {
+        setRenamingFolderPath(null);
+        return;
+      }
+      if (trimmed.includes("/")) {
+        toast.error("Folder name cannot contain /");
+        return;
+      }
+      const parts = oldPath.split("/");
+      const parent = parts.slice(0, -1).join("/");
+      const newPath = parent ? `${parent}/${trimmed}` : trimmed;
+      if (newPath === oldPath) {
+        setRenamingFolderPath(null);
+        return;
+      }
+      if (
+        folderRenameCollides(oldPath, newPath, items, itemFolder, emptyFolders)
+      ) {
+        toast.error("A folder with that name already exists");
+        return;
+      }
+      setRenamingFolderPath(null);
+      applyFolderMove(oldPath, newPath);
+    },
+    [items, itemFolder, emptyFolders, applyFolderMove],
+  );
+
   const handleDragEnd = useCallback(
     (event: DragEndEvent) => {
       setDraggingLabel(null);
@@ -428,40 +613,9 @@ export function SidebarFolderTree<T>({
 
         if (newFolderPath === srcFolder) return;
         // Prevent dropping into self or descendant
-        if (newFolderPath === srcFolder || newFolderPath.startsWith(srcFolder + "/")) return;
+        if (newFolderPath.startsWith(srcFolder + "/")) return;
 
-        const childItems = collectItemsUnderFolder(srcFolder);
-        for (const child of childItems) {
-          const relativePath = child.folder.slice(srcFolder.length);
-          const newItemFolder = newFolderPath + relativePath;
-          onMoveToFolder(child.key, newItemFolder);
-        }
-
-        // Move phantom empty folders too
-        setEmptyFolders((prev) => {
-          const prefix = srcFolder + "/";
-          return prev.map((f) => {
-            if (f === srcFolder) return newFolderPath;
-            if (f.startsWith(prefix)) return newFolderPath + f.slice(srcFolder.length);
-            return f;
-          });
-        });
-
-        // Update expanded state for the renamed folder paths
-        setExpanded((prev) => {
-          const next = { ...prev };
-          const prefix = srcFolder + "/";
-          for (const key of Object.keys(next)) {
-            if (key === srcFolder || key.startsWith(prefix)) {
-              const newKey = key === srcFolder ? newFolderPath : newFolderPath + key.slice(srcFolder.length);
-              next[newKey] = next[key];
-              delete next[key];
-            }
-          }
-          saveExpanded(storageKey, next);
-          return next;
-        });
-
+        applyFolderMove(srcFolder, newFolderPath);
         return;
       }
 
@@ -473,7 +627,7 @@ export function SidebarFolderTree<T>({
 
       onMoveToFolder(activeId, targetFolder);
     },
-    [items, itemKey, itemFolder, onMoveToFolder, collectItemsUnderFolder, storageKey],
+    [items, itemKey, itemFolder, onMoveToFolder, applyFolderMove],
   );
 
   const handleNewFolderCommit = useCallback(
@@ -515,6 +669,17 @@ export function SidebarFolderTree<T>({
                 onToggleStar={onToggleStar}
                 isStarred={isStarred}
                 onNewFolder={() => setCreatingFolder(true)}
+                renamingPath={renamingFolderPath}
+                onRequestRename={(p) => {
+                  setRenamingFolderPath(p);
+                  setExpanded((prev) => {
+                    const next = { ...prev, [p]: true };
+                    saveExpanded(storageKey, next);
+                    return next;
+                  });
+                }}
+                onRenameCommit={handleRenameCommit}
+                onRenameCancel={() => setRenamingFolderPath(null)}
                 depth={0}
               />
             ))}

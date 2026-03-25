@@ -27,21 +27,45 @@ import { AiChatComposer, type MentionCandidate } from "./ai-chat-composer";
 import {
   AiThinkingBlock,
   AiToolCallBlock,
-  AiToolResultBlock,
   type LiveStreamBlock,
-  type LiveToolCallBlock,
-  type LiveToolResultBlock,
+  type LiveToolBlock,
 } from "./ai-chat-blocks";
 
 const MAX_RUN_OUTPUT_CHARS = 200_000;
 
 function getActiveToolCallIndex(blocks: LiveStreamBlock[]): number | null {
-  const stack: number[] = [];
+  const pending: number[] = [];
   blocks.forEach((b, i) => {
-    if (b.kind === "call") stack.push(i);
-    else if (b.kind === "result") stack.pop();
+    if (b.kind === "tool" && !b.done) pending.push(i);
   });
-  return stack.length ? stack[stack.length - 1]! : null;
+  return pending.length ? pending[pending.length - 1]! : null;
+}
+
+type HistoryRow =
+  | { type: "msg"; m: ChatUiMessage }
+  | { type: "tool_pair"; call: ChatUiMessage; result: ChatUiMessage };
+
+function toHistoryRows(items: ChatUiMessage[]): HistoryRow[] {
+  const out: HistoryRow[] = [];
+  const pending: ChatUiMessage[] = [];
+  for (const m of items) {
+    if (m.kind === "tool_call" && m.tool) {
+      pending.push(m);
+      continue;
+    }
+    if (m.kind === "tool_result" && m.tool && pending.length > 0) {
+      out.push({ type: "tool_pair", call: pending.shift()!, result: m });
+      continue;
+    }
+    while (pending.length) {
+      out.push({ type: "msg", m: pending.shift()! });
+    }
+    out.push({ type: "msg", m });
+  }
+  while (pending.length) {
+    out.push({ type: "msg", m: pending.shift()! });
+  }
+  return out;
 }
 
 type PendingRunChunk = { chunk: string; tool: string; runId: string };
@@ -55,7 +79,7 @@ function patchSingleRunOutput(
   const next = [...s];
   const tryPatch = (idx: number): boolean => {
     const b = next[idx];
-    if (b?.kind !== "call") return false;
+    if (b?.kind !== "tool" || b.done) return false;
     if (tool && b.tool !== tool) return false;
     const prev = b.runOutput ?? "";
     let merged = prev + chunk;
@@ -72,13 +96,14 @@ function patchSingleRunOutput(
   };
   for (let i = next.length - 1; i >= 0; i--) {
     const b = next[i];
-    if (b?.kind !== "call") continue;
+    if (b?.kind !== "tool" || b.done) continue;
     if (tool && b.tool === tool && tryPatch(i)) return next;
   }
   for (let i = next.length - 1; i >= 0; i--) {
     const b = next[i];
     if (
-      b?.kind === "call" &&
+      b?.kind === "tool" &&
+      !b.done &&
       (b.tool === "run_playbook" || b.tool === "run_role") &&
       tryPatch(i)
     ) {
@@ -137,11 +162,12 @@ const MessageRow = memo(function MessageRow({ m }: { m: ChatUiMessage }) {
       ) : null;
     case "tool_result":
       return m.tool ? (
-        <AiToolResultBlock
+        <AiToolCallBlock
           tool={m.tool}
-          preview={m.result_preview ?? m.text ?? ""}
+          done
+          resultPreview={m.result_preview ?? m.text ?? ""}
           outcome={m.outcome}
-          resultType={m.result_type}
+          resultType={m.result_type ?? undefined}
           exitCode={m.exit_code ?? undefined}
           entityId={m.entity_id ?? undefined}
           entityName={m.entity_name ?? undefined}
@@ -381,11 +407,11 @@ export function AiBottomPanel() {
               setLiveBlocks((s) => [
                 ...s,
                 {
-                  kind: "call",
+                  kind: "tool",
                   tool: ev.tool!,
                   args: ev.args,
                   startedAt: Date.now(),
-                } satisfies LiveToolCallBlock,
+                } satisfies LiveToolBlock,
               ]);
             }
             if (ev.type === "run_output") {
@@ -398,13 +424,9 @@ export function AiBottomPanel() {
             }
             if (ev.type === "tool_result" && ev.tool) {
               invalidateQueriesForRacksmithAgentTool(ev.tool);
+              flushRunOutputSync();
               setLiveBlocks((s) => {
-                const calls = s.filter((b): b is LiveToolCallBlock => b.kind === "call");
-                const results = s.filter((b): b is LiveToolResultBlock => b.kind === "result");
-                const pending = calls[calls.length - results.length - 1];
-                const startedAt = pending?.startedAt;
-                const elapsedMs =
-                  startedAt != null ? Date.now() - startedAt : null;
+                const idx = s.findIndex((b) => b.kind === "tool" && !b.done);
                 let outcome: string | null = "success";
                 if (
                   ev.result_type === "run" &&
@@ -420,19 +442,43 @@ export function AiBottomPanel() {
                 ) {
                   outcome = "failed";
                 }
-                const block: LiveToolResultBlock = {
-                  kind: "result",
-                  tool: ev.tool!,
-                  result: ev.result ?? "",
-                  resultType: ev.result_type,
-                  exitCode: ev.exit_code ?? null,
-                  entityId: ev.entity_id ?? null,
-                  entityName: ev.entity_name ?? null,
-                  runStatus: ev.run_status ?? null,
-                  outcome,
-                  elapsedMs,
-                };
-                return [...s, block];
+                if (idx < 0) {
+                  return [
+                    ...s,
+                    {
+                      kind: "tool",
+                      tool: ev.tool!,
+                      startedAt: Date.now(),
+                      done: true,
+                      resultPreview: ev.result ?? "",
+                      resultType: ev.result_type,
+                      exitCode: ev.exit_code ?? null,
+                      entityId: ev.entity_id ?? null,
+                      entityName: ev.entity_name ?? null,
+                      runStatus: ev.run_status ?? null,
+                      outcome,
+                      elapsedMs: null,
+                    } satisfies LiveToolBlock,
+                  ];
+                }
+                const b = s[idx] as LiveToolBlock;
+                const elapsedMs = Date.now() - b.startedAt;
+                return s.map((block, i) =>
+                  i === idx
+                    ? ({
+                        ...b,
+                        done: true,
+                        resultPreview: ev.result ?? "",
+                        resultType: ev.result_type,
+                        exitCode: ev.exit_code ?? null,
+                        entityId: ev.entity_id ?? null,
+                        entityName: ev.entity_name ?? null,
+                        runStatus: ev.run_status ?? null,
+                        outcome,
+                        elapsedMs,
+                      } satisfies LiveToolBlock)
+                    : block,
+                );
               });
             }
             if (ev.type === "error" && ev.message) {
@@ -462,7 +508,10 @@ export function AiBottomPanel() {
     });
   }, [messagesQuery.data?.items?.length, liveBlocks.length, sending]);
 
-  const items = messagesQuery.data?.items ?? [];
+  const historyRows = useMemo(
+    () => toHistoryRows(messagesQuery.data?.items ?? []),
+    [messagesQuery.data?.items],
+  );
   const activeCallIdx = getActiveToolCallIndex(liveBlocks);
 
   const mentionCandidates = useMemo(
@@ -575,9 +624,30 @@ export function AiBottomPanel() {
                 <Loader2 className="size-4 animate-spin" />
               </div>
             )}
-            {items.map((m, i) => (
-              <MessageRow key={`${i}-${m.kind}-${m.tool ?? ""}`} m={m} />
-            ))}
+            {historyRows.map((row, i) => {
+              if (row.type === "tool_pair") {
+                if (!row.call.tool) return null;
+                return (
+                  <AiToolCallBlock
+                    key={`hist-${i}-${row.call.tool}-${row.result.tool ?? ""}`}
+                    tool={row.call.tool}
+                    args={row.call.args ?? undefined}
+                    done
+                    resultPreview={row.result.result_preview ?? row.result.text ?? ""}
+                    outcome={row.result.outcome}
+                    resultType={row.result.result_type ?? undefined}
+                    exitCode={row.result.exit_code ?? undefined}
+                    entityId={row.result.entity_id ?? undefined}
+                    entityName={row.result.entity_name ?? undefined}
+                    runStatus={row.result.run_status ?? undefined}
+                  />
+                );
+              }
+              const m = row.m;
+              return (
+                <MessageRow key={`hist-${i}-${m.kind}-${m.tool ?? ""}`} m={m} />
+              );
+            })}
             {liveBlocks.map((b, i) => {
               if (b.kind === "user") {
                 return (
@@ -591,8 +661,8 @@ export function AiBottomPanel() {
               if (b.kind === "thinking") {
                 return <AiThinkingBlock key={`lb-${i}`} text={b.text} />;
               }
-              if (b.kind === "call") {
-                const active = i === activeCallIdx;
+              if (b.kind === "tool") {
+                const active = i === activeCallIdx && !b.done;
                 return (
                   <AiToolCallBlock
                     key={`lb-${i}`}
@@ -603,23 +673,20 @@ export function AiBottomPanel() {
                     startedAt={b.startedAt}
                     runOutput={b.runOutput}
                     runId={b.runId}
+                    done={b.done}
+                    resultPreview={b.resultPreview}
+                    outcome={b.outcome}
+                    resultType={b.resultType}
+                    exitCode={b.exitCode ?? undefined}
+                    entityId={b.entityId ?? undefined}
+                    entityName={b.entityName ?? undefined}
+                    runStatus={b.runStatus ?? undefined}
+                    elapsedMs={b.elapsedMs ?? undefined}
                   />
                 );
               }
-              return (
-                <AiToolResultBlock
-                  key={`lb-${i}`}
-                  tool={b.tool}
-                  preview={b.result}
-                  outcome={b.outcome ?? undefined}
-                  resultType={b.resultType}
-                  exitCode={b.exitCode ?? undefined}
-                  entityId={b.entityId ?? undefined}
-                  entityName={b.entityName ?? undefined}
-                  runStatus={b.runStatus ?? undefined}
-                  elapsedMs={b.elapsedMs ?? undefined}
-                />
-              );
+              const _exhaustive: never = b;
+              return _exhaustive;
             })}
             <div ref={scrollEndRef} />
           </div>
