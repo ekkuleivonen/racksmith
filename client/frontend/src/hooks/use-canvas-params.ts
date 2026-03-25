@@ -15,13 +15,11 @@ export interface CanvasFilters {
 
 export interface CanvasParams {
   view: CanvasView;
-  selectedHostId: string | null;
   filters: CanvasFilters;
 }
 
 export interface CanvasActions {
   setView: (view: CanvasView) => void;
-  selectHost: (hostId: string | null) => void;
   setFilter: (key: keyof Omit<CanvasFilters, "search">, values: string[]) => void;
   setSearch: (q: string) => void;
   clearFilters: () => void;
@@ -48,7 +46,6 @@ export function useCanvasParams(): [CanvasParams, CanvasActions] {
 
     return {
       view,
-      selectedHostId: searchParams.get("host"),
       filters: {
         groups: parseCommaSeparated(searchParams.get("groups")),
         labels: parseCommaSeparated(searchParams.get("labels")),
@@ -71,20 +68,6 @@ export function useCanvasParams(): [CanvasParams, CanvasActions] {
       updateParams((p) => {
         if (view === "list") p.delete("view");
         else p.set("view", view);
-        return p;
-      });
-    },
-    [updateParams],
-  );
-
-  const selectHost = useCallback(
-    (hostId: string | null) => {
-      updateParams((p) => {
-        if (hostId) {
-          p.set("host", hostId);
-        } else {
-          p.delete("host");
-        }
         return p;
       });
     },
@@ -129,8 +112,8 @@ export function useCanvasParams(): [CanvasParams, CanvasActions] {
   );
 
   const actions: CanvasActions = useMemo(
-    () => ({ setView, selectHost, setFilter, setSearch, clearFilters }),
-    [setView, selectHost, setFilter, setSearch, clearFilters],
+    () => ({ setView, setFilter, setSearch, clearFilters }),
+    [setView, setFilter, setSearch, clearFilters],
   );
 
   return [params, actions];

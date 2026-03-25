@@ -78,7 +78,7 @@ function BottomMinimizedBar() {
   };
 
   return (
-    <div className="flex items-center h-8 bg-[#09090b] border-t border-zinc-800/60 px-2 gap-1 shrink-0">
+    <div className="flex items-center h-8 bg-[#09090b] border-t border-zinc-700/60 px-2 gap-1 shrink-0">
       <div className="flex items-center gap-1 min-w-0 overflow-x-auto scrollbar-hide flex-1">
         {tabs.map((tab) => (
           <button

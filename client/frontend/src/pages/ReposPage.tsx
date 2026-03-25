@@ -54,7 +54,7 @@ export function ReposPage() {
         return;
       }
       const hosts = await listHosts();
-      navigate(hosts[0] ? `/?host=${hosts[0].id}` : "/", { replace: true });
+      navigate(hosts[0] ? `/hosts/${hosts[0].id}` : "/", { replace: true });
     },
     [navigate]
   );

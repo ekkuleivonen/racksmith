@@ -43,7 +43,7 @@ export function HostCreatePage() {
         // Host created; probe failed (e.g. SSH not ready). User can probe later.
       }
       toast.success("Host created");
-      navigate(`/?host=${result.host.id}`);
+      navigate(`/hosts/${result.host.id}`);
     } catch (error) {
       toastApiError(error, "Failed to create host");
     } finally {

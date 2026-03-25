@@ -9,9 +9,11 @@ import {
   compareHosts,
   hostDisplayLabel,
   isManagedHost,
+  isReachableHost,
   matchesStatusFilter,
   type Host,
 } from "@/lib/hosts";
+import { HostContextMenu } from "@/components/canvas/host-context-menu";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { HostStatusDot } from "@/components/shared/host-status-dot";
@@ -106,11 +108,9 @@ function SortableHead({
 
 interface HostsListViewProps {
   filters: CanvasFilters;
-  selectedHostId: string | null;
-  onSelectHost: (hostId: string) => void;
 }
 
-export function HostsListView({ filters, selectedHostId, onSelectHost }: HostsListViewProps) {
+export function HostsListView({ filters }: HostsListViewProps) {
   const [sortCol, setSortCol] = useState<SortColumn>("name");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
 
@@ -158,11 +158,6 @@ export function HostsListView({ filters, selectedHostId, onSelectHost }: HostsLi
 
   const handleClick = useCallback(
     (e: React.MouseEvent, hostId: string, index: number) => {
-      if (e.metaKey || e.ctrlKey) {
-        toggle(hostId);
-        lastClickedRef.current = index;
-        return;
-      }
       if (e.shiftKey && lastClickedRef.current >= 0) {
         const from = Math.min(lastClickedRef.current, index);
         const to = Math.max(lastClickedRef.current, index);
@@ -171,9 +166,9 @@ export function HostsListView({ filters, selectedHostId, onSelectHost }: HostsLi
         return;
       }
       lastClickedRef.current = index;
-      onSelectHost(hostId);
+      toggle(hostId);
     },
-    [toggle, addMany, onSelectHost, hosts],
+    [toggle, addMany, hosts],
   );
 
   const handleSelectAll = useCallback(() => {
@@ -232,25 +227,26 @@ export function HostsListView({ filters, selectedHostId, onSelectHost }: HostsLi
           {virtualItems.map((virtualRow) => {
             const host = hosts[virtualRow.index];
             const status = pingStatuses[hostStatusKey(host.id)] ?? "unknown";
-            const isSelected = host.id === selectedHostId;
             const isMultiSelected = selected.has(host.id);
 
             return (
-              <TableRow
+              <HostContextMenu
                 key={host.id}
-                data-index={virtualRow.index}
-                ref={virtualizer.measureElement}
-                data-state={isMultiSelected ? "selected" : undefined}
-                onClick={(e) => handleClick(e, host.id, virtualRow.index)}
-                className={cn(
-                  "cursor-pointer",
-                  isMultiSelected
-                    ? "bg-blue-500/5 hover:bg-blue-500/10"
-                    : isSelected
-                      ? "bg-emerald-500/5 hover:bg-emerald-500/10"
-                      : "",
-                )}
+                hostId={host.id}
+                hostLabel={hostDisplayLabel(host)}
+                sshEnabled={isReachableHost(host)}
+                relocateEnabled={!!host.mac_address}
               >
+                <TableRow
+                  data-index={virtualRow.index}
+                  ref={virtualizer.measureElement}
+                  data-state={isMultiSelected ? "selected" : undefined}
+                  onClick={(e) => handleClick(e, host.id, virtualRow.index)}
+                  className={cn(
+                    "cursor-pointer",
+                    isMultiSelected ? "bg-blue-500/5 hover:bg-blue-500/10" : "",
+                  )}
+                >
                 <TableCell>
                   <Checkbox
                     checked={isMultiSelected}
@@ -293,6 +289,7 @@ export function HostsListView({ filters, selectedHostId, onSelectHost }: HostsLi
                   </div>
                 </TableCell>
               </TableRow>
+              </HostContextMenu>
             );
           })}
           {paddingBottom > 0 && (

@@ -26,9 +26,14 @@ import {
   hostDisplayLabel,
   hostSubnetBucket,
   isManagedHost,
+  isReachableHost,
   matchesCanvasHostFilters,
   type Host,
 } from "@/lib/hosts";
+import {
+  HostCanvasFloatingMenu,
+  type HostCanvasFloatingMenuState,
+} from "@/components/canvas/host-context-menu";
 import { upsertSubnet, type SubnetMeta } from "@/lib/subnets";
 import { invalidateResource } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
@@ -38,24 +43,36 @@ import type { CanvasFilters } from "@/hooks/use-canvas-params";
 
 interface NetworkViewProps {
   filters: CanvasFilters;
-  selectedHostId: string | null;
-  onSelectHost: (hostId: string) => void;
 }
 
 type SubnetSaveFn = (cidr: string, name: string, description: string) => void;
 const SubnetSaveContext = createContext<SubnetSaveFn>(() => {});
 
-function HostNode({ data }: { data: { label: string; ip: string; status: string; selected: boolean; multiSelected: boolean } }) {
+type HostCanvasMenuOpener = (
+  hostId: string,
+  label: string,
+  clientX: number,
+  clientY: number,
+) => void;
+const HostCanvasMenuContext = createContext<HostCanvasMenuOpener | null>(null);
+
+type HostNodeData = { label: string; ip: string; status: string; multiSelected: boolean };
+
+function HostNode({ id, data }: { id: string; data: HostNodeData }) {
+  const openHostMenu = useContext(HostCanvasMenuContext);
   return (
     <div
       className={cn(
         "border bg-zinc-900/90 px-3 py-2 min-w-[140px] transition-colors",
         data.multiSelected
           ? "border-blue-500/60 bg-blue-500/5 shadow-[0_0_6px_rgba(59,130,246,0.15)]"
-          : data.selected
-            ? "border-emerald-500/60 shadow-[0_0_8px_rgba(16,185,129,0.15)]"
-            : "border-zinc-700 hover:border-zinc-600",
+          : "border-zinc-700 hover:border-zinc-600",
       )}
+      onContextMenu={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        openHostMenu?.(id, data.label, e.clientX, e.clientY);
+      }}
     >
       <Handle type="target" position={Position.Top} className="!bg-zinc-600 !border-zinc-500 !w-2 !h-2" />
       <div className="flex items-center gap-2">
@@ -236,7 +253,7 @@ function computeGridLayout(
   return positioned;
 }
 
-function NetworkViewInner({ filters, selectedHostId, onSelectHost }: NetworkViewProps) {
+function NetworkViewInner({ filters }: NetworkViewProps) {
   const { data: allHosts = [] } = useHosts();
   const { data: subnetMetas = [] } = useSubnets();
   const pingStatuses = usePingStore((s) => s.statuses);
@@ -244,6 +261,7 @@ function NetworkViewInner({ filters, selectedHostId, onSelectHost }: NetworkView
   const multiSelected = useSelection((s) => s.selected);
   const selectionToggle = useSelection((s) => s.toggle);
   const selectionAddMany = useSelection((s) => s.addMany);
+  const [floatMenu, setFloatMenu] = useState<HostCanvasFloatingMenuState | null>(null);
 
   const subnetMetaMap = useMemo(() => {
     const m = new Map<string, SubnetMeta>();
@@ -279,6 +297,21 @@ function NetworkViewInner({ filters, selectedHostId, onSelectHost }: NetworkView
       .filter((h) => matchesCanvasHostFilters(h, filters, pingStatuses))
       .sort(compareHosts);
   }, [allHosts, filters, pingStatuses]);
+
+  const openHostContextMenu = useCallback<HostCanvasMenuOpener>(
+    (hostId, label, clientX, clientY) => {
+      const host = hosts.find((h) => h.id === hostId);
+      setFloatMenu({
+        x: clientX,
+        y: clientY,
+        hostId,
+        hostLabel: label,
+        sshEnabled: host ? isReachableHost(host) : false,
+        relocateEnabled: host ? !!host.mac_address : false,
+      });
+    },
+    [hosts],
+  );
 
   // Stable key that only changes when the set of hosts or their subnet
   // membership changes — NOT on status/selection updates.
@@ -326,7 +359,6 @@ function NetworkViewInner({ filters, selectedHostId, onSelectHost }: NetworkView
             label: hostDisplayLabel(host),
             ip: host.ip_address ?? "",
             status,
-            selected: host.id === selectedHostId,
             multiSelected: multiSelected.has(host.id),
           },
         });
@@ -363,11 +395,10 @@ function NetworkViewInner({ filters, selectedHostId, onSelectHost }: NetworkView
           const host = hosts.find((h) => h.id === node.id);
           if (!host) return node;
           const status = pingStatuses[hostStatusKey(host.id)] ?? "unknown";
-          const selected = host.id === selectedHostId;
           const ms = multiSelected.has(host.id);
-          const d = node.data as { status: string; selected: boolean; multiSelected: boolean };
-          if (d.status === status && d.selected === selected && d.multiSelected === ms) return node;
-          return { ...node, data: { ...node.data, status, selected, multiSelected: ms } };
+          const d = node.data as { status: string; multiSelected: boolean };
+          if (d.status === status && d.multiSelected === ms) return node;
+          return { ...node, data: { ...node.data, status, multiSelected: ms } };
         }
         if (node.type === "subnet") {
           const cidr = (node.data as { cidr: string }).cidr;
@@ -381,18 +412,14 @@ function NetworkViewInner({ filters, selectedHostId, onSelectHost }: NetworkView
         return node;
       }),
     );
-  }, [pingStatuses, selectedHostId, hosts, subnetMetaMap, multiSelected, setNodes]);
+  }, [pingStatuses, hosts, subnetMetaMap, multiSelected, setNodes]);
 
   const onNodeClick = useCallback(
-    (event: React.MouseEvent, node: Node) => {
+    (_event: React.MouseEvent, node: Node) => {
       if (node.type !== "host") return;
-      if (event.metaKey || event.ctrlKey) {
-        selectionToggle(node.id);
-      } else {
-        onSelectHost(node.id);
-      }
+      selectionToggle(node.id);
     },
-    [onSelectHost, selectionToggle],
+    [selectionToggle],
   );
 
   const onSelectionChange = useCallback(
@@ -417,25 +444,28 @@ function NetworkViewInner({ filters, selectedHostId, onSelectHost }: NetworkView
   }
 
   return (
-    <SubnetSaveContext.Provider value={handleSubnetSave}>
-      <ReactFlow
-        nodes={nodes}
-        edges={edges}
-        onNodesChange={onNodesChange}
-        onEdgesChange={onEdgesChange}
-        onNodeClick={onNodeClick}
-        onSelectionChange={onSelectionChange}
-        selectionOnDrag
-        nodeTypes={nodeTypes}
-        fitView
-        proOptions={{ hideAttribution: true }}
-        className="bg-zinc-950"
-        minZoom={0.3}
-        maxZoom={2}
-      >
-        <Background color="#27272a" gap={20} size={1} />
-      </ReactFlow>
-    </SubnetSaveContext.Provider>
+    <HostCanvasMenuContext.Provider value={openHostContextMenu}>
+      <SubnetSaveContext.Provider value={handleSubnetSave}>
+        <ReactFlow
+          nodes={nodes}
+          edges={edges}
+          onNodesChange={onNodesChange}
+          onEdgesChange={onEdgesChange}
+          onNodeClick={onNodeClick}
+          onSelectionChange={onSelectionChange}
+          selectionOnDrag
+          nodeTypes={nodeTypes}
+          fitView
+          proOptions={{ hideAttribution: true }}
+          className="bg-zinc-950"
+          minZoom={0.3}
+          maxZoom={2}
+        >
+          <Background color="#27272a" gap={20} size={1} />
+        </ReactFlow>
+        <HostCanvasFloatingMenu state={floatMenu} onClose={() => setFloatMenu(null)} />
+      </SubnetSaveContext.Provider>
+    </HostCanvasMenuContext.Provider>
   );
 }
 

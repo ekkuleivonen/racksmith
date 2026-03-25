@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 import type { RackLayoutHost, ZoneSelection } from "@/lib/racks";
+import { hostDisplayLabel, isReachableHost } from "@/lib/hosts";
+import { HostContextMenu } from "@/components/canvas/host-context-menu";
 
 const ROW_HEIGHT = 28;
 const RESIZE_HANDLE_SIZE = 8;
@@ -28,6 +30,7 @@ export function RackCanvas({
   onResizeItem,
   onPlaceUnplacedHost,
   selectionMode = false,
+  enableHostContextMenu = false,
 }: {
   rackUnits: number;
   cols: number;
@@ -41,6 +44,8 @@ export function RackCanvas({
   onResizeItem?: (itemId: string, position: MovePosition) => void;
   onPlaceUnplacedHost?: (hostId: string, position: MovePosition) => void;
   selectionMode?: boolean;
+  /** When true, managed rack items get a right-click host menu (hosts canvas overview only). */
+  enableHostContextMenu?: boolean;
 }) {
   const totalHeight = rackUnits * ROW_HEIGHT;
   const placedItems = useMemo(() => items.filter((item) => item.placement === "rack"), [items]);
@@ -601,35 +606,52 @@ export function RackCanvas({
                     />
                   </>
                 )}
-                <div
-                  draggable={canDrag}
-                  className={cn(
-                    "h-full px-2 py-1 overflow-hidden",
-                    isPending
-                      ? "opacity-80 cursor-default"
-                      : onMoveItem && "cursor-grab active:cursor-grabbing"
-                  )}
-                  onDragStart={(e) => handleItemDragStart(e, item)}
-                  onDragEnd={handleItemDragEnd}
-                  onDragOver={(e) => {
-                    const topU = item.position_u_start + item.position_u_height - 1;
-                    handleCellDragOver(e, topU, item.position_col_start);
-                  }}
-                  onDrop={(e) => {
-                    const topU = item.position_u_start + item.position_u_height - 1;
-                    handleCellDrop(e, topU, item.position_col_start);
-                    setDraggedItem(null);
-                    setDropPreviewTarget(null);
-                  }}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onSelectItem?.(item.id, e);
-                  }}
-                >
-                  <p className={cn("text-[11px] truncate", isUnmanaged ? "text-zinc-500" : "text-zinc-100")}>
-                    {item.name || item.hostname || item.ip_address || (isPending ? "Pending details" : "Unassigned")}
-                  </p>
-                </div>
+                {(() => {
+                  const dragBody = (
+                    <div
+                      draggable={canDrag}
+                      className={cn(
+                        "h-full px-2 py-1 overflow-hidden",
+                        isPending
+                          ? "opacity-80 cursor-default"
+                          : onMoveItem && "cursor-grab active:cursor-grabbing"
+                      )}
+                      onDragStart={(e) => handleItemDragStart(e, item)}
+                      onDragEnd={handleItemDragEnd}
+                      onDragOver={(e) => {
+                        const topU = item.position_u_start + item.position_u_height - 1;
+                        handleCellDragOver(e, topU, item.position_col_start);
+                      }}
+                      onDrop={(e) => {
+                        const topU = item.position_u_start + item.position_u_height - 1;
+                        handleCellDrop(e, topU, item.position_col_start);
+                        setDraggedItem(null);
+                        setDropPreviewTarget(null);
+                      }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onSelectItem?.(item.id, e);
+                      }}
+                    >
+                      <p className={cn("text-[11px] truncate", isUnmanaged ? "text-zinc-500" : "text-zinc-100")}>
+                        {item.name || item.hostname || item.ip_address || (isPending ? "Pending details" : "Unassigned")}
+                      </p>
+                    </div>
+                  );
+                  if (enableHostContextMenu && item.managed && !isPending) {
+                    return (
+                      <HostContextMenu
+                        hostId={item.id}
+                        hostLabel={hostDisplayLabel(item)}
+                        sshEnabled={isReachableHost(item)}
+                        relocateEnabled={!!item.mac_address}
+                      >
+                        {dragBody}
+                      </HostContextMenu>
+                    );
+                  }
+                  return dragBody;
+                })()}
               </div>
             );
           })}

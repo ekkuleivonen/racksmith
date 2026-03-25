@@ -19,11 +19,9 @@ import type { CanvasFilters } from "@/hooks/use-canvas-params";
 
 interface RacksOverviewProps {
   filters: CanvasFilters;
-  selectedHostId: string | null;
-  onSelectHost: (hostId: string) => void;
 }
 
-export function RacksOverview({ filters, selectedHostId, onSelectHost }: RacksOverviewProps) {
+export function RacksOverview({ filters }: RacksOverviewProps) {
   const { data: rackEntries = [] } = useRackEntries();
   const pingStatuses = usePingStore((s) => s.statuses);
   const multiSelected = useSelection((s) => s.selected);
@@ -51,14 +49,10 @@ export function RacksOverview({ filters, selectedHostId, onSelectHost }: RacksOv
   }, [rackEntries, hasFilters, filters, pingStatuses]);
 
   const handleItemClick = useCallback(
-    (id: string, event?: React.MouseEvent) => {
-      if (event && (event.metaKey || event.ctrlKey)) {
-        selectionToggle(id);
-      } else {
-        onSelectHost(id);
-      }
+    (id: string) => {
+      selectionToggle(id);
     },
-    [onSelectHost, selectionToggle],
+    [selectionToggle],
   );
 
   if (rackEntries.length === 0) {
@@ -126,9 +120,9 @@ export function RacksOverview({ filters, selectedHostId, onSelectHost }: RacksOv
                   rackUnits={rack.rack_units}
                   cols={rack.rack_cols}
                   items={filteredHosts}
-                  selectedItemId={selectedHostId}
                   multiSelectedIds={multiSelected}
-                  onSelectItem={(id, event) => handleItemClick(id, event)}
+                  onSelectItem={(id) => handleItemClick(id)}
+                  enableHostContextMenu
                 />
               </div>
             </div>

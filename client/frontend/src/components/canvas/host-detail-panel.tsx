@@ -1,7 +1,5 @@
 import { useMemo, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import {
-  Expand,
   Locate,
   Plus,
   Power,
@@ -34,12 +32,12 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { SSH_PORT_FALLBACK } from "@/lib/defaults";
-import { hostDisplayLabel, isReachableHost, type Host, type HostInput } from "@/lib/hosts";
+import { isReachableHost, type Host, type HostInput } from "@/lib/hosts";
 import { hostStatusDotClass } from "@/components/shared/host-status-dot";
 import type { PingStatus } from "@/lib/ssh";
 import type { Group } from "@/lib/groups";
 import { cn } from "@/lib/utils";
-import { useDefaults, useHost, useGroups, usePingStatus } from "@/hooks/queries";
+import { useDefaults } from "@/hooks/queries";
 import {
   useDeleteHost,
   useRebootHost,
@@ -47,13 +45,6 @@ import {
   useRelocateHost,
   useUpdateHost,
 } from "@/hooks/mutations";
-import { LoadingState } from "@/components/shared/loading-state";
-
-interface HostDetailPanelProps {
-  hostId: string;
-  onClose: () => void;
-}
-
 function useAppSshPort(): number {
   const { data } = useDefaults();
   return data?.ssh_port ?? SSH_PORT_FALLBACK;
@@ -582,89 +573,6 @@ export function EditableVarsSection({ host }: { host: Host }) {
           </Button>
         </div>
       )}
-    </div>
-  );
-}
-
-export function HostDetailPanel({ hostId, onClose }: HostDetailPanelProps) {
-  const navigate = useNavigate();
-  const { data: host, isLoading } = useHost(hostId || undefined);
-  const pingStatus = usePingStatus(hostId || undefined);
-  const { data: allGroups = [] } = useGroups();
-
-  if (isLoading) {
-    return (
-      <div className="h-full flex items-center justify-center">
-        <LoadingState message="Loading host..." />
-      </div>
-    );
-  }
-
-  if (!host || !host.managed) {
-    return (
-      <div className="h-full flex flex-col items-center justify-center gap-2 p-4">
-        <p className="text-sm text-zinc-400">Host not found</p>
-        <Button size="sm" variant="outline" onClick={onClose}>Close</Button>
-      </div>
-    );
-  }
-
-  return (
-    <div className="h-full flex flex-col border-l border-zinc-800 bg-zinc-900/30">
-      <div className="flex items-center justify-between gap-2 p-3 border-b border-zinc-800 shrink-0">
-        <div className="min-w-0">
-          <h2 className="text-sm font-medium text-zinc-100 truncate">
-            {hostDisplayLabel(host)}
-          </h2>
-          <div className="flex items-center gap-2 mt-0.5">
-            <PingBadge status={pingStatus.data ?? "unknown"} />
-            {host.placement && (
-              <span className="text-[10px] text-zinc-500">
-                {host.placement.u_height ?? 1}U @ col {(host.placement.col_start ?? 0) + 1}
-              </span>
-            )}
-          </div>
-        </div>
-        <div className="flex items-center gap-0.5 shrink-0">
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                size="icon"
-                variant="ghost"
-                className="h-7 w-7"
-                aria-label="Open full page"
-                onClick={() => navigate(`/hosts/${host.id}`)}
-              >
-                <Expand className="size-3" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom" className="text-xs">
-              Open full page
-            </TooltipContent>
-          </Tooltip>
-          <HostActions host={host} onClose={onClose} />
-        </div>
-      </div>
-
-      <div className="flex-1 min-h-0 overflow-y-auto p-3 space-y-3">
-        {(host.os_family || (host.labels ?? []).length > 0) && (
-          <div className="flex flex-wrap gap-1">
-            {host.os_family ? (
-              <Badge variant="outline" className="text-[10px]">{host.os_family}</Badge>
-            ) : null}
-          </div>
-        )}
-
-        <EditableNameSection host={host} />
-        <Separator />
-        <EditableConnectionSection host={host} />
-        <Separator />
-        <EditableLabelsSection host={host} />
-        <Separator />
-        <EditableGroupsSection host={host} allGroups={allGroups} />
-        <Separator />
-        <EditableVarsSection key={host.id} host={host} />
-      </div>
     </div>
   );
 }

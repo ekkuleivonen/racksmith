@@ -119,7 +119,7 @@ export function UnifiedBottomPanel() {
   };
 
   return (
-    <div className="h-full flex flex-col bg-[#09090b] shadow-[0_-6px_16px_rgba(0,0,0,0.5)]">
+    <div className="h-full flex flex-col bg-[#09090b] border-t border-zinc-700/60">
       <div className="flex items-center border-b border-zinc-800/60 shrink-0">
         <div className="flex-1 flex items-center min-w-0 overflow-x-auto scrollbar-hide">
           {tabs.map((tab) => (
