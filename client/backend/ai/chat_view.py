@@ -21,7 +21,7 @@ from pydantic_ai.messages import (
     UserPromptPart,
 )
 
-from _utils.agent_stream import _summarize_tool_args
+from _utils.agent_stream import _summarize_tool_args, tool_result_ui_metadata
 
 _RESULT_TOOL_PREFIX = "final_result"
 
@@ -101,17 +101,28 @@ def model_messages_to_ui(items: list[ModelMessage]) -> list[dict[str, Any]]:
                     )
                 elif isinstance(resp_part, ToolReturnPart | BuiltinToolReturnPart):
                     flush_assistant()
-                    preview = _tool_return_preview(resp_part.content)
+                    content_str = str(resp_part.content)
+                    preview = _tool_return_preview(content_str)
                     oc = getattr(resp_part, "outcome", "success")
-                    out.append(
-                        {
-                            "kind": "tool_result",
-                            "tool": resp_part.tool_name,
-                            "result_preview": preview,
-                            "outcome": str(oc),
-                            "text": preview[:280] + ("…" if len(preview) > 280 else ""),
-                        }
-                    )
+                    meta = tool_result_ui_metadata(resp_part.tool_name, content_str)
+                    row: dict[str, Any] = {
+                        "kind": "tool_result",
+                        "tool": resp_part.tool_name,
+                        "result_preview": preview,
+                        "outcome": str(oc),
+                        "text": preview[:280] + ("…" if len(preview) > 280 else ""),
+                    }
+                    for key in (
+                        "result_type",
+                        "exit_code",
+                        "entity_id",
+                        "entity_name",
+                        "run_status",
+                    ):
+                        val = meta.get(key)
+                        if val is not None:
+                            row[key] = val
+                    out.append(row)
                 elif isinstance(resp_part, FilePart):
                     continue
                 else:

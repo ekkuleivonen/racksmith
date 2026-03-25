@@ -16,6 +16,11 @@ export type ChatUiMessage = {
   args?: Record<string, unknown> | null;
   result_preview?: string | null;
   outcome?: string | null;
+  result_type?: string | null;
+  exit_code?: number | null;
+  entity_id?: string | null;
+  entity_name?: string | null;
+  run_status?: string | null;
 };
 
 export type ChatStreamContext = {

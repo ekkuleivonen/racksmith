@@ -29,7 +29,20 @@ import {
   AiToolCallBlock,
   AiToolResultBlock,
   type LiveStreamBlock,
+  type LiveToolCallBlock,
+  type LiveToolResultBlock,
 } from "./ai-chat-blocks";
+
+const MAX_RUN_OUTPUT_CHARS = 200_000;
+
+function getActiveToolCallIndex(blocks: LiveStreamBlock[]): number | null {
+  const stack: number[] = [];
+  blocks.forEach((b, i) => {
+    if (b.kind === "call") stack.push(i);
+    else if (b.kind === "result") stack.pop();
+  });
+  return stack.length ? stack[stack.length - 1]! : null;
+}
 
 const assistantMarkdownClassName = cn(
   "text-zinc-300",
@@ -58,8 +71,10 @@ function MessageRow({ m }: { m: ChatUiMessage }) {
   switch (m.kind) {
     case "user":
       return (
-        <div className="rounded-lg px-3.5 py-2.5 text-[12px] leading-relaxed whitespace-pre-wrap break-words bg-zinc-800 text-zinc-100 ml-12">
-          {m.text}
+        <div className="flex justify-end">
+          <div className="max-w-[85%] rounded-lg px-3.5 py-2.5 text-[12px] leading-relaxed whitespace-pre-wrap break-words bg-zinc-800 text-zinc-100">
+            {m.text}
+          </div>
         </div>
       );
     case "assistant":
@@ -82,6 +97,11 @@ function MessageRow({ m }: { m: ChatUiMessage }) {
           tool={m.tool}
           preview={m.result_preview ?? m.text ?? ""}
           outcome={m.outcome}
+          resultType={m.result_type}
+          exitCode={m.exit_code ?? undefined}
+          entityId={m.entity_id ?? undefined}
+          entityName={m.entity_name ?? undefined}
+          runStatus={m.run_status ?? undefined}
         />
       ) : null;
     case "system":
@@ -220,7 +240,7 @@ export function AiBottomPanel() {
     if (!text || !activeChatId || sending) return;
     setInput("");
     setSending(true);
-    setLiveBlocks([]);
+    setLiveBlocks([{ kind: "user", text }]);
     const controller = new AbortController();
     try {
       const res = await streamAiChatTurn(
@@ -249,6 +269,13 @@ export function AiBottomPanel() {
               tool?: string;
               args?: Record<string, unknown>;
               result?: string;
+              chunk?: string;
+              run_id?: string;
+              result_type?: string;
+              exit_code?: number;
+              entity_id?: string;
+              entity_name?: string;
+              run_status?: string;
             };
             if (ev.type === "thinking" && ev.text) {
               setLiveBlocks((s) => {
@@ -265,15 +292,94 @@ export function AiBottomPanel() {
             if (ev.type === "tool_call" && ev.tool) {
               setLiveBlocks((s) => [
                 ...s,
-                { kind: "call", tool: ev.tool!, args: ev.args },
+                {
+                  kind: "call",
+                  tool: ev.tool!,
+                  args: ev.args,
+                  startedAt: Date.now(),
+                } satisfies LiveToolCallBlock,
               ]);
+            }
+            if (ev.type === "run_output") {
+              const chunk = ev.chunk ?? "";
+              const tool = ev.tool ?? "";
+              const runId = ev.run_id ?? "";
+              setLiveBlocks((s) => {
+                const next = [...s];
+                const tryPatch = (idx: number) => {
+                  const b = next[idx];
+                  if (b?.kind !== "call") return false;
+                  if (tool && b.tool !== tool) return false;
+                  const prev = b.runOutput ?? "";
+                  let merged = prev + chunk;
+                  if (merged.length > MAX_RUN_OUTPUT_CHARS) {
+                    merged =
+                      "…(truncated for UI)\n" +
+                      merged.slice(-MAX_RUN_OUTPUT_CHARS);
+                  }
+                  next[idx] = {
+                    ...b,
+                    runOutput: merged,
+                    runId: runId || b.runId,
+                  };
+                  return true;
+                };
+                for (let i = next.length - 1; i >= 0; i--) {
+                  const b = next[i];
+                  if (b?.kind !== "call") continue;
+                  if (tool && b.tool === tool && tryPatch(i)) return next;
+                }
+                for (let i = next.length - 1; i >= 0; i--) {
+                  const b = next[i];
+                  if (
+                    b?.kind === "call" &&
+                    (b.tool === "run_playbook" || b.tool === "run_role") &&
+                    tryPatch(i)
+                  ) {
+                    return next;
+                  }
+                }
+                return s;
+              });
             }
             if (ev.type === "tool_result" && ev.tool) {
               invalidateQueriesForRacksmithAgentTool(ev.tool);
-              setLiveBlocks((s) => [
-                ...s,
-                { kind: "result", tool: ev.tool!, result: ev.result ?? "" },
-              ]);
+              setLiveBlocks((s) => {
+                const calls = s.filter((b): b is LiveToolCallBlock => b.kind === "call");
+                const results = s.filter((b): b is LiveToolResultBlock => b.kind === "result");
+                const pending = calls[calls.length - results.length - 1];
+                const startedAt = pending?.startedAt;
+                const elapsedMs =
+                  startedAt != null ? Date.now() - startedAt : null;
+                let outcome: string | null = "success";
+                if (
+                  ev.result_type === "run" &&
+                  typeof ev.exit_code === "number" &&
+                  ev.exit_code !== 0
+                ) {
+                  outcome = "failed";
+                }
+                if (
+                  ev.result_type === "ssh" &&
+                  typeof ev.exit_code === "number" &&
+                  ev.exit_code !== 0
+                ) {
+                  outcome = "failed";
+                }
+                const block: LiveToolResultBlock = {
+                  kind: "result",
+                  tool: ev.tool!,
+                  result: ev.result ?? "",
+                  resultType: ev.result_type,
+                  exitCode: ev.exit_code ?? null,
+                  entityId: ev.entity_id ?? null,
+                  entityName: ev.entity_name ?? null,
+                  runStatus: ev.run_status ?? null,
+                  outcome,
+                  elapsedMs,
+                };
+                return [...s, block];
+              });
             }
             if (ev.type === "error" && ev.message) {
               toast.error(ev.message);
@@ -295,7 +401,7 @@ export function AiBottomPanel() {
 
   useEffect(() => {
     scrollEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
-  }, [messagesQuery.data?.items?.length, liveBlocks.length]);
+  }, [messagesQuery.data?.items?.length, liveBlocks]);
 
   const items = messagesQuery.data?.items ?? [];
 
@@ -413,23 +519,31 @@ export function AiBottomPanel() {
               <MessageRow key={`${i}-${m.kind}-${m.tool ?? ""}`} m={m} />
             ))}
             {liveBlocks.map((b, i) => {
-              if (b.kind === "thinking") {
+              if (b.kind === "user") {
                 return (
-                  <div
-                    key={`lb-${i}`}
-                    className="mr-8 rounded-md border border-violet-500/20 bg-violet-500/5 px-3.5 py-2.5 text-[10px] text-zinc-500 whitespace-pre-wrap"
-                  >
-                    {b.text}
+                  <div key={`lb-${i}`} className="flex justify-end">
+                    <div className="max-w-[85%] rounded-lg px-3.5 py-2.5 text-[12px] leading-relaxed whitespace-pre-wrap break-words bg-zinc-800 text-zinc-100">
+                      {b.text}
+                    </div>
                   </div>
                 );
               }
+              if (b.kind === "thinking") {
+                return <AiThinkingBlock key={`lb-${i}`} text={b.text} />;
+              }
               if (b.kind === "call") {
+                const activeIdx = getActiveToolCallIndex(liveBlocks);
+                const active = i === activeIdx;
                 return (
                   <AiToolCallBlock
                     key={`lb-${i}`}
                     tool={b.tool}
                     args={b.args}
                     compact
+                    active={active}
+                    startedAt={b.startedAt}
+                    runOutput={b.runOutput}
+                    runId={b.runId}
                   />
                 );
               }
@@ -438,7 +552,13 @@ export function AiBottomPanel() {
                   key={`lb-${i}`}
                   tool={b.tool}
                   preview={b.result}
-                  outcome="success"
+                  outcome={b.outcome ?? undefined}
+                  resultType={b.resultType}
+                  exitCode={b.exitCode ?? undefined}
+                  entityId={b.entityId ?? undefined}
+                  entityName={b.entityName ?? undefined}
+                  runStatus={b.runStatus ?? undefined}
+                  elapsedMs={b.elapsedMs ?? undefined}
                 />
               );
             })}

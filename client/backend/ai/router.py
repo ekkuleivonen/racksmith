@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
+from typing import Any
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 
 import settings
-from _utils.agent_stream import stream_racksmith_turn
+from _utils.agent_stream import sse_event, stream_racksmith_turn
 from _utils.ai import RACKSMITH_CHAT_INSTRUCTIONS, racksmith_agent
 from _utils.exceptions import RepoNotAvailableError
 from auth.dependencies import CurrentSession
@@ -89,15 +91,38 @@ async def chat_turn_stream(
 
         full_prompt = prefix + body.content.strip()
         updated: list = []
-        async for chunk in stream_racksmith_turn(
-            racksmith_agent,
-            user_prompt=full_prompt,
-            deps=deps,
-            message_history=prior or None,
-            instructions=RACKSMITH_CHAT_INSTRUCTIONS,
-            persisted_messages=updated,
-        ):
-            yield chunk
+
+        merge: asyncio.Queue[str | None] = asyncio.Queue()
+
+        async def forward_run_chunk(ev: dict[str, Any]) -> None:
+            await merge.put(sse_event(ev))
+
+        deps.run_output_sink = forward_run_chunk
+
+        async def run_turn_worker() -> None:
+            try:
+                async for chunk in stream_racksmith_turn(
+                    racksmith_agent,
+                    user_prompt=full_prompt,
+                    deps=deps,
+                    message_history=prior or None,
+                    instructions=RACKSMITH_CHAT_INSTRUCTIONS,
+                    persisted_messages=updated,
+                ):
+                    await merge.put(chunk)
+            finally:
+                await merge.put(None)
+
+        worker = asyncio.create_task(run_turn_worker())
+        try:
+            while True:
+                item = await merge.get()
+                if item is None:
+                    break
+                yield item
+        finally:
+            await worker
+
         if updated:
             try:
                 await ai_chat_store.save_messages(session, chat_id, updated)

@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import json
-from collections.abc import AsyncGenerator, Sequence
+import re
+from collections.abc import AsyncGenerator, Awaitable, Callable, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -39,10 +40,92 @@ class AgentDeps:
     host_ip: str = ""
     host_ssh_user: str = ""
     host_ssh_port: int = 22
+    # Optional: agent tools push Ansible run output here for real-time chat SSE (see ai/router).
+    run_output_sink: Callable[[dict[str, Any]], Awaitable[None]] | None = field(
+        default=None, repr=False
+    )
+
+
+def sse_event(payload: dict[str, Any]) -> str:
+    return f"data: {json.dumps(payload)}\n\n"
 
 
 def _sse(payload: dict[str, Any]) -> str:
-    return f"data: {json.dumps(payload)}\n\n"
+    return sse_event(payload)
+
+
+_RE_RUN_META = re.compile(
+    r"run_id=(?P<run_id>[^\s]+)\s+status=(?P<status>\w+)\s+exit_code=(?P<exit_code>-?\d+|None)"
+)
+_RE_CREATED_ROLE = re.compile(r"Created role '(?P<name>[^']+)'\s+\(id:\s*(?P<id>[^)]+)\)")
+_RE_UPDATED_ROLE = re.compile(r"Updated role '(?P<name>[^']+)'\s+\(id:\s*(?P<id>[^)]+)\)")
+_RE_PLAYBOOK = re.compile(
+    r"(?:Created|Updated) playbook '(?P<name>[^']+)'\s+\(id:\s*(?P<id>[^)]+)\)"
+)
+_RE_SSH_EXIT = re.compile(r"^exit_code=(?P<code>-?\d+)", re.MULTILINE)
+
+
+def tool_result_ui_metadata(tool_name: str, content: str) -> dict[str, Any]:
+    """Structured fields for SPA tool result cards (SSE + persisted view)."""
+    meta: dict[str, Any] = {"result_type": "text"}
+    text = content if len(content) <= 4000 else content[:4000] + "…"
+
+    if tool_name in ("run_playbook", "run_role"):
+        m = _RE_RUN_META.search(text)
+        meta["result_type"] = "run"
+        if m:
+            meta["entity_id"] = m.group("run_id").strip()
+            meta["run_status"] = m.group("status").strip()
+            ec = m.group("exit_code")
+            meta["exit_code"] = None if ec == "None" else int(ec)
+        return meta
+
+    if tool_name == "run_ssh_command":
+        meta["result_type"] = "ssh"
+        m = _RE_SSH_EXIT.search(text)
+        if m:
+            meta["exit_code"] = int(m.group("code"))
+        return meta
+
+    if tool_name == "create_role":
+        m = _RE_CREATED_ROLE.search(text)
+        meta["result_type"] = "crud_create"
+        if m:
+            meta["entity_name"] = m.group("name")
+            meta["entity_id"] = m.group("id").strip()
+        return meta
+
+    if tool_name == "update_role":
+        m = _RE_UPDATED_ROLE.search(text)
+        meta["result_type"] = "crud_update"
+        if m:
+            meta["entity_name"] = m.group("name")
+            meta["entity_id"] = m.group("id").strip()
+        return meta
+
+    if tool_name in ("create_playbook", "update_playbook"):
+        m = _RE_PLAYBOOK.search(text)
+        meta["result_type"] = (
+            "crud_create" if tool_name == "create_playbook" else "crud_update"
+        )
+        if m:
+            meta["entity_name"] = m.group("name")
+            meta["entity_id"] = m.group("id").strip()
+        return meta
+
+    if tool_name.startswith("delete_"):
+        meta["result_type"] = "delete"
+        return meta
+
+    if tool_name in ("create_host", "update_host", "probe_managed_host"):
+        meta["result_type"] = "json_host"
+        return meta
+
+    if tool_name.startswith("create_") or tool_name.startswith("update_"):
+        meta["result_type"] = "crud_generic"
+        return meta
+
+    return meta
 
 
 def _summarize_tool_args(tool_name: str, raw_json: str) -> dict[str, Any]:
@@ -51,29 +134,76 @@ def _summarize_tool_args(tool_name: str, raw_json: str) -> dict[str, Any]:
         args = json.loads(raw_json)
     except Exception:
         return {}
+
+    def with_summary(d: dict[str, Any], summary: str) -> dict[str, Any]:
+        out = {**d, "summary": summary}
+        return out
+
     if tool_name in ("create_role", "update_role"):
         role = args.get("role", args)
-        return {
-            "name": role.get("name", ""),
-            "description": (role.get("description") or "")[:200],
-        }
+        name = str(role.get("name", "") or "")
+        desc = (role.get("description") or "")[:200]
+        verb = "Create role" if tool_name == "create_role" else "Update role"
+        return with_summary(
+            {"name": name, "description": desc},
+            f"{verb}: {name}" if name else verb,
+        )
     if tool_name in ("create_playbook", "update_playbook"):
         pb = args.get("playbook", args)
-        return {
-            "name": pb.get("name", ""),
-            "role_count": len(pb.get("roles", [])),
-        }
+        name = str(pb.get("name", "") or "")
+        rc = len(pb.get("roles", []))
+        verb = "Create playbook" if tool_name == "create_playbook" else "Update playbook"
+        return with_summary(
+            {"name": name, "role_count": rc},
+            f"{verb}: {name} ({rc} roles)" if name else f"{verb} ({rc} roles)",
+        )
     if tool_name == "get_role_detail":
-        return {"role_id": args.get("role_id", "")}
+        rid = str(args.get("role_id", ""))
+        return with_summary({"role_id": rid}, f"Load role {rid}")
     if tool_name == "get_playbook":
-        return {"playbook_id": args.get("playbook_id", "")}
+        pid = str(args.get("playbook_id", ""))
+        return with_summary({"playbook_id": pid}, f"Load playbook {pid}")
     if tool_name == "run_ssh_command":
         cmd = str(args.get("command", ""))
-        return {"command": cmd[:160] + ("…" if len(cmd) > 160 else "")}
+        short = cmd[:160] + ("…" if len(cmd) > 160 else "")
+        return with_summary({"command": short}, f"SSH: {short}")
     if tool_name == "run_playbook":
-        return {"playbook_id": args.get("playbook_id", "")}
+        pid = str(args.get("playbook_id", ""))
+        return with_summary({"playbook_id": pid}, f"Run playbook {pid}")
     if tool_name == "run_role":
-        return {"role_id": args.get("role_id", ""), "become": args.get("become", False)}
+        rid = str(args.get("role_id", ""))
+        become = bool(args.get("become", False))
+        return with_summary(
+            {"role_id": rid, "become": become},
+            f"Run role {rid}" + (" (become)" if become else ""),
+        )
+    if tool_name == "create_host":
+        h = args.get("host", args) if isinstance(args.get("host"), dict) else args
+        hn = str(h.get("name", "") or "")
+        ip = str(h.get("ip_address", "") or "")
+        return with_summary(
+            {"name": hn, "ip": ip},
+            f"Create host {hn}" + (f" @ {ip}" if ip else ""),
+        )
+    if tool_name == "update_host":
+        hid = str(args.get("host_id", ""))
+        return with_summary({"host_id": hid}, f"Update host {hid}")
+    if tool_name == "delete_role":
+        rid = str(args.get("role_id", ""))
+        return with_summary({"role_id": rid}, f"Delete role {rid}")
+    if tool_name == "delete_playbook":
+        pid = str(args.get("playbook_id", ""))
+        casc = bool(args.get("cascade_roles", False))
+        return with_summary(
+            {"playbook_id": pid, "cascade_roles": casc},
+            f"Delete playbook {pid}" + (" (+ orphan roles)" if casc else ""),
+        )
+    if tool_name == "delete_host":
+        hid = str(args.get("host_id", ""))
+        return with_summary({"host_id": hid}, f"Delete host {hid}")
+    if tool_name == "delete_group":
+        gid = str(args.get("group_id", ""))
+        return with_summary({"group_id": gid}, f"Delete group {gid}")
     return {}
 
 
@@ -153,13 +283,26 @@ async def stream_agent(
                                         if hasattr(tool_event, "result")
                                         else str(tool_event)
                                     )
-                                    yield _sse(
-                                        {
-                                            "type": "tool_result",
-                                            "tool": current_tool,
-                                            "result": str(content)[:2000],
-                                        }
-                                    )
+                                    text = str(content)
+                                    meta = tool_result_ui_metadata(current_tool, text)
+                                    payload: dict[str, Any] = {
+                                        "type": "tool_result",
+                                        "tool": current_tool,
+                                        "result": text[:2000],
+                                        **{
+                                            k: v
+                                            for k, v in meta.items()
+                                            if v is not None
+                                            and k in (
+                                                "result_type",
+                                                "exit_code",
+                                                "entity_id",
+                                                "entity_name",
+                                                "run_status",
+                                            )
+                                        },
+                                    }
+                                    yield _sse(payload)
                                     current_tool = None
 
             # Build the done payload from the agent's final output.
@@ -267,13 +410,26 @@ async def stream_racksmith_turn(
                                         if hasattr(tool_event, "result")
                                         else str(tool_event)
                                     )
-                                    yield _sse(
-                                        {
-                                            "type": "tool_result",
-                                            "tool": current_tool,
-                                            "result": str(content)[:2000],
-                                        }
-                                    )
+                                    text = str(content)
+                                    meta = tool_result_ui_metadata(current_tool, text)
+                                    payload2: dict[str, Any] = {
+                                        "type": "tool_result",
+                                        "tool": current_tool,
+                                        "result": text[:2000],
+                                        **{
+                                            k: v
+                                            for k, v in meta.items()
+                                            if v is not None
+                                            and k in (
+                                                "result_type",
+                                                "exit_code",
+                                                "entity_id",
+                                                "entity_name",
+                                                "run_status",
+                                            )
+                                        },
+                                    }
+                                    yield _sse(payload2)
                                     current_tool = None
 
             if run.result is None:

@@ -29,6 +29,11 @@ class ChatUiMessage(BaseModel):
     args: dict[str, Any] | None = None
     result_preview: str | None = None
     outcome: str | None = None
+    result_type: str | None = None
+    exit_code: int | None = None
+    entity_id: str | None = None
+    entity_name: str | None = None
+    run_status: str | None = None
 
 
 class ChatMessagesResponse(BaseModel):

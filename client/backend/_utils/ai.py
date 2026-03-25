@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+from collections.abc import Awaitable, Callable
 from typing import Any
 
 import httpx
@@ -185,6 +186,9 @@ _OUTPUT_TAIL = 8000
 async def _wait_for_run(
     run_id: str,
     load_run_fn: Any,
+    *,
+    output_sink: Callable[[dict[str, Any]], Awaitable[None]] | None = None,
+    tool_name: str = "",
 ) -> str:
     """Subscribe to Redis pub/sub, wait for run completion, return formatted output."""
     channel = run_events_channel(run_id)
@@ -212,6 +216,17 @@ async def _wait_for_run(
             if msg["type"] != "message":
                 continue
             payload = json.loads(msg["data"])
+            if payload.get("type") == "output" and output_sink:
+                chunk = payload.get("data", "")
+                if isinstance(chunk, str) and chunk:
+                    await output_sink(
+                        {
+                            "type": "run_output",
+                            "run_id": run_id,
+                            "tool": tool_name,
+                            "chunk": chunk,
+                        }
+                    )
             if payload.get("type") == "done":
                 break
     finally:
@@ -250,7 +265,12 @@ async def run_playbook(
         runtime_vars=runtime_vars or {},
     )
     run = await playbook_manager.create_run(deps.session, playbook_id, body)
-    return await _wait_for_run(run.id, playbook_manager.load_playbook_run)
+    return await _wait_for_run(
+        run.id,
+        playbook_manager.load_playbook_run,
+        output_sink=deps.run_output_sink,
+        tool_name="run_playbook",
+    )
 
 
 async def run_role(
@@ -274,7 +294,12 @@ async def run_role(
         become=become,
     )
     run = await role_manager.create_run(deps.session, role_id, body)
-    return await _wait_for_run(run.id, role_manager._load_run)
+    return await _wait_for_run(
+        run.id,
+        role_manager._load_run,
+        output_sink=deps.run_output_sink,
+        tool_name="run_role",
+    )
 
 
 # ---------------------------------------------------------------------------
