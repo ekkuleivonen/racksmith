@@ -154,9 +154,10 @@ jobs:
         working-directory: client/backend
         run: uv sync --frozen
 
+      # Pygments ≤2.19.2: CVE-2026-4539 (no first_patched_version on GHSA yet). Remove when PyPI has a fix.
       - name: pip-audit
         working-directory: client/backend
-        run: uv run pip-audit
+        run: uv run pip-audit --ignore-vuln CVE-2026-4539
 
   audit-registry-backend:
     runs-on: ubuntu-latest
@@ -172,9 +173,10 @@ jobs:
         working-directory: registry/backend
         run: uv sync --frozen
 
+      # Pygments ≤2.19.2: CVE-2026-4539 (no first_patched_version on GHSA yet). Remove when PyPI has a fix.
       - name: pip-audit
         working-directory: registry/backend
-        run: uv run pip-audit
+        run: uv run pip-audit --ignore-vuln CVE-2026-4539
 
   audit-client-frontend:
     runs-on: ubuntu-latest
