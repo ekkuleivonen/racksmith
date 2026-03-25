@@ -15,7 +15,7 @@ import {
 import { cn } from "@/lib/utils";
 
 export type MentionCandidate = {
-  type: "host" | "playbook" | "role" | "rack";
+  type: "host" | "playbook" | "role" | "group" | "rack";
   id: string;
   label: string;
 };
@@ -39,6 +39,7 @@ const TYPE_COLORS: Record<string, string> = {
   host: "text-emerald-400",
   playbook: "text-sky-400",
   role: "text-amber-400",
+  group: "text-violet-400",
   rack: "text-rose-400",
 };
 
@@ -46,6 +47,7 @@ const CHIP_COLORS: Record<string, string> = {
   host: "border-emerald-500/30 bg-emerald-500/10 text-emerald-200/90",
   playbook: "border-sky-500/30 bg-sky-500/10 text-sky-200/90",
   role: "border-amber-500/30 bg-amber-500/10 text-amber-200/90",
+  group: "border-violet-500/30 bg-violet-500/10 text-violet-200/90",
   rack: "border-rose-500/30 bg-rose-500/10 text-rose-200/90",
 };
 
@@ -203,7 +205,7 @@ export function AiChatComposer({
             value={value}
             onChange={handleChange}
             onKeyDown={handleKeyDown}
-            placeholder="Ask about playbooks, roles, hosts… (@ to mention)"
+            placeholder="Ask about playbooks, roles, hosts, groups… (@ to mention)"
             className={cn(
               "w-full bg-transparent text-[12px] text-zinc-200 placeholder:text-zinc-600",
               "resize-none outline-none border-0",
@@ -251,7 +253,7 @@ export function AiChatComposer({
             <CommandEmpty className="text-[10px] text-zinc-500 py-2 text-center">
               No matches
             </CommandEmpty>
-            {(["host", "playbook", "role", "rack"] as const).map((type) => {
+            {(["host", "playbook", "role", "group", "rack"] as const).map((type) => {
               const group = filtered.filter((c) => c.type === type);
               if (group.length === 0) return null;
               return (

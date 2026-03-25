@@ -27,6 +27,7 @@ export type ChatStreamContext = {
   hosts?: string[];
   playbooks?: string[];
   roles?: string[];
+  groups?: string[];
   runs?: string[];
   racks?: string[];
 };

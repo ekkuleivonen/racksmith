@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from _utils.agent_stream import AgentDeps
 from _utils.exceptions import NotFoundError
 from auth.session import SessionData
+from groups.managers import group_manager
 from hosts.managers import host_manager
 from playbooks.managers import playbook_manager
 from roles.managers import role_manager
@@ -19,6 +20,7 @@ class ChatAttachmentContext:
     host_ids: list[str]
     playbook_ids: list[str]
     role_ids: list[str]
+    group_ids: list[str]
     run_ids: list[str]
     rack_ids: list[str]
 
@@ -64,6 +66,25 @@ async def build_agent_deps_and_prefix(
             raise ValueError(f"Role not found: {rid}") from None
         prefix_lines.append(f"[Attached role id={detail.id} name={detail.name}]")
 
+    for gid in ctx.group_ids:
+        gid = (gid or "").strip()
+        if not gid:
+            continue
+        try:
+            gw = group_manager.get_group(session, gid)
+        except NotFoundError:
+            raise ValueError(f"Group not found: {gid}") from None
+        n = len(gw.hosts)
+        if gw.hosts:
+            bits = [h.name or h.id for h in gw.hosts[:12]]
+            tail = f" …+{n - 12} more" if n > 12 else ""
+            host_preview = f" sample_hosts={','.join(bits)}{tail}"
+        else:
+            host_preview = ""
+        prefix_lines.append(
+            f"[Attached group id={gw.id} name={gw.name} member_count={n}{host_preview}]"
+        )
+
     for run_id in ctx.run_ids:
         run_id = (run_id or "").strip()
         if not run_id:
@@ -94,11 +115,12 @@ async def build_agent_deps_and_prefix(
 
 def parse_context_payload(raw: dict | None) -> ChatAttachmentContext:
     if not raw:
-        return ChatAttachmentContext([], [], [], [], [])
+        return ChatAttachmentContext([], [], [], [], [], [])
     return ChatAttachmentContext(
         host_ids=list(raw.get("hosts") or []),
         playbook_ids=list(raw.get("playbooks") or []),
         role_ids=list(raw.get("roles") or []),
+        group_ids=list(raw.get("groups") or []),
         run_ids=list(raw.get("runs") or []),
         rack_ids=list(raw.get("racks") or []),
     )

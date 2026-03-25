@@ -369,11 +369,7 @@ export function AiToolCallBlock({
 
   return (
     <details
-      className={cn(
-        "group/tc rounded-md border text-[10px] mr-8",
-        borderDone,
-        !done && active && "animate-pulse border-opacity-80",
-      )}
+      className={cn("group/tc rounded-md border text-[10px] mr-8", borderDone)}
       open={done ? false : Boolean(active && runOutput)}
     >
       <summary className="flex items-center gap-1.5 text-zinc-300 font-medium px-3 py-2 cursor-pointer select-none list-none [&::-webkit-details-marker]:hidden">

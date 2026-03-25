@@ -17,7 +17,7 @@ import {
   type ChatStreamContext,
   type ChatUiMessage,
 } from "@/lib/ai-chat";
-import { useHosts, usePlaybooks, useRoles, useRackEntries } from "@/hooks/queries";
+import { useGroups, useHosts, usePlaybooks, useRoles, useRackEntries } from "@/hooks/queries";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { toastApiError } from "@/lib/api";
@@ -196,6 +196,7 @@ function attachmentsToContext(items: MentionCandidate[]): ChatStreamContext {
       a.type === "host" ? "hosts"
       : a.type === "playbook" ? "playbooks"
       : a.type === "role" ? "roles"
+      : a.type === "group" ? "groups"
       : "racks";
     (ctx[key] ??= []).push(a.id);
   }
@@ -264,6 +265,7 @@ export function AiBottomPanel() {
   const { data: hosts = [] } = useHosts();
   const { data: playbooks = [] } = usePlaybooks();
   const { data: roles = [] } = useRoles();
+  const { data: groups = [] } = useGroups();
   const { data: rackEntries = [] } = useRackEntries();
 
   useEffect(() => {
@@ -519,9 +521,10 @@ export function AiBottomPanel() {
       ...hosts.map((h) => ({ type: "host" as const, id: h.id, label: h.name ?? h.id })),
       ...playbooks.map((p) => ({ type: "playbook" as const, id: p.id, label: p.name })),
       ...roles.map((r) => ({ type: "role" as const, id: r.id, label: r.name })),
+      ...groups.map((g) => ({ type: "group" as const, id: g.id, label: g.name || g.id })),
       ...rackEntries.map((re) => ({ type: "rack" as const, id: re.rack.id, label: re.rack.name })),
     ],
-    [hosts, playbooks, roles, rackEntries],
+    [hosts, playbooks, roles, groups, rackEntries],
   );
 
   const handleAttach = useCallback((item: MentionCandidate) => {
