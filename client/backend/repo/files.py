@@ -23,6 +23,7 @@ from auth.git import (
 from auth.git import (
     get_file_statuses as get_git_file_statuses,
 )
+from auth.managers import auth_manager
 from auth.session import SessionData
 from auth.workspace import (
     is_yaml_path,
@@ -149,11 +150,13 @@ class FilesManager:
                 repo_path, layout.racksmith_prefix
             )
 
+        access_token = await auth_manager.ensure_fresh_token(session)
+
         def _commit() -> str | None:
             return git_commit_and_push(
                 repo_path,
                 message,
-                session.access_token,
+                access_token,
                 binding.owner,
                 binding.repo,
                 paths_to_add=paths_to_add,

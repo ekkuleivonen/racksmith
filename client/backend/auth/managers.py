@@ -11,7 +11,7 @@ from fastapi import Cookie, HTTPException, Request
 
 import settings
 from _utils.logging import get_logger
-from auth.session import SessionData, create_session, delete_session, get_session
+from auth.session import SessionData, create_session, delete_session, get_session, update_session_tokens
 
 logger = get_logger(__name__)
 
@@ -102,6 +102,43 @@ class AuthManager:
         session_id = await create_session(access_token, user_data, refresh_token=new_refresh_token)
         logger.info("auth_token_refreshed", user_id=str(user_data.get("id", "")))
         return session_id
+
+    async def ensure_fresh_token(self, session: SessionData) -> str:
+        """Refresh the GitHub access token if possible, updating the session in place.
+
+        Falls back to the existing token when no refresh token is available or
+        the refresh call fails.
+        """
+        if not session.refresh_token:
+            return session.access_token
+
+        registry_url = settings.REGISTRY_URL.rstrip("/")
+        try:
+            async with httpx.AsyncClient() as client:
+                resp = await client.post(
+                    f"{registry_url}/auth/refresh",
+                    json={"refresh_token": session.refresh_token},
+                    timeout=10,
+                )
+            if resp.status_code != 200:
+                logger.warning("token_refresh_before_push_failed", status_code=resp.status_code)
+                return session.access_token
+            data = resp.json()
+        except httpx.HTTPError as exc:
+            logger.warning("token_refresh_before_push_error", error=str(exc))
+            return session.access_token
+
+        access_token = data.get("github_access_token")
+        new_refresh_token = data.get("refresh_token", "")
+        if not access_token:
+            return session.access_token
+
+        if session.session_id:
+            await update_session_tokens(session.session_id, access_token, new_refresh_token)
+        session.access_token = access_token
+        session.refresh_token = new_refresh_token
+        logger.info("token_refreshed_before_push")
+        return access_token
 
     async def logout(self, session_id: str | None) -> None:
         await delete_session(session_id)
