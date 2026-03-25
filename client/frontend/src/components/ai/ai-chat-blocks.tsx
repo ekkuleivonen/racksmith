@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import {
   Wrench,
@@ -12,6 +12,9 @@ import {
 } from "lucide-react";
 import { AnsiUp } from "ansi_up";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 
 const ansiUp = new AnsiUp();
@@ -545,6 +548,91 @@ export function AiThinkingBlock({ text }: { text: string }) {
   );
 }
 
+export type InputFieldSpec = {
+  key: string;
+  label: string;
+  type: "password" | "text";
+  required: boolean;
+};
+
+export function AiInputRequiredBlock({
+  fields,
+  onSubmit,
+  disabled,
+}: {
+  fields: InputFieldSpec[];
+  onSubmit: (values: Record<string, string>) => void | Promise<void>;
+  disabled?: boolean;
+}) {
+  const [values, setValues] = useState<Record<string, string>>({});
+  const [submitting, setSubmitting] = useState(false);
+
+  const allRequiredOk = fields.every((f) => {
+    if (!f.required) return true;
+    return (values[f.key] ?? "").trim().length > 0;
+  });
+
+  const handleSubmit = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!allRequiredOk || submitting || disabled) return;
+    setSubmitting(true);
+    try {
+      const out: Record<string, string> = {};
+      for (const f of fields) {
+        const v = (values[f.key] ?? "").trim();
+        if (v) out[f.key] = v;
+      }
+      await onSubmit(out);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="mr-8 rounded-md border border-amber-500/40 bg-amber-500/[0.06] px-3.5 py-3 min-w-0 max-w-md">
+      <div className="text-[10px] uppercase tracking-wide text-amber-200/80 mb-2">
+        Runtime input required
+      </div>
+      <form onSubmit={(e) => void handleSubmit(e)} className="space-y-3">
+        {fields.map((f) => (
+          <div key={f.key} className="space-y-1.5">
+            <Label htmlFor={`runtime-${f.key}`} className="text-[11px] text-zinc-300">
+              {f.label}
+              {f.required ? " *" : ""}
+            </Label>
+            <Input
+              id={`runtime-${f.key}`}
+              type={f.type === "password" ? "password" : "text"}
+              autoComplete="off"
+              className="h-8 text-[12px]"
+              value={values[f.key] ?? ""}
+              disabled={disabled || submitting}
+              onChange={(e) =>
+                setValues((prev) => ({ ...prev, [f.key]: e.target.value }))
+              }
+            />
+          </div>
+        ))}
+        <Button
+          type="submit"
+          size="sm"
+          className="h-8 text-[11px]"
+          disabled={!allRequiredOk || submitting || disabled}
+        >
+          {submitting ? (
+            <>
+              <Loader2 className="size-3 animate-spin mr-1" />
+              Continuing…
+            </>
+          ) : (
+            "Submit"
+          )}
+        </Button>
+      </form>
+    </div>
+  );
+}
+
 export type LiveToolBlock = {
   kind: "tool";
   tool: string;
@@ -563,7 +651,13 @@ export type LiveToolBlock = {
   elapsedMs?: number | null;
 };
 
+export type LiveInputBlock = {
+  kind: "input_required";
+  fields: InputFieldSpec[];
+};
+
 export type LiveStreamBlock =
   | { kind: "user"; text: string }
   | { kind: "thinking"; text: string }
-  | LiveToolBlock;
+  | LiveToolBlock
+  | LiveInputBlock;

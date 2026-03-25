@@ -53,3 +53,16 @@ export function streamAiChatTurn(
 ): Promise<Response> {
   return apiStreamPost(`/ai/chats/${chatId}/stream`, body, signal);
 }
+
+export type ChatResumeBody = {
+  become_password?: string;
+  runtime_vars?: Record<string, string>;
+};
+
+export function resumeAiChatTurn(
+  chatId: string,
+  body: ChatResumeBody,
+  signal?: AbortSignal,
+): Promise<Response> {
+  return apiStreamPost(`/ai/chats/${chatId}/resume`, body, signal);
+}

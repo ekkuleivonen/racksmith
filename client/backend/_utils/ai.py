@@ -9,7 +9,7 @@ from typing import Any
 
 import httpx
 import redis.asyncio as aioredis
-from pydantic_ai import Agent, RunContext
+from pydantic_ai import Agent, ApprovalRequired, RunContext
 from pydantic_ai.models.openai import OpenAIModel
 from pydantic_ai.providers.openai import OpenAIProvider
 from racksmith_shared.runs import run_events_channel
@@ -272,9 +272,34 @@ async def run_playbook(
     if not host_ids:
         return "Cannot run playbook: host_ids is required and must not be empty."
 
+    try:
+        detail = playbook_manager.get_playbook(ctx.deps.session, playbook_id)
+    except FileNotFoundError:
+        return f"Playbook '{playbook_id}' not found."
+
+    merged_runtime = dict(runtime_vars or {})
+    if ctx.deps.resume_runtime_vars:
+        merged_runtime.update(ctx.deps.resume_runtime_vars)
+    become_pw = (ctx.deps.become_password or "").strip() or None
+
+    if detail.become and not become_pw and not ctx.tool_call_approved:
+        raise ApprovalRequired(
+            metadata={
+                "fields": [
+                    {
+                        "key": "become_password",
+                        "label": "Sudo password",
+                        "type": "password",
+                        "required": True,
+                    }
+                ]
+            }
+        )
+
     body = PlaybookRunRequest(
         targets=TargetSelection(hosts=list(host_ids)),
-        runtime_vars=runtime_vars or {},
+        runtime_vars=merged_runtime,
+        become_password=become_pw if detail.become else None,
     )
     run = await playbook_manager.create_run(ctx.deps.session, playbook_id, body)
     return await _wait_for_run(
@@ -300,10 +325,29 @@ async def run_role(
     if not host_ids:
         return "Cannot run role: host_ids is required and must not be empty."
 
+    merged_runtime = dict(ctx.deps.resume_runtime_vars or {})
+    become_pw = (ctx.deps.become_password or "").strip() or None
+
+    if become and not become_pw and not ctx.tool_call_approved:
+        raise ApprovalRequired(
+            metadata={
+                "fields": [
+                    {
+                        "key": "become_password",
+                        "label": "Sudo password",
+                        "type": "password",
+                        "required": True,
+                    }
+                ]
+            }
+        )
+
     body = RoleRunRequest(
         targets=TargetSelection(hosts=list(host_ids)),
         vars=vars or {},
         become=become,
+        become_password=become_pw if become else None,
+        runtime_vars=merged_runtime,
     )
     run = await role_manager.create_run(ctx.deps.session, role_id, body)
     return await _wait_for_run(

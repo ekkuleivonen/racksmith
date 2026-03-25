@@ -1,4 +1,14 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  memo,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type Dispatch,
+  type MutableRefObject,
+  type SetStateAction,
+} from "react";
 import { Loader2, Minus, Plus, Sparkles, X } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -13,6 +23,7 @@ import {
   createAiChat,
   deleteAiChat,
   getAiChatMessages,
+  resumeAiChatTurn,
   streamAiChatTurn,
   type ChatStreamContext,
   type ChatUiMessage,
@@ -25,6 +36,7 @@ import { invalidateQueriesForRacksmithAgentTool } from "@/lib/queryClient";
 import { MarkdownContent } from "@/components/shared/markdown-content";
 import { AiChatComposer, type MentionCandidate } from "./ai-chat-composer";
 import {
+  AiInputRequiredBlock,
   AiThinkingBlock,
   AiToolCallBlock,
   type LiveStreamBlock,
@@ -111,6 +123,169 @@ function patchSingleRunOutput(
     }
   }
   return s;
+}
+
+type AgentSseEvent = {
+  type?: string;
+  text?: string;
+  message?: string;
+  tool?: string;
+  args?: Record<string, unknown>;
+  result?: string;
+  chunk?: string;
+  run_id?: string;
+  result_type?: string;
+  exit_code?: number;
+  entity_id?: string;
+  entity_name?: string;
+  run_status?: string;
+  fields?: Array<{ key: string; label: string; type: string; required?: boolean }>;
+};
+
+type AgentSseDeps = {
+  setLiveBlocks: Dispatch<SetStateAction<LiveStreamBlock[]>>;
+  pendingRunOutputRef: MutableRefObject<PendingRunChunk[]>;
+  scheduleRunOutputFlush: () => void;
+  flushRunOutputSync: () => void;
+};
+
+function applyAgentSseEvent(ev: AgentSseEvent, deps: AgentSseDeps): void {
+  const {
+    setLiveBlocks,
+    pendingRunOutputRef,
+    scheduleRunOutputFlush,
+    flushRunOutputSync,
+  } = deps;
+
+  if (ev.type === "thinking" && ev.text) {
+    setLiveBlocks((s) => {
+      const last = s[s.length - 1];
+      if (last?.kind === "thinking") {
+        return [...s.slice(0, -1), { kind: "thinking", text: last.text + ev.text! }];
+      }
+      return [...s, { kind: "thinking", text: ev.text! }];
+    });
+    return;
+  }
+  if (ev.type === "tool_call" && ev.tool) {
+    setLiveBlocks((s) => [
+      ...s,
+      {
+        kind: "tool",
+        tool: ev.tool!,
+        args: ev.args,
+        startedAt: Date.now(),
+      } satisfies LiveToolBlock,
+    ]);
+    return;
+  }
+  if (ev.type === "run_output") {
+    pendingRunOutputRef.current.push({
+      chunk: ev.chunk ?? "",
+      tool: ev.tool ?? "",
+      runId: ev.run_id ?? "",
+    });
+    scheduleRunOutputFlush();
+    return;
+  }
+  if (ev.type === "tool_result" && ev.tool) {
+    invalidateQueriesForRacksmithAgentTool(ev.tool);
+    flushRunOutputSync();
+    setLiveBlocks((s) => {
+      const idx = s.findIndex((b) => b.kind === "tool" && !b.done);
+      let outcome: string | null = "success";
+      if (
+        ev.result_type === "run" &&
+        typeof ev.exit_code === "number" &&
+        ev.exit_code !== 0
+      ) {
+        outcome = "failed";
+      }
+      if (
+        ev.result_type === "ssh" &&
+        typeof ev.exit_code === "number" &&
+        ev.exit_code !== 0
+      ) {
+        outcome = "failed";
+      }
+      if (idx < 0) {
+        return [
+          ...s,
+          {
+            kind: "tool",
+            tool: ev.tool!,
+            startedAt: Date.now(),
+            done: true,
+            resultPreview: ev.result ?? "",
+            resultType: ev.result_type,
+            exitCode: ev.exit_code ?? null,
+            entityId: ev.entity_id ?? null,
+            entityName: ev.entity_name ?? null,
+            runStatus: ev.run_status ?? null,
+            outcome,
+            elapsedMs: null,
+          } satisfies LiveToolBlock,
+        ];
+      }
+      const b = s[idx] as LiveToolBlock;
+      const elapsedMs = Date.now() - b.startedAt;
+      return s.map((block, i) =>
+        i === idx
+          ? ({
+              ...b,
+              done: true,
+              resultPreview: ev.result ?? "",
+              resultType: ev.result_type,
+              exitCode: ev.exit_code ?? null,
+              entityId: ev.entity_id ?? null,
+              entityName: ev.entity_name ?? null,
+              runStatus: ev.run_status ?? null,
+              outcome,
+              elapsedMs,
+            } satisfies LiveToolBlock)
+          : block,
+      );
+    });
+    return;
+  }
+  if (ev.type === "input_required" && ev.fields && ev.fields.length > 0) {
+    const fields = ev.fields.map((f) => ({
+      key: f.key,
+      label: f.label,
+      type: f.type === "password" ? ("password" as const) : ("text" as const),
+      required: f.required !== false,
+    }));
+    setLiveBlocks((s) => [...s, { kind: "input_required", fields }]);
+    return;
+  }
+  if (ev.type === "error" && ev.message) {
+    toast.error(ev.message);
+  }
+}
+
+async function consumeAgentSseResponse(res: Response, deps: AgentSseDeps): Promise<void> {
+  const reader = res.body?.getReader();
+  if (!reader) return;
+  const decoder = new TextDecoder();
+  let buffer = "";
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split("\n");
+    buffer = lines.pop() ?? "";
+    for (const line of lines) {
+      if (!line.startsWith("data: ")) continue;
+      const payload = line.slice(6);
+      if (payload === "[DONE]") continue;
+      try {
+        const ev = JSON.parse(payload) as AgentSseEvent;
+        applyAgentSseEvent(ev, deps);
+      } catch {
+        /* ignore */
+      }
+    }
+  }
 }
 
 const assistantMarkdownClassName = cn(
@@ -349,6 +524,13 @@ export function AiBottomPanel() {
     }
   };
 
+  const streamDeps = (): AgentSseDeps => ({
+    setLiveBlocks,
+    pendingRunOutputRef,
+    scheduleRunOutputFlush,
+    flushRunOutputSync,
+  });
+
   const handleSend = async () => {
     const text = input.trim();
     if (!text || !activeChatId || sending) return;
@@ -364,139 +546,50 @@ export function AiBottomPanel() {
         { content: text, context: ctx },
         controller.signal,
       );
-      const reader = res.body!.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n");
-        buffer = lines.pop() ?? "";
-        for (const line of lines) {
-          if (!line.startsWith("data: ")) continue;
-          const payload = line.slice(6);
-          if (payload === "[DONE]") continue;
-          try {
-            const ev = JSON.parse(payload) as {
-              type?: string;
-              text?: string;
-              message?: string;
-              tool?: string;
-              args?: Record<string, unknown>;
-              result?: string;
-              chunk?: string;
-              run_id?: string;
-              result_type?: string;
-              exit_code?: number;
-              entity_id?: string;
-              entity_name?: string;
-              run_status?: string;
-            };
-            if (ev.type === "thinking" && ev.text) {
-              setLiveBlocks((s) => {
-                const last = s[s.length - 1];
-                if (last?.kind === "thinking") {
-                  return [
-                    ...s.slice(0, -1),
-                    { kind: "thinking", text: last.text + ev.text! },
-                  ];
-                }
-                return [...s, { kind: "thinking", text: ev.text! }];
-              });
-            }
-            if (ev.type === "tool_call" && ev.tool) {
-              setLiveBlocks((s) => [
-                ...s,
-                {
-                  kind: "tool",
-                  tool: ev.tool!,
-                  args: ev.args,
-                  startedAt: Date.now(),
-                } satisfies LiveToolBlock,
-              ]);
-            }
-            if (ev.type === "run_output") {
-              pendingRunOutputRef.current.push({
-                chunk: ev.chunk ?? "",
-                tool: ev.tool ?? "",
-                runId: ev.run_id ?? "",
-              });
-              scheduleRunOutputFlush();
-            }
-            if (ev.type === "tool_result" && ev.tool) {
-              invalidateQueriesForRacksmithAgentTool(ev.tool);
-              flushRunOutputSync();
-              setLiveBlocks((s) => {
-                const idx = s.findIndex((b) => b.kind === "tool" && !b.done);
-                let outcome: string | null = "success";
-                if (
-                  ev.result_type === "run" &&
-                  typeof ev.exit_code === "number" &&
-                  ev.exit_code !== 0
-                ) {
-                  outcome = "failed";
-                }
-                if (
-                  ev.result_type === "ssh" &&
-                  typeof ev.exit_code === "number" &&
-                  ev.exit_code !== 0
-                ) {
-                  outcome = "failed";
-                }
-                if (idx < 0) {
-                  return [
-                    ...s,
-                    {
-                      kind: "tool",
-                      tool: ev.tool!,
-                      startedAt: Date.now(),
-                      done: true,
-                      resultPreview: ev.result ?? "",
-                      resultType: ev.result_type,
-                      exitCode: ev.exit_code ?? null,
-                      entityId: ev.entity_id ?? null,
-                      entityName: ev.entity_name ?? null,
-                      runStatus: ev.run_status ?? null,
-                      outcome,
-                      elapsedMs: null,
-                    } satisfies LiveToolBlock,
-                  ];
-                }
-                const b = s[idx] as LiveToolBlock;
-                const elapsedMs = Date.now() - b.startedAt;
-                return s.map((block, i) =>
-                  i === idx
-                    ? ({
-                        ...b,
-                        done: true,
-                        resultPreview: ev.result ?? "",
-                        resultType: ev.result_type,
-                        exitCode: ev.exit_code ?? null,
-                        entityId: ev.entity_id ?? null,
-                        entityName: ev.entity_name ?? null,
-                        runStatus: ev.run_status ?? null,
-                        outcome,
-                        elapsedMs,
-                      } satisfies LiveToolBlock)
-                    : block,
-                );
-              });
-            }
-            if (ev.type === "error" && ev.message) {
-              toast.error(ev.message);
-            }
-          } catch {
-            /* ignore */
-          }
-        }
-      }
+      await consumeAgentSseResponse(res, streamDeps());
       flushRunOutputSync();
       await queryClient.invalidateQueries({ queryKey: ["ai-chat-messages", activeChatId] });
-      setLiveBlocks([]);
+      setLiveBlocks((prev) =>
+        prev.some((b) => b.kind === "input_required") ? prev : [],
+      );
     } catch (e) {
       if (e instanceof DOMException && e.name === "AbortError") return;
       toastApiError(e, "Send failed");
+    } finally {
+      flushRunOutputSync();
+      setSending(false);
+    }
+  };
+
+  const handleRuntimeInputSubmit = async (values: Record<string, string>) => {
+    if (!activeChatId || sending) return;
+    setSending(true);
+    setLiveBlocks((s) => s.filter((b) => b.kind !== "input_required"));
+    try {
+      const become = (values.become_password ?? "").trim();
+      const runtimeVars = { ...values };
+      delete runtimeVars.become_password;
+      const filteredRv = Object.fromEntries(
+        Object.entries(runtimeVars).filter(([, v]) => v.trim().length > 0),
+      );
+      const res = await resumeAiChatTurn(activeChatId, {
+        become_password: become || undefined,
+        ...(Object.keys(filteredRv).length > 0 ? { runtime_vars: filteredRv } : {}),
+      });
+      await consumeAgentSseResponse(res, {
+        setLiveBlocks,
+        pendingRunOutputRef,
+        scheduleRunOutputFlush,
+        flushRunOutputSync,
+      });
+      flushRunOutputSync();
+      await queryClient.invalidateQueries({ queryKey: ["ai-chat-messages", activeChatId] });
+      setLiveBlocks((prev) =>
+        prev.some((b) => b.kind === "input_required") ? prev : [],
+      );
+    } catch (e) {
+      if (e instanceof DOMException && e.name === "AbortError") return;
+      toastApiError(e, "Could not continue");
     } finally {
       flushRunOutputSync();
       setSending(false);
@@ -685,6 +778,16 @@ export function AiBottomPanel() {
                     entityName={b.entityName ?? undefined}
                     runStatus={b.runStatus ?? undefined}
                     elapsedMs={b.elapsedMs ?? undefined}
+                  />
+                );
+              }
+              if (b.kind === "input_required") {
+                return (
+                  <AiInputRequiredBlock
+                    key={`lb-${i}`}
+                    fields={b.fields}
+                    disabled={sending}
+                    onSubmit={handleRuntimeInputSubmit}
                   />
                 );
               }

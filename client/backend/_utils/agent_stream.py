@@ -20,6 +20,7 @@ from pydantic_ai.messages import (
     TextPart,
     TextPartDelta,
 )
+from pydantic_ai.tools import DeferredToolRequests, DeferredToolResults
 
 from _utils.logging import get_logger
 from auth.session import SessionData
@@ -54,6 +55,8 @@ class AgentDeps:
     run_output_sink: Callable[[dict[str, Any]], Awaitable[None]] | None = field(
         default=None, repr=False
     )
+    become_password: str | None = field(default=None, repr=False)
+    resume_runtime_vars: dict[str, str] | None = field(default=None, repr=False)
 
 
 def sse_event(payload: dict[str, Any]) -> str:
@@ -136,6 +139,34 @@ def tool_result_ui_metadata(tool_name: str, content: str) -> dict[str, Any]:
         return meta
 
     return meta
+
+
+def collect_input_fields_from_deferred(requests: DeferredToolRequests) -> list[dict[str, Any]]:
+    """Merge ``fields`` from per-tool-call metadata; dedupe by ``key``."""
+    seen: set[str] = set()
+    out: list[dict[str, Any]] = []
+    for meta in (requests.metadata or {}).values():
+        if not isinstance(meta, dict):
+            continue
+        fields = meta.get("fields")
+        if not isinstance(fields, list):
+            continue
+        for f in fields:
+            if not isinstance(f, dict):
+                continue
+            key = str(f.get("key", ""))
+            if not key or key in seen:
+                continue
+            seen.add(key)
+            out.append(
+                {
+                    "key": key,
+                    "label": str(f.get("label", key)),
+                    "type": str(f.get("type", "text")),
+                    "required": bool(f.get("required", True)),
+                }
+            )
+    return out
 
 
 def _summarize_tool_args(tool_name: str, raw_json: str) -> dict[str, Any]:
@@ -346,25 +377,30 @@ async def stream_agent(
 async def stream_racksmith_turn(
     agent: Agent[Any, Any],
     *,
-    user_prompt: str,
+    user_prompt: str | None,
     deps: AgentDeps,
     message_history: Sequence[ModelMessage] | None,
     instructions: str | None,
     persisted_messages: list[ModelMessage],
+    deferred_tool_results: DeferredToolResults | None = None,
+    deferred_snapshots: list[DeferredToolRequests] | None = None,
 ) -> AsyncGenerator[str]:
     """Run one chat turn with optional prior ``ModelMessage`` history; update ``persisted_messages`` on success."""
     from _utils.ai import get_model
 
     model = get_model()
     history_list: list[ModelMessage] = list(message_history) if message_history else []
+    output_union: list[type] = [str, DeferredToolRequests]
 
     try:
-        async with agent.iter(
+        async with agent.iter(  # type: ignore[var-annotated]
             user_prompt=user_prompt,
             message_history=history_list or None,
             deps=deps,
             model=model,
             instructions=instructions,
+            output_type=output_union,
+            deferred_tool_results=deferred_tool_results,
         ) as run:
             async for node in run:
                 if Agent.is_model_request_node(node):
@@ -435,6 +471,17 @@ async def stream_racksmith_turn(
                 return
 
             result_output = run.result.output
+
+            if isinstance(result_output, DeferredToolRequests):
+                fields = collect_input_fields_from_deferred(result_output)
+                yield _sse({"type": "input_required", "fields": fields})
+                persisted_messages.clear()
+                persisted_messages.extend(run.all_messages())
+                if deferred_snapshots is not None:
+                    deferred_snapshots.append(result_output)
+                yield "data: [DONE]\n\n"
+                return
+
             done: dict[str, Any] = {"type": "done"}
 
             if hasattr(result_output, "model_dump"):

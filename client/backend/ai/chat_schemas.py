@@ -46,3 +46,8 @@ class ChatStreamRequest(BaseModel):
         default_factory=dict,
         description="Optional keys: hosts, playbooks, roles, groups, runs, racks — each a list of string ids.",
     )
+
+
+class ChatResumeRequest(BaseModel):
+    become_password: str | None = None
+    runtime_vars: dict[str, str] = Field(default_factory=dict)
