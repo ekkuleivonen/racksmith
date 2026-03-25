@@ -211,29 +211,37 @@ export function UnifiedBottomPanel() {
         </Button>
       </div>
 
-      <div className="flex-1 min-h-0">
-        {activeTab?.kind === "ssh" ? (
-          <div className="h-full min-h-0 px-1 pb-1">
-            {tabs
-              .filter((t): t is Extract<BottomTab, { kind: "ssh" }> => t.kind === "ssh")
-              .map((t) => (
-                <SshTerminalPane
-                  key={t.id}
-                  hostId={t.hostId}
-                  visible={t.id === activeTab.id}
-                />
-              ))}
-          </div>
-        ) : activeTab?.kind === "ai-chat" ? (
-          <AiChatContent key={activeTab.chatId} chatId={activeTab.chatId} />
-        ) : activeTab?.kind === "playbook-run" ? (
-          <PlaybookRunContent
-            key={activeTab.runId}
-            runId={activeTab.runId}
-            playbookName={activeTab.playbookName}
-            status={activeTab.status}
-          />
-        ) : (
+      <div className="flex-1 min-h-0 relative">
+        <div className={cn("h-full min-h-0 px-1 pb-1", activeTab?.kind !== "ssh" && "hidden")}>
+          {tabs
+            .filter((t): t is Extract<BottomTab, { kind: "ssh" }> => t.kind === "ssh")
+            .map((t) => (
+              <SshTerminalPane
+                key={t.id}
+                hostId={t.hostId}
+                visible={t.id === activeTab?.id}
+              />
+            ))}
+        </div>
+        {tabs
+          .filter((t): t is Extract<BottomTab, { kind: "ai-chat" }> => t.kind === "ai-chat")
+          .map((t) => (
+            <div key={t.id} className={cn("h-full", t.id !== activeTab?.id && "hidden")}>
+              <AiChatContent chatId={t.chatId} />
+            </div>
+          ))}
+        {tabs
+          .filter((t): t is Extract<BottomTab, { kind: "playbook-run" }> => t.kind === "playbook-run")
+          .map((t) => (
+            <div key={t.id} className={cn("h-full", t.id !== activeTab?.id && "hidden")}>
+              <PlaybookRunContent
+                runId={t.runId}
+                playbookName={t.playbookName}
+                status={t.status}
+              />
+            </div>
+          ))}
+        {!activeTab && (
           <div className="h-full flex items-center justify-center text-zinc-500 text-xs">
             No tab selected
           </div>
