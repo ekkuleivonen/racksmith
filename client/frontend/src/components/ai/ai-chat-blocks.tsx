@@ -99,23 +99,23 @@ export function AiRunOutputBlock({
   return (
     <div
       className={cn(
-        "mt-1 rounded-md border border-emerald-500/30 bg-zinc-950/90 font-mono text-[9px] text-zinc-400",
+        "mt-1 rounded-md border border-emerald-500/30 bg-zinc-950/90 font-mono text-[10px] leading-relaxed text-zinc-300",
         done && "opacity-90",
       )}
     >
-      <div className="flex items-center gap-1.5 border-b border-emerald-500/20 px-2 py-1 text-zinc-500">
-        <Terminal className="size-2.5 shrink-0 text-emerald-500/70" />
+      <div className="flex items-center gap-1.5 border-b border-emerald-500/20 px-2 py-1.5 text-zinc-500 text-[10px]">
+        <Terminal className="size-3 shrink-0 text-emerald-500/70" />
         <span className="uppercase tracking-wide">Ansible output</span>
         {runId ? (
-          <span className="truncate font-mono text-[8px] text-zinc-600">{runId.slice(0, 8)}…</span>
+          <span className="truncate font-mono text-[9px] text-zinc-600">{runId.slice(0, 8)}…</span>
         ) : null}
         {capped ? (
-          <span className="ml-auto text-[8px] text-amber-500/90">Showing last 200 lines</span>
+          <span className="ml-auto text-[9px] text-amber-500/90">Showing last 200 lines</span>
         ) : null}
       </div>
       <pre
         ref={preRef}
-        className="max-h-96 overflow-y-auto whitespace-pre-wrap break-all px-2 py-1.5"
+        className="max-h-[32rem] overflow-y-auto whitespace-pre-wrap break-all px-2.5 py-2"
       >
         {display}
       </pre>
@@ -363,6 +363,10 @@ export function AiToolCallBlock({
       ? "border-rose-500/40 bg-rose-500/[0.07]"
       : toolCallAccentClass(tool);
 
+  /** Live panel passes compact; do not clip run tools — their body is mostly ansible output. */
+  const compactClipBody =
+    Boolean(compact && !done) && tool !== "run_playbook" && tool !== "run_role";
+
   return (
     <details
       className={cn(
@@ -410,7 +414,7 @@ export function AiToolCallBlock({
         )}
         <span className="font-mono text-[9px] text-zinc-600 shrink-0">{tool}</span>
       </summary>
-      <div className={cn("px-3 pb-2", compact && !done && "max-h-20 overflow-hidden")}>
+      <div className={cn("px-3 pb-2", compactClipBody && "max-h-20 overflow-hidden")}>
         <CallSummaryExtra tool={tool} args={args} />
         {(tool === "run_playbook" || tool === "run_role") && !done && (
           <AiRunOutputBlock text={runOutput ?? ""} runId={runId} done={false} />
