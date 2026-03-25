@@ -14,10 +14,10 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { useSetupStore } from "@/stores/setup";
+import { useBottomBarStore } from "@/stores/bottom-bar";
 import { useGitStatuses, useHosts } from "@/hooks/queries";
-import { useSshStore } from "@/stores/ssh";
-import { useAiChatUiStore } from "@/stores/ai-chat-ui";
 import { hostDisplayLabel, isManagedHost, isReachableHost } from "@/lib/hosts";
+import { openAiChatWorkspace } from "@/lib/open-ai-chat-workspace";
 import { cn } from "@/lib/utils";
 
 function SshHostPicker({ onSelect }: { onSelect: (hostId: string, label: string) => void }) {
@@ -81,12 +81,21 @@ export function SidebarFooter() {
   const syncing = useSetupStore((s) => s.syncing);
   const { data: gitData } = useGitStatuses();
 
-  const sshTabs = useSshStore((s) => s.tabs);
-  const sshPanelOpen = useSshStore((s) => s.panelOpen);
-  const openSession = useSshStore((s) => s.openSession);
-  const togglePanel = useSshStore((s) => s.togglePanel);
-  const engageAiDock = useAiChatUiStore((s) => s.engageDock);
-  const aiPanelOpen = useAiChatUiStore((s) => s.panelOpen);
+  const userId = status?.user?.id ?? "";
+  const repoFull = status?.repo?.full_name ?? "";
+
+  const sshTabs = useBottomBarStore((s) =>
+    s.tabs.filter((t) => t.kind === "ssh"),
+  );
+  const panelOpen = useBottomBarStore((s) => s.panelOpen);
+  const openSshSession = useBottomBarStore((s) => s.openSshSession);
+  const togglePanel = useBottomBarStore((s) => s.togglePanel);
+  const activeTabId = useBottomBarStore((s) => s.activeTabId);
+  const activeTab = useBottomBarStore((s) =>
+    s.tabs.find((t) => t.id === s.activeTabId),
+  );
+  const aiPanelOpen =
+    panelOpen && activeTab?.kind === "ai-chat";
 
   const [hostPickerOpen, setHostPickerOpen] = useState(false);
 
@@ -107,7 +116,7 @@ export function SidebarFooter() {
 
   const handleHostSelect = (hostId: string, label: string) => {
     setHostPickerOpen(false);
-    openSession(hostId, label);
+    openSshSession(hostId, label);
   };
 
   return (
@@ -146,7 +155,7 @@ export function SidebarFooter() {
                 aiPanelOpen && "border-violet-500/50 text-violet-200 bg-violet-500/10",
               )}
               disabled={!status?.repo_ready}
-              onClick={engageAiDock}
+              onClick={() => void openAiChatWorkspace(userId, repoFull)}
               aria-label="Open AI chat"
             >
               <Sparkles className="size-3" />
@@ -165,7 +174,9 @@ export function SidebarFooter() {
                   size="icon"
                   className={cn(
                     "size-7 shrink-0",
-                    sshPanelOpen && sshTabs.length > 0 && "border-zinc-600 text-zinc-100",
+                    panelOpen &&
+                      sshTabs.some((t) => t.id === activeTabId) &&
+                      "border-zinc-600 text-zinc-100",
                   )}
                   onClick={handleSshClick}
                   aria-label="SSH Terminal"

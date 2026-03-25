@@ -9,19 +9,11 @@ import {
   type MutableRefObject,
   type SetStateAction,
 } from "react";
-import { Loader2, Minus, Plus, Sparkles, X } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useSetupStore } from "@/stores/setup";
-import { useAiChatUiStore } from "@/stores/ai-chat-ui";
 import {
-  readOpenChatIds,
-  writeOpenChatIds,
-} from "@/lib/ai-chat-storage";
-import {
-  createAiChat,
-  deleteAiChat,
   getAiChatMessages,
   resumeAiChatTurn,
   streamAiChatTurn,
@@ -378,15 +370,10 @@ function attachmentsToContext(items: MentionCandidate[]): ChatStreamContext {
   return ctx;
 }
 
-export function AiBottomPanel() {
-  const panelOpen = useAiChatUiStore((s) => s.panelOpen);
-  const setPanelOpen = useAiChatUiStore((s) => s.setPanelOpen);
-  const disengageDock = useAiChatUiStore((s) => s.disengageDock);
-  const { userId, repoFull, repoReady } = useRepoScope();
+export function AiChatContent({ chatId }: { chatId: string }) {
+  const { repoReady } = useRepoScope();
   const queryClient = useQueryClient();
 
-  const [openChatIds, setOpenChatIds] = useState<string[]>([]);
-  const [activeChatId, setActiveChatId] = useState<string | null>(null);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [liveBlocks, setLiveBlocks] = useState<LiveStreamBlock[]>([]);
@@ -437,92 +424,21 @@ export function AiBottomPanel() {
     [],
   );
 
+  useEffect(() => {
+    setLiveBlocks([]);
+  }, [chatId]);
+
   const { data: hosts = [] } = useHosts();
   const { data: playbooks = [] } = usePlaybooks();
   const { data: roles = [] } = useRoles();
   const { data: groups = [] } = useGroups();
   const { data: rackEntries = [] } = useRackEntries();
 
-  useEffect(() => {
-    if (!panelOpen || !repoReady) return;
-    const ids = readOpenChatIds(userId, repoFull);
-    setOpenChatIds(ids);
-    setActiveChatId((cur) => {
-      if (cur && ids.includes(cur)) return cur;
-      return ids[0] ?? null;
-    });
-  }, [panelOpen, repoReady, userId, repoFull]);
-
-  const ensureChat = useCallback(async () => {
-    if (!repoReady) return;
-    let ids = readOpenChatIds(userId, repoFull);
-    if (ids.length === 0) {
-      try {
-        const { chat_id } = await createAiChat();
-        ids = [chat_id];
-        writeOpenChatIds(userId, repoFull, ids);
-        setOpenChatIds(ids);
-        setActiveChatId(chat_id);
-      } catch (e) {
-        toastApiError(e, "Could not start chat");
-      }
-      return;
-    }
-    setActiveChatId((cur) => {
-      if (cur && ids.includes(cur)) return cur;
-      return ids[0] ?? null;
-    });
-  }, [repoReady, userId, repoFull]);
-
-  useEffect(() => {
-    if (panelOpen && repoReady) {
-      void ensureChat();
-    }
-  }, [panelOpen, repoReady, ensureChat]);
-
   const messagesQuery = useQuery({
-    queryKey: ["ai-chat-messages", activeChatId],
-    queryFn: () => getAiChatMessages(activeChatId!),
-    enabled: Boolean(activeChatId && panelOpen && repoReady),
+    queryKey: ["ai-chat-messages", chatId],
+    queryFn: () => getAiChatMessages(chatId),
+    enabled: Boolean(chatId && repoReady),
   });
-
-  const persistOpenIds = useCallback(
-    (ids: string[]) => {
-      setOpenChatIds(ids);
-      if (repoReady) writeOpenChatIds(userId, repoFull, ids);
-    },
-    [repoReady, userId, repoFull],
-  );
-
-  const handleNewChat = async () => {
-    if (!repoReady) return;
-    try {
-      const { chat_id } = await createAiChat();
-      const next = [...openChatIds, chat_id];
-      persistOpenIds(next);
-      setActiveChatId(chat_id);
-      await queryClient.invalidateQueries({ queryKey: ["ai-chat-messages", chat_id] });
-    } catch (e) {
-      toastApiError(e, "Could not create chat");
-    }
-  };
-
-  const handleCloseChat = async (chatId: string) => {
-    try {
-      await deleteAiChat(chatId);
-    } catch {
-      /* still drop from UI */
-    }
-    const next = openChatIds.filter((id) => id !== chatId);
-    persistOpenIds(next);
-    queryClient.removeQueries({ queryKey: ["ai-chat-messages", chatId] });
-    if (activeChatId === chatId) {
-      setActiveChatId(next[0] ?? null);
-    }
-    if (next.length === 0) {
-      disengageDock();
-    }
-  };
 
   const streamDeps = (): AgentSseDeps => ({
     setLiveBlocks,
@@ -533,7 +449,7 @@ export function AiBottomPanel() {
 
   const handleSend = async () => {
     const text = input.trim();
-    if (!text || !activeChatId || sending) return;
+    if (!text || !chatId || sending) return;
     const ctx = attachmentsToContext(attachmentsRef.current);
     setAttachments([]);
     setInput("");
@@ -542,13 +458,13 @@ export function AiBottomPanel() {
     const controller = new AbortController();
     try {
       const res = await streamAiChatTurn(
-        activeChatId,
+        chatId,
         { content: text, context: ctx },
         controller.signal,
       );
       await consumeAgentSseResponse(res, streamDeps());
       flushRunOutputSync();
-      await queryClient.invalidateQueries({ queryKey: ["ai-chat-messages", activeChatId] });
+      await queryClient.invalidateQueries({ queryKey: ["ai-chat-messages", chatId] });
       setLiveBlocks((prev) =>
         prev.some((b) => b.kind === "input_required") ? prev : [],
       );
@@ -562,7 +478,7 @@ export function AiBottomPanel() {
   };
 
   const handleRuntimeInputSubmit = async (values: Record<string, string>) => {
-    if (!activeChatId || sending) return;
+    if (!chatId || sending) return;
     setSending(true);
     setLiveBlocks((s) => s.filter((b) => b.kind !== "input_required"));
     try {
@@ -572,7 +488,7 @@ export function AiBottomPanel() {
       const filteredRv = Object.fromEntries(
         Object.entries(runtimeVars).filter(([, v]) => v.trim().length > 0),
       );
-      const res = await resumeAiChatTurn(activeChatId, {
+      const res = await resumeAiChatTurn(chatId, {
         become_password: become || undefined,
         ...(Object.keys(filteredRv).length > 0 ? { runtime_vars: filteredRv } : {}),
       });
@@ -583,7 +499,7 @@ export function AiBottomPanel() {
         flushRunOutputSync,
       });
       flushRunOutputSync();
-      await queryClient.invalidateQueries({ queryKey: ["ai-chat-messages", activeChatId] });
+      await queryClient.invalidateQueries({ queryKey: ["ai-chat-messages", chatId] });
       setLiveBlocks((prev) =>
         prev.some((b) => b.kind === "input_required") ? prev : [],
       );
@@ -647,71 +563,7 @@ export function AiBottomPanel() {
   }
 
   return (
-    <div className="h-full flex flex-col bg-[#09090b] shadow-[0_-6px_16px_rgba(0,0,0,0.5)]">
-      <div className="flex items-center border-b border-zinc-800/60 shrink-0">
-        <Sparkles className="size-3 text-violet-400 mx-2 shrink-0" />
-        <div className="flex-1 flex items-center min-w-0 overflow-x-auto scrollbar-hide">
-          {openChatIds.map((id) => (
-            <button
-              key={id}
-              type="button"
-              onClick={() => setActiveChatId(id)}
-              className={cn(
-                "group flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-medium tracking-wide border-r border-zinc-800/60 shrink-0 transition-colors",
-                activeChatId === id
-                  ? "bg-zinc-900 text-zinc-200"
-                  : "text-zinc-500 hover:text-zinc-300 hover:bg-zinc-900/50",
-              )}
-            >
-              <span className="truncate max-w-[100px]">{id.slice(0, 8)}…</span>
-              <span
-                role="button"
-                tabIndex={0}
-                className="size-3.5 flex items-center justify-center rounded-sm opacity-0 group-hover:opacity-100 hover:bg-zinc-700 transition-opacity"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  void handleCloseChat(id);
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") {
-                    e.stopPropagation();
-                    void handleCloseChat(id);
-                  }
-                }}
-              >
-                <X className="size-2.5" />
-              </span>
-            </button>
-          ))}
-          <button
-            type="button"
-            className="flex items-center justify-center px-2 py-1.5 text-zinc-500 hover:text-zinc-300 transition-colors shrink-0"
-            aria-label="New chat"
-            onClick={() => void handleNewChat()}
-          >
-            <Plus className="size-3" />
-          </button>
-        </div>
-        <Button
-          size="icon"
-          variant="ghost"
-          className="h-6 w-6 text-zinc-500 hover:text-zinc-300 shrink-0"
-          aria-label="Minimize AI panel"
-          onClick={() => setPanelOpen(false)}
-        >
-          <Minus className="size-3" />
-        </Button>
-        <Button
-          size="icon"
-          variant="ghost"
-          className="h-6 w-6 text-zinc-500 hover:text-zinc-300 mr-1 shrink-0"
-          aria-label="Close AI dock"
-          onClick={disengageDock}
-        >
-          <X className="size-3" />
-        </Button>
-      </div>
-
+    <div className="h-full flex flex-col bg-[#09090b] min-h-0">
       <div className="flex-1 min-h-0 flex flex-col">
         <ScrollArea className="flex-1 min-h-0 px-6">
           <div className="space-y-4 py-3 pr-4">
@@ -803,7 +655,7 @@ export function AiBottomPanel() {
             value={input}
             onChange={setInput}
             onSend={handleSend}
-            disabled={sending || !activeChatId}
+            disabled={sending || !chatId}
             sending={sending}
             candidates={mentionCandidates}
             attachments={attachments}

@@ -39,7 +39,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { usePlaybooks, useHosts, useGroups } from "@/hooks/queries";
 import { cn } from "@/lib/utils";
-import { useTerminalWebSocket } from "@/hooks/use-terminal-websocket";
+import { useBottomBarStore } from "@/stores/bottom-bar";
 import { toastApiError } from "@/lib/api";
 import { hostDisplayLabel, isManagedHost } from "@/lib/hosts";
 import {
@@ -47,10 +47,8 @@ import {
   emptyTargetSelection,
   getPlaybookRequiredRuntimeVars,
   resolveTargets,
-  type PlaybookRun,
   type PlaybookSummary,
   type TargetSelection,
-  playbookRunStreamUrl,
 } from "@/lib/playbooks";
 import {
   needsRuntimeVarsDialog,
@@ -65,7 +63,7 @@ interface PlaybookRunDialogProps {
   playbookId?: string;
 }
 
-type Phase = "pick" | "pick-hosts" | "running" | "done";
+type Phase = "pick" | "pick-hosts";
 
 type TargetTab = "hosts" | "groups" | "hostvars";
 
@@ -96,14 +94,12 @@ export function PlaybookRunDialog({
   const { data: groups = [] } = useGroups();
   const [search, setSearch] = useState("");
   const [phase, setPhase] = useState<Phase>("pick");
-  const [activeRun, setActiveRun] = useState<PlaybookRun | null>(null);
   const [selectedPlaybook, setSelectedPlaybook] =
     useState<PlaybookSummary | null>(null);
   const [runtimeFields, setRuntimeFields] = useState<RuntimeVarField[]>([]);
   const [runtimeNeedsBecome, setRuntimeNeedsBecome] = useState(false);
   const [runtimeDialogOpen, setRuntimeDialogOpen] = useState(false);
   const [starting, setStarting] = useState(false);
-  const [initialTerminalOutput, setInitialTerminalOutput] = useState("");
 
   const [selectedHostIds, setSelectedHostIds] = useState<Set<string>>(
     new Set(),
@@ -121,8 +117,6 @@ export function PlaybookRunDialog({
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewExpanded, setPreviewExpanded] = useState(false);
 
-  const terminalHostRef = useRef<HTMLDivElement | null>(null);
-  const renderedOutputRef = useRef("");
   const pendingTargetsRef = useRef<TargetSelection>(emptyTargetSelection());
 
   const hostLabels = useMemo(() => {
@@ -304,13 +298,11 @@ export function PlaybookRunDialog({
   useEffect(() => {
     if (!open) {
       setPhase("pick");
-      setActiveRun(null);
       setSelectedPlaybook(null);
       setSearch("");
       setRuntimeFields([]);
       setRuntimeNeedsBecome(false);
       setStarting(false);
-      setInitialTerminalOutput("");
       setSelectedHostIds(new Set());
       setHostSearch("");
       setFilterGroupIds([]);
@@ -424,7 +416,6 @@ export function PlaybookRunDialog({
       becomePassword?: string | null,
     ) => {
       setStarting(true);
-      setPhase("running");
       try {
         const result = await createPlaybookRun(playbookId, {
           targets,
@@ -434,9 +425,13 @@ export function PlaybookRunDialog({
               : undefined,
           become_password: becomePassword ?? undefined,
         });
-        setActiveRun(result.run);
-        setInitialTerminalOutput(result.run.output ?? "");
+        useBottomBarStore.getState().openPlaybookRunTab({
+          runId: result.run.id,
+          playbookName: result.run.playbook_name,
+          status: result.run.status,
+        });
         toast.success("Playbook started");
+        onOpenChange(false);
       } catch (error) {
         toastApiError(error, "Failed to start playbook");
         setPhase(preselectedPlaybookId ? "pick-hosts" : "pick");
@@ -444,7 +439,7 @@ export function PlaybookRunDialog({
         setStarting(false);
       }
     },
-    [preselectedPlaybookId],
+    [preselectedPlaybookId, onOpenChange],
   );
 
   const handleSelectPlaybook = useCallback(
@@ -518,76 +513,6 @@ export function PlaybookRunDialog({
         : [...prev, groupId],
     );
   }, []);
-
-  const handlePlaybookMessage = useCallback(
-    (payload: unknown, terminal: import("xterm").Terminal) => {
-      const p = payload as {
-        type?: string;
-        run?: PlaybookRun;
-        data?: string;
-        message?: string;
-      };
-      if (p.type === "error") {
-        toast.error(p.message ?? "Playbook run error");
-        return;
-      }
-      if (p.type === "snapshot" || p.type === "status") {
-        if (p.run) {
-          setActiveRun(p.run);
-          if (p.run.status === "completed" || p.run.status === "failed") {
-            setPhase("done");
-          }
-          if (p.run.output !== renderedOutputRef.current) {
-            terminal.clear();
-            if (p.run.output) terminal.write(String(p.run.output));
-            renderedOutputRef.current = String(p.run.output || "");
-          }
-        }
-      }
-      if (p.type === "output") {
-        const chunk = String(p.data ?? "");
-        terminal.write(chunk);
-        renderedOutputRef.current += chunk;
-        setActiveRun((cur) =>
-          cur ? { ...cur, output: `${cur.output}${chunk}` } : cur,
-        );
-      }
-    },
-    [],
-  );
-
-  const handlePlaybookError = useCallback(() => {
-    // Suppress — the run already completed; server just closed the socket.
-  }, []);
-
-  useTerminalWebSocket({
-    containerRef: terminalHostRef,
-    url:
-      activeRun && (phase === "running" || phase === "done")
-        ? playbookRunStreamUrl(activeRun.id)
-        : null,
-    interactive: false,
-    initialOutput: initialTerminalOutput,
-    onMessage: handlePlaybookMessage,
-    onError: handlePlaybookError,
-  });
-
-  const statusLabel = activeRun
-    ? activeRun.status === "queued"
-      ? "Queued"
-      : activeRun.status === "running"
-        ? "Running..."
-        : activeRun.status === "completed"
-          ? "Completed"
-          : "Failed"
-    : "";
-
-  const statusColor =
-    activeRun?.status === "completed"
-      ? "text-emerald-400"
-      : activeRun?.status === "failed"
-        ? "text-red-400"
-        : "text-zinc-400";
 
   const filterPopoverButtonClass = (active: boolean) =>
     cn(
@@ -1463,46 +1388,6 @@ export function PlaybookRunDialog({
             </>
           )}
 
-          {(phase === "running" || phase === "done") && activeRun && (
-            <>
-              <DialogHeader>
-                <DialogTitle className="flex items-center gap-2">
-                  {selectedPlaybook?.name ?? "Playbook run"}
-                  {(activeRun.status === "running" ||
-                    activeRun.status === "queued") && (
-                    <LoaderCircle className="size-3.5 animate-spin text-zinc-400" />
-                  )}
-                </DialogTitle>
-                <DialogDescription>
-                  <span className={statusColor}>{statusLabel}</span>
-                  {" · "}
-                  {activeRun.hosts.length} host
-                  {activeRun.hosts.length !== 1 ? "s" : ""}
-                  {activeRun.exit_code !== null &&
-                    ` · exit ${activeRun.exit_code}`}
-                </DialogDescription>
-              </DialogHeader>
-
-              <div className="flex-1 min-h-0 border border-zinc-800 bg-zinc-950 p-2">
-                <div
-                  ref={terminalHostRef}
-                  className="h-full w-full min-h-[24rem] overflow-hidden"
-                />
-              </div>
-
-              <DialogFooter className="flex-wrap gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => onOpenChange(false)}
-                >
-                  {phase === "done"
-                    ? "Close"
-                    : "Close (run continues in background)"}
-                </Button>
-              </DialogFooter>
-            </>
-          )}
         </DialogContent>
       </Dialog>
     </>
