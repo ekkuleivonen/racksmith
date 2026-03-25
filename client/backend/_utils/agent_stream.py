@@ -51,6 +51,8 @@ class AgentDeps:
     session: SessionData
     created_playbook_id: str | None = field(default=None, repr=False)
     updated_playbook_id: str | None = field(default=None, repr=False)
+    # Hosts @-attached in chat (order preserved, deduped). Used for run_playbook / run_role targets.
+    attached_host_ids: list[str] = field(default_factory=list, repr=False)
     # When set (e.g. failed-run debug or playbook generate with probe host), run_ssh_command works.
     host_id: str = ""
     host_ip: str = ""

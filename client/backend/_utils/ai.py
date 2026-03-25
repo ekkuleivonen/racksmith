@@ -183,6 +183,15 @@ _RUN_TIMEOUT = 300  # 5 minutes
 _OUTPUT_TAIL = 8000
 
 
+def _agent_run_target_host_ids(deps: AgentDeps) -> list[str]:
+    """Hosts for playbook/role runs: all @-attached hosts, else single SSH context host."""
+    if deps.attached_host_ids:
+        return list(deps.attached_host_ids)
+    if deps.host_id:
+        return [deps.host_id]
+    return []
+
+
 async def _wait_for_run(
     run_id: str,
     load_run_fn: Any,
@@ -252,16 +261,17 @@ async def run_playbook(
     playbook_id: str,
     runtime_vars: dict[str, str] | None = None,
 ) -> str:
-    """Run a playbook on the attached host and wait for completion. Returns the Ansible output and exit code. A host must be attached to the chat context."""
+    """Run a playbook on the attached host(s) and wait for completion. Returns the Ansible output and exit code. Attach one or more hosts (@) or a single inferred SSH target (e.g. from a run)."""
     from playbooks.managers import playbook_manager
     from playbooks.schemas import PlaybookRunRequest, TargetSelection
 
     deps = ctx.deps
-    if not deps.host_id:
+    host_ids = _agent_run_target_host_ids(deps)
+    if not host_ids:
         return "Cannot run playbook: no host attached to this conversation."
 
     body = PlaybookRunRequest(
-        targets=TargetSelection(hosts=[deps.host_id]),
+        targets=TargetSelection(hosts=host_ids),
         runtime_vars=runtime_vars or {},
     )
     run = await playbook_manager.create_run(deps.session, playbook_id, body)
@@ -279,17 +289,18 @@ async def run_role(
     vars: dict[str, str] | None = None,
     become: bool = False,
 ) -> str:
-    """Run a single role on the attached host and wait for completion. Returns the Ansible output and exit code. A host must be attached to the chat context."""
+    """Run a single role on the attached host(s) and wait for completion. Returns the Ansible output and exit code. Attach one or more hosts (@) or a single inferred SSH target."""
     from playbooks.schemas import TargetSelection
     from roles.managers import role_manager
     from roles.schemas import RoleRunRequest
 
     deps = ctx.deps
-    if not deps.host_id:
+    host_ids = _agent_run_target_host_ids(deps)
+    if not host_ids:
         return "Cannot run role: no host attached to this conversation."
 
     body = RoleRunRequest(
-        targets=TargetSelection(hosts=[deps.host_id]),
+        targets=TargetSelection(hosts=host_ids),
         vars=vars or {},
         become=become,
     )

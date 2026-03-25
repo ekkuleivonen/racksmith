@@ -31,6 +31,8 @@ async def build_agent_deps_and_prefix(
     """Return deps (SSH from first eligible host or first run's target) and a text prefix for the user turn."""
     prefix_lines: list[str] = []
     ssh_host: Host | None = None
+    attached_host_ids: list[str] = []
+    seen_attached: set[str] = set()
 
     for hid in ctx.host_ids:
         hid = (hid or "").strip()
@@ -43,6 +45,9 @@ async def build_agent_deps_and_prefix(
         prefix_lines.append(
             f"[Attached host id={h.id} name={h.name or h.id} ip={h.ip_address or 'n/a'} managed={h.managed}]"
         )
+        if h.id not in seen_attached:
+            seen_attached.add(h.id)
+            attached_host_ids.append(h.id)
         if ssh_host is None and h.managed and (h.ip_address or "").strip() and (h.ssh_user or "").strip():
             ssh_host = h
 
@@ -97,7 +102,7 @@ async def build_agent_deps_and_prefix(
             continue
         prefix_lines.append(f"[Attached rack id={rack_id} — use rack APIs if you need layout details.]")
 
-    deps = AgentDeps(session=session)
+    deps = AgentDeps(session=session, attached_host_ids=attached_host_ids)
     if ssh_host is not None:
         deps.host_id = ssh_host.id
         deps.host_ip = (ssh_host.ip_address or "").strip()
