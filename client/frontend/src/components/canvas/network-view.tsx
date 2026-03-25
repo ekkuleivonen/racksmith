@@ -68,6 +68,9 @@ function HostNode({ id, data }: { id: string; data: HostNodeData }) {
           ? "border-blue-500/60 bg-blue-500/5 shadow-[0_0_6px_rgba(59,130,246,0.15)]"
           : "border-zinc-700 hover:border-zinc-600",
       )}
+      onMouseDown={(e) => {
+        if (e.button === 2) e.stopPropagation();
+      }}
       onContextMenu={(e) => {
         e.preventDefault();
         e.stopPropagation();
