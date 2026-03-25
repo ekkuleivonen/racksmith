@@ -1,6 +1,14 @@
 import { useMemo, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { GitBranch, KeyRound, Package, RefreshCw, Search, Sparkles, Terminal } from "lucide-react";
+import {
+  GitBranch,
+  KeyRound,
+  Package,
+  RefreshCw,
+  Search,
+  Sparkles,
+  Terminal,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -20,7 +28,11 @@ import { hostDisplayLabel, isManagedHost, isReachableHost } from "@/lib/hosts";
 import { openAiChatWorkspace } from "@/lib/open-ai-chat-workspace";
 import { cn } from "@/lib/utils";
 
-function SshHostPicker({ onSelect }: { onSelect: (hostId: string, label: string) => void }) {
+function SshHostPicker({
+  onSelect,
+}: {
+  onSelect: (hostId: string, label: string) => void;
+}) {
   const { data: hosts = [] } = useHosts();
   const [search, setSearch] = useState("");
 
@@ -154,7 +166,8 @@ export function SidebarFooter() {
               size="icon"
               className={cn(
                 "size-7 shrink-0",
-                aiPanelOpen && "border-violet-500/50 text-violet-200 bg-violet-500/10",
+                aiPanelOpen &&
+                  "border-violet-500/50 text-violet-200 bg-violet-500/10",
               )}
               disabled={!status?.repo_ready}
               onClick={() => void openAiChatWorkspace(userId, repoFull)}
@@ -193,47 +206,59 @@ export function SidebarFooter() {
             <SshHostPicker onSelect={handleHostSelect} />
           </PopoverContent>
         </Popover>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="outline"
-              size="icon"
-              className="size-7 shrink-0"
+        <Popover>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <PopoverTrigger asChild>
+                <div className="relative shrink-0 overflow-visible">
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="size-7"
+                    aria-label="Git actions"
+                  >
+                    <GitBranch className="size-3" />
+                  </Button>
+                  {changeCount > 0 && (
+                    <span className="absolute -top-0.5 -right-0.5 min-w-[12px] h-3 px-0.5 flex items-center justify-center rounded-full bg-yellow-500 text-[9px] font-medium text-zinc-900 pointer-events-none">
+                      {changeCount > 99 ? "99+" : changeCount}
+                    </span>
+                  )}
+                </div>
+              </PopoverTrigger>
+            </TooltipTrigger>
+            <TooltipContent side="top" className="text-xs">
+              Git actions
+            </TooltipContent>
+          </Tooltip>
+          <PopoverContent side="top" align="end" className="w-44 p-1">
+            <button
+              type="button"
+              className="flex items-center gap-2 w-full px-2 py-1.5 text-xs text-zinc-300 hover:bg-zinc-800 rounded-sm transition-colors disabled:opacity-40 disabled:pointer-events-none"
               disabled={!status?.repo_ready || syncing}
               onClick={() => void syncRepo()}
-              aria-label="Sync repo"
             >
-              <RefreshCw className={`size-3 ${syncing ? "animate-spin" : ""}`} />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent side="top" className="text-xs">
-            Rebase racksmith branch on main
-          </TooltipContent>
-        </Tooltip>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <div className="relative shrink-0 overflow-visible">
-              <Button
-                variant="outline"
-                size="icon"
-                className="size-7"
-                disabled={changeCount === 0}
-                onClick={() => navigate("/diff/review")}
-                aria-label="Review changes"
-              >
-                <GitBranch className="size-3" />
-              </Button>
+              <RefreshCw
+                className={cn("size-3 shrink-0", syncing && "animate-spin")}
+              />
+              Rebase on main
+            </button>
+            <button
+              type="button"
+              className="flex items-center gap-2 w-full px-2 py-1.5 text-xs text-zinc-300 hover:bg-zinc-800 rounded-sm transition-colors disabled:opacity-40 disabled:pointer-events-none"
+              disabled={changeCount === 0}
+              onClick={() => navigate("/diff/review")}
+            >
+              <GitBranch className="size-3 shrink-0" />
+              Review changes
               {changeCount > 0 && (
-                <span className="absolute -top-0.5 -right-0.5 min-w-[12px] h-3 px-0.5 flex items-center justify-center rounded-full bg-yellow-500 text-[9px] font-medium text-zinc-900 pointer-events-none">
-                  {changeCount > 99 ? "99+" : changeCount}
+                <span className="ml-auto text-[10px] text-yellow-400 font-medium">
+                  {changeCount}
                 </span>
               )}
-            </div>
-          </TooltipTrigger>
-          <TooltipContent side="top" className="text-xs">
-            Review changes
-          </TooltipContent>
-        </Tooltip>
+            </button>
+          </PopoverContent>
+        </Popover>
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
