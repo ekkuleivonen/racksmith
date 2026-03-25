@@ -25,6 +25,7 @@ const GroupDetailPage = lazy(() => import("@/pages/GroupDetailPage").then(m => (
 const GroupCreatePage = lazy(() => import("@/pages/GroupCreatePage").then(m => ({ default: m.GroupCreatePage })));
 const RackOnboardingPage = lazy(() => import("@/pages/RackOnboardingPage").then(m => ({ default: m.RackOnboardingPage })));
 const HostCreatePage = lazy(() => import("@/pages/HostCreatePage").then(m => ({ default: m.HostCreatePage })));
+const HostDetailPage = lazy(() => import("@/pages/HostDetailPage").then(m => ({ default: m.HostDetailPage })));
 const RolesPage = lazy(() => import("@/pages/RolesPage").then(m => ({ default: m.RolesPage })));
 const RoleCreatePage = lazy(() => import("@/pages/RoleCreatePage").then(m => ({ default: m.RoleCreatePage })));
 const RoleDetailPage = lazy(() => import("@/pages/RoleDetailPage").then(m => ({ default: m.RoleDetailPage })));
@@ -128,7 +129,7 @@ function AppRoutes() {
                 <Route path="/racks/view/:rackId" element={<RackDetailPage />} />
                 <Route path="/hosts/create" element={<HostCreatePage />} />
                 <Route path="/hosts" element={<Navigate to="/?view=list" replace />} />
-                <Route path="/hosts/:id" element={<Navigate to="/" replace />} />
+                <Route path="/hosts/:id" element={<HostDetailPage />} />
                 <Route path="/groups" element={<GroupsPage />} />
                 <Route path="/groups/create" element={<GroupCreatePage />} />
                 <Route path="/groups/:groupId" element={<GroupDetailPage />} />

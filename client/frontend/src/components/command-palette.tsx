@@ -56,7 +56,7 @@ export function CommandPalette() {
           {hosts.length > 0 && (
             <CommandGroup heading="Hosts">
               {hosts.map((h) => (
-                <CommandItem key={h.id} onSelect={() => go(`/?host=${h.id}`)} value={`host ${hostDisplayLabel(h)} ${h.ip_address ?? ""}`}>
+                <CommandItem key={h.id} onSelect={() => go(`/hosts/${h.id}`)} value={`host ${hostDisplayLabel(h)} ${h.ip_address ?? ""}`}>
                   <Monitor className="size-3.5 shrink-0 text-zinc-400" />
                   <span className="truncate">{hostDisplayLabel(h)}</span>
                   {h.ip_address && (

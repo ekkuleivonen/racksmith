@@ -1,5 +1,7 @@
 import { useMemo, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
+  Expand,
   Locate,
   Plus,
   Power,
@@ -74,7 +76,7 @@ function buildUpdatePayload(
   };
 }
 
-function PingBadge({ status }: { status: PingStatus }) {
+export function PingBadge({ status }: { status: PingStatus }) {
   return (
     <Badge
       variant="outline"
@@ -96,17 +98,24 @@ function PingBadge({ status }: { status: PingStatus }) {
   );
 }
 
-function HostActions({
+export function HostActions({
   host,
   onClose,
+  showCloseButton = true,
+  onDeleted,
 }: {
   host: Host;
   onClose: () => void;
+  /** When false, the panel close button is hidden (e.g. full-page host detail). */
+  showCloseButton?: boolean;
+  /** Called after successful delete; defaults to `onClose`. */
+  onDeleted?: () => void;
 }) {
   const refreshMutation = useRefreshHost();
   const relocateMutation = useRelocateHost();
   const rebootMutation = useRebootHost();
   const deleteMutation = useDeleteHost();
+  const afterDelete = onDeleted ?? onClose;
 
   return (
     <div className="flex items-center gap-1">
@@ -178,7 +187,7 @@ function HostActions({
             onClick={() => {
               if (!window.confirm("Delete this host? This cannot be undone.")) return;
               deleteMutation.mutate(host.id, {
-                onSuccess: () => onClose(),
+                onSuccess: () => afterDelete(),
               });
             }}
           >
@@ -189,28 +198,32 @@ function HostActions({
           Delete host
         </TooltipContent>
       </Tooltip>
-      <Separator orientation="vertical" className="h-4 mx-1" />
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button
-            size="icon"
-            variant="ghost"
-            className="h-7 w-7"
-            aria-label="Close panel"
-            onClick={onClose}
-          >
-            <X className="size-3" />
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent side="bottom" className="text-xs">
-          Close
-        </TooltipContent>
-      </Tooltip>
+      {showCloseButton ? (
+        <>
+          <Separator orientation="vertical" className="h-4 mx-1" />
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                size="icon"
+                variant="ghost"
+                className="h-7 w-7"
+                aria-label="Close panel"
+                onClick={onClose}
+              >
+                <X className="size-3" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" className="text-xs">
+              Close
+            </TooltipContent>
+          </Tooltip>
+        </>
+      ) : null}
     </div>
   );
 }
 
-function EditableNameSection({ host }: { host: Host }) {
+export function EditableNameSection({ host }: { host: Host }) {
   const [draft, setDraft] = useState(host.name ?? "");
   const updateMutation = useUpdateHost();
   const defaultSsh = useAppSshPort();
@@ -243,7 +256,7 @@ function EditableNameSection({ host }: { host: Host }) {
   );
 }
 
-function EditableConnectionSection({ host }: { host: Host }) {
+export function EditableConnectionSection({ host }: { host: Host }) {
   const defaultSsh = useAppSshPort();
   const [draft, setDraft] = useState({
     ip_address: host.ip_address ?? "",
@@ -325,7 +338,7 @@ function EditableConnectionSection({ host }: { host: Host }) {
   );
 }
 
-function EditableLabelsSection({ host }: { host: Host }) {
+export function EditableLabelsSection({ host }: { host: Host }) {
   const [draft, setDraft] = useState<string[]>(host.labels ?? []);
   const [newLabel, setNewLabel] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
@@ -418,7 +431,7 @@ function EditableLabelsSection({ host }: { host: Host }) {
   );
 }
 
-function EditableGroupsSection({ host, allGroups }: { host: Host; allGroups: Group[] }) {
+export function EditableGroupsSection({ host, allGroups }: { host: Host; allGroups: Group[] }) {
   const [draft, setDraft] = useState<string[]>(host.groups ?? []);
   const updateMutation = useUpdateHost();
   const defaultSsh = useAppSshPort();
@@ -522,7 +535,7 @@ function partitionEditableHostVars(vars: Record<string, unknown>): {
   return { hidden, editable };
 }
 
-function EditableVarsSection({ host }: { host: Host }) {
+export function EditableVarsSection({ host }: { host: Host }) {
   const [rows, setRows] = useState<VarRow[]>(() =>
     varsToRows(partitionEditableHostVars(host.vars ?? {}).editable),
   );
@@ -574,6 +587,7 @@ function EditableVarsSection({ host }: { host: Host }) {
 }
 
 export function HostDetailPanel({ hostId, onClose }: HostDetailPanelProps) {
+  const navigate = useNavigate();
   const { data: host, isLoading } = useHost(hostId || undefined);
   const pingStatus = usePingStatus(hostId || undefined);
   const { data: allGroups = [] } = useGroups();
@@ -611,7 +625,25 @@ export function HostDetailPanel({ hostId, onClose }: HostDetailPanelProps) {
             )}
           </div>
         </div>
-        <HostActions host={host} onClose={onClose} />
+        <div className="flex items-center gap-0.5 shrink-0">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                size="icon"
+                variant="ghost"
+                className="h-7 w-7"
+                aria-label="Open full page"
+                onClick={() => navigate(`/hosts/${host.id}`)}
+              >
+                <Expand className="size-3" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" className="text-xs">
+              Open full page
+            </TooltipContent>
+          </Tooltip>
+          <HostActions host={host} onClose={onClose} />
+        </div>
       </div>
 
       <div className="flex-1 min-h-0 overflow-y-auto p-3 space-y-3">
