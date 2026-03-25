@@ -126,17 +126,20 @@ async def get_playbook(ctx: RunContext[AgentDeps], playbook_id: str) -> str:
 
 
 async def run_ssh_command(ctx: RunContext[AgentDeps], command: str) -> str:
-    """Run a shell command on the configured target host via the daemon (non-interactive). Returns stdout, stderr, and exit code."""
+    """Run a shell command via the daemon (non-interactive). Uses explicit / @-attached SSH context when present; otherwise the first managed inventory host with SSH (same pool as an unrestricted playbook run)."""
     from daemon.client import daemon_post
 
-    deps = ctx.deps
+    conn = _resolve_ssh_connection_for_agent(ctx.deps)
+    if conn is None:
+        return "Cannot run SSH: no managed host with SSH credentials in inventory."
+    ip, ssh_user, ssh_port = conn
     try:
         result = await daemon_post(
             "/ssh/exec",
             {
-                "ip": deps.host_ip,
-                "ssh_user": deps.host_ssh_user,
-                "ssh_port": deps.host_ssh_port,
+                "ip": ip,
+                "ssh_user": ssh_user,
+                "ssh_port": ssh_port,
                 "command": command,
             },
             timeout=120.0,
@@ -190,6 +193,37 @@ def _agent_run_target_host_ids(deps: AgentDeps) -> list[str]:
     if deps.host_id:
         return [deps.host_id]
     return []
+
+
+def _resolve_ssh_connection_for_agent(deps: AgentDeps) -> tuple[str, str, int] | None:
+    """IP / SSH user / port for run_ssh_command: explicit deps, then @-attached SSH-capable host, else first managed host (empty target selection)."""
+    ip, user = (deps.host_ip or "").strip(), (deps.host_ssh_user or "").strip()
+    if ip and user:
+        return ip, user, int(deps.host_ssh_port or 22)
+
+    from hosts.managers import host_manager
+    from playbooks.managers import playbook_manager
+    from playbooks.schemas import TargetSelection
+
+    for hid in _agent_run_target_host_ids(deps):
+        try:
+            h = host_manager.get_host(deps.session, hid)
+        except NotFoundError:
+            continue
+        hip = (h.ip_address or "").strip()
+        hu = (h.ssh_user or "").strip()
+        if h.managed and hip and hu:
+            return hip, hu, int(h.ssh_port or 22)
+
+    host_ids = playbook_manager.resolve_targets(deps.session, TargetSelection()).hosts
+    if not host_ids:
+        return None
+    h = host_manager.get_host(deps.session, host_ids[0])
+    return (
+        (h.ip_address or "").strip(),
+        (h.ssh_user or "").strip(),
+        int(h.ssh_port or 22),
+    )
 
 
 async def _wait_for_run(
@@ -261,17 +295,15 @@ async def run_playbook(
     playbook_id: str,
     runtime_vars: dict[str, str] | None = None,
 ) -> str:
-    """Run a playbook on the attached host(s) and wait for completion. Returns the Ansible output and exit code. Attach one or more hosts (@) or a single inferred SSH target (e.g. from a run)."""
+    """Run a playbook and wait for completion. With @-attached host(s), limits to those; otherwise uses all managed inventory hosts (same as an empty target pick in the UI)."""
     from playbooks.managers import playbook_manager
     from playbooks.schemas import PlaybookRunRequest, TargetSelection
 
     deps = ctx.deps
     host_ids = _agent_run_target_host_ids(deps)
-    if not host_ids:
-        return "Cannot run playbook: no host attached to this conversation."
-
+    targets = TargetSelection(hosts=host_ids) if host_ids else TargetSelection()
     body = PlaybookRunRequest(
-        targets=TargetSelection(hosts=host_ids),
+        targets=targets,
         runtime_vars=runtime_vars or {},
     )
     run = await playbook_manager.create_run(deps.session, playbook_id, body)
@@ -289,18 +321,16 @@ async def run_role(
     vars: dict[str, str] | None = None,
     become: bool = False,
 ) -> str:
-    """Run a single role on the attached host(s) and wait for completion. Returns the Ansible output and exit code. Attach one or more hosts (@) or a single inferred SSH target."""
+    """Run a single role and wait for completion. With @-attached host(s), limits to those; otherwise all managed inventory hosts."""
     from playbooks.schemas import TargetSelection
     from roles.managers import role_manager
     from roles.schemas import RoleRunRequest
 
     deps = ctx.deps
     host_ids = _agent_run_target_host_ids(deps)
-    if not host_ids:
-        return "Cannot run role: no host attached to this conversation."
-
+    targets = TargetSelection(hosts=host_ids) if host_ids else TargetSelection()
     body = RoleRunRequest(
-        targets=TargetSelection(hosts=host_ids),
+        targets=targets,
         vars=vars or {},
         become=become,
     )
