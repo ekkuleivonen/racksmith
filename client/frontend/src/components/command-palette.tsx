@@ -35,7 +35,7 @@ export function CommandPalette() {
     return () => document.removeEventListener("keydown", onKeyDown);
   }, []);
 
-  const { data: hosts = [] } = useHosts();
+  const { data: hosts = [] } = useHosts({ managed: true });
   const { data: rackEntries = [] } = useRackEntries();
   const { data: groups = [] } = useGroups();
   const { data: playbooks = [] } = usePlaybooks();
