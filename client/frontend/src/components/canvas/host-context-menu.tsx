@@ -15,7 +15,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { createAiChat } from "@/lib/ai-chat";
+import { createAiChat, streamAiChatTurn } from "@/lib/ai-chat";
 import { toastApiError } from "@/lib/api";
 import { useRebootHost, useRefreshHost, useRelocateHost } from "@/hooks/mutations";
 import { useBottomBarStore } from "@/stores/bottom-bar";
@@ -47,10 +47,14 @@ function useHostMenuHandlers(hostId: string, hostLabel: string) {
     try {
       const { chat_id } = await createAiChat();
       openAiChatTab(chat_id, hostLabel);
+      await streamAiChatTurn(chat_id, {
+        content: `I want to work with host "${hostLabel}".`,
+        context: { hosts: [hostId] },
+      });
     } catch (e) {
       toastApiError(e, "Failed to create chat");
     }
-  }, [openAiChatTab, hostLabel]);
+  }, [openAiChatTab, hostId, hostLabel]);
 
   return { openDetails, openSsh, openChat };
 }
