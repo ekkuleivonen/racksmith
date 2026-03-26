@@ -20,7 +20,10 @@ logger = get_logger(__name__)
 
 CHAT_KEY_PREFIX = "rs:ai:chat:"
 CHAT_TTL_SECONDS = 90 * 24 * 3600  # 90 days
-MAX_SERIALIZED_BYTES = 450_000
+MAX_SERIALIZED_BYTES = 1_500_000
+_TRIM_AT_BYTES = int(MAX_SERIALIZED_BYTES * 0.8)
+_KEEP_RECENT_MSGS = 6
+_TRIMMED_CONTENT_LEN = 300
 _ta = ModelMessagesTypeAdapter
 
 
@@ -97,6 +100,47 @@ def deferred_requests_from_json(raw: str) -> DeferredToolRequests | None:
     return DeferredToolRequests(calls=calls, approvals=approvals, metadata=meta)
 
 
+def _trim_old_tool_results(items: list[Any]) -> list[Any]:
+    """Compact older tool-return content to keep serialized size within budget.
+
+    Keeps the last ``_KEEP_RECENT_MSGS`` messages fully intact and truncates
+    ``tool-return`` content in everything older.
+    """
+    n = len(items)
+    if n <= _KEEP_RECENT_MSGS:
+        return items
+
+    trim_boundary = n - _KEEP_RECENT_MSGS
+    out: list[Any] = []
+
+    for idx, msg in enumerate(items):
+        if idx >= trim_boundary or not isinstance(msg, dict):
+            out.append(msg)
+            continue
+
+        parts = msg.get("parts")
+        if not isinstance(parts, list):
+            out.append(msg)
+            continue
+
+        new_parts: list[Any] = []
+        changed = False
+        for part in parts:
+            if not isinstance(part, dict):
+                new_parts.append(part)
+                continue
+            if part.get("part_kind") == "tool-return":
+                content = part.get("content", "")
+                if isinstance(content, str) and len(content) > _TRIMMED_CONTENT_LEN:
+                    part = {**part, "content": content[:_TRIMMED_CONTENT_LEN] + "\n…[trimmed]"}
+                    changed = True
+            new_parts.append(part)
+
+        out.append({**msg, "parts": new_parts} if changed else msg)
+
+    return out
+
+
 class AiChatStore:
     async def create(self, session: SessionData) -> str:
         chat_id = secrets.token_urlsafe(16)
@@ -131,8 +175,13 @@ class AiChatStore:
             return []
 
     async def save_messages(self, session: SessionData, chat_id: str, messages: list[ModelMessage]) -> None:
-        dumped = _ta.dump_python(messages, mode="json")
+        dumped: list[Any] = _ta.dump_python(messages, mode="json")
         payload = json.dumps({"v": 1, "updated_at": time.time(), "items": dumped})
+
+        if len(payload.encode("utf-8")) > _TRIM_AT_BYTES:
+            dumped = _trim_old_tool_results(dumped)
+            payload = json.dumps({"v": 1, "updated_at": time.time(), "items": dumped})
+
         if len(payload.encode("utf-8")) > MAX_SERIALIZED_BYTES:
             raise ValueError("Chat history too large; start a new chat.")
         key = _chat_key(session, chat_id)
