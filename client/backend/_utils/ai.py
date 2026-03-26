@@ -282,19 +282,36 @@ async def run_playbook(
         merged_runtime.update(ctx.deps.resume_runtime_vars)
     become_pw = (ctx.deps.become_password or "").strip() or None
 
-    if detail.become and not become_pw and not ctx.tool_call_approved:
-        raise ApprovalRequired(
-            metadata={
-                "fields": [
-                    {
-                        "key": "become_password",
-                        "label": "Sudo password",
-                        "type": "password",
-                        "required": True,
-                    }
-                ]
-            }
+    if not ctx.tool_call_approved:
+        fields: list[dict[str, Any]] = []
+
+        if detail.become and not become_pw:
+            fields.append(
+                {
+                    "key": "become_password",
+                    "label": "Sudo password",
+                    "type": "password",
+                    "required": True,
+                }
+            )
+
+        req_vars = playbook_manager.get_required_runtime_vars(
+            ctx.deps.session, playbook_id
         )
+        for entry in req_vars.inputs:
+            if entry.key in merged_runtime:
+                continue
+            fields.append(
+                {
+                    "key": entry.key,
+                    "label": entry.label,
+                    "type": "password" if entry.secret else "text",
+                    "required": entry.required,
+                }
+            )
+
+        if fields:
+            raise ApprovalRequired(metadata={"fields": fields})
 
     body = PlaybookRunRequest(
         targets=TargetSelection(hosts=list(host_ids)),
@@ -325,22 +342,47 @@ async def run_role(
     if not host_ids:
         return "Cannot run role: host_ids is required and must not be empty."
 
+    merged_vars = dict(vars or {})
     merged_runtime = dict(ctx.deps.resume_runtime_vars or {})
+    merged_vars.update(merged_runtime)
     become_pw = (ctx.deps.become_password or "").strip() or None
 
-    if become and not become_pw and not ctx.tool_call_approved:
-        raise ApprovalRequired(
-            metadata={
-                "fields": [
+    if not ctx.tool_call_approved:
+        fields: list[dict[str, Any]] = []
+
+        if become and not become_pw:
+            fields.append(
+                {
+                    "key": "become_password",
+                    "label": "Sudo password",
+                    "type": "password",
+                    "required": True,
+                }
+            )
+
+        try:
+            role_detail = role_manager.get_role(ctx.deps.session, role_id)
+            for inp in role_detail.inputs:
+                t = (inp.type or "string").lower()
+                is_secret = bool(inp.secret) or t == "secret"
+                no_default = inp.default is None
+                if not is_secret and not (inp.required and no_default):
+                    continue
+                if inp.key in merged_vars:
+                    continue
+                fields.append(
                     {
-                        "key": "become_password",
-                        "label": "Sudo password",
-                        "type": "password",
-                        "required": True,
+                        "key": inp.key,
+                        "label": inp.label or inp.key,
+                        "type": "password" if is_secret else "text",
+                        "required": inp.required,
                     }
-                ]
-            }
-        )
+                )
+        except (FileNotFoundError, NotFoundError):
+            pass
+
+        if fields:
+            raise ApprovalRequired(metadata={"fields": fields})
 
     body = RoleRunRequest(
         targets=TargetSelection(hosts=list(host_ids)),
