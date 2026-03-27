@@ -98,22 +98,24 @@ def _generate_role_id(layout: AnsibleLayout) -> str:
 
 
 def _request_input_to_role_input(inp: RoleInputSpec | dict) -> RoleInput:
-    if hasattr(inp, "model_dump"):
-        inp = inp.model_dump()
-    t = inp.get("type", "string")
-    options = inp.get("options", []) or inp.get("choices", [])
-    label = inp.get("label", "")
-    description = inp.get("description", "") or label
+    spec = inp if isinstance(inp, RoleInputSpec) else RoleInputSpec.model_validate(inp)
+    d = spec.model_dump()
+    t = d.get("type", "string")
+    options = d.get("options", []) or d.get("choices", [])
+    label = d.get("label", "")
+    description = d.get("description", "") or label
+    secret = bool(d.get("secret"))
     return RoleInput(
-        key=inp.get("key", ""),
+        key=d.get("key", ""),
         description=description,
         type={"string": "str", "bool": "bool", "boolean": "bool", "secret": "str", "list": "list", "dict": "dict", "int": "int"}.get(t, "str"),
-        default=inp.get("default"),
-        required=inp.get("required", False),
+        default=d.get("default"),
+        required=d.get("required", False),
         choices=options,
-        no_log=(t == "secret"),
-        racksmith_placeholder=inp.get("placeholder", ""),
-        racksmith_secret=inp.get("secret", False),
+        no_log=secret,
+        racksmith_placeholder=d.get("placeholder", ""),
+        racksmith_secret=secret,
+        racksmith_runtime=bool(d.get("runtime")),
         racksmith_label=label,
     )
 
@@ -134,6 +136,7 @@ def _role_data_to_summary(r: RoleData) -> RoleSummary:
                 "options": inp.choices,
                 "placeholder": inp.racksmith_placeholder,
                 "secret": inp.racksmith_secret,
+                "runtime": inp.racksmith_runtime,
             })
             for inp in r.inputs
         ],
@@ -266,6 +269,7 @@ class RoleManager(RunManagerMixin):
                     "options": list(inp.choices),
                     "placeholder": inp.racksmith_placeholder,
                     "secret": inp.racksmith_secret,
+                    "runtime": inp.racksmith_runtime,
                 }
                 for inp in role.inputs
             ],

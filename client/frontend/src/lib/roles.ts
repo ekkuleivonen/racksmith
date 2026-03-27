@@ -15,6 +15,7 @@ export type RoleInput = {
   type?: string;
   options?: string[];
   secret?: boolean;
+  runtime?: boolean;
   required?: boolean;
 };
 

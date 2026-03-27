@@ -316,9 +316,10 @@ class TestPlaybookManagerRequiredRuntimeVars:
         keys = [i.key for i in req.inputs]
         assert "ssd_root_partition" not in keys
 
-    def test_required_included_when_playbook_missing_var(
+    def test_required_only_not_included_without_runtime_flag(
         self, with_repo_mock, layout
     ) -> None:
+        """Required + no default is static; editor validates — not runtime prompt."""
         self._seed_action_role(
             layout,
             "step_b",
@@ -338,4 +339,88 @@ class TestPlaybookManagerRequiredRuntimeVars:
         )
         req = playbook_manager.get_required_runtime_vars(with_repo_mock, "pb_rtv2")
         keys = [i.key for i in req.inputs]
-        assert "ssd_root_partition" in keys
+        assert "ssd_root_partition" not in keys
+
+    def test_runtime_non_secret_included_when_unbound(
+        self, with_repo_mock, layout
+    ) -> None:
+        self._seed_action_role(
+            layout,
+            "rt_env",
+            inputs=[
+                {
+                    "key": "deploy_env",
+                    "label": "Env",
+                    "type": "string",
+                    "runtime": True,
+                    "required": True,
+                }
+            ],
+        )
+        _seed_playbook(
+            layout,
+            "pb_rt",
+            roles=[AnsiblePlaybookRoleEntry(role="rt_env")],
+        )
+        req = playbook_manager.get_required_runtime_vars(with_repo_mock, "pb_rt")
+        keys = [i.key for i in req.inputs]
+        assert "deploy_env" in keys
+        entry = next(i for i in req.inputs if i.key == "deploy_env")
+        assert entry.secret is False
+
+    def test_secret_input_included_marked_secret(
+        self, with_repo_mock, layout
+    ) -> None:
+        self._seed_action_role(
+            layout,
+            "rt_secret",
+            inputs=[
+                {
+                    "key": "api_token",
+                    "label": "Token",
+                    "type": "string",
+                    "secret": True,
+                    "required": True,
+                }
+            ],
+        )
+        _seed_playbook(
+            layout,
+            "pb_sec",
+            roles=[AnsiblePlaybookRoleEntry(role="rt_secret")],
+        )
+        req = playbook_manager.get_required_runtime_vars(with_repo_mock, "pb_sec")
+        keys = [i.key for i in req.inputs]
+        assert "api_token" in keys
+        entry = next(i for i in req.inputs if i.key == "api_token")
+        assert entry.secret is True
+
+    def test_runtime_omitted_when_playbook_binds_var(
+        self, with_repo_mock, layout
+    ) -> None:
+        self._seed_action_role(
+            layout,
+            "rt_bound",
+            inputs=[
+                {
+                    "key": "branch",
+                    "label": "Branch",
+                    "type": "string",
+                    "runtime": True,
+                    "required": True,
+                }
+            ],
+        )
+        _seed_playbook(
+            layout,
+            "pb_bound",
+            roles=[
+                AnsiblePlaybookRoleEntry(
+                    role="rt_bound",
+                    vars={"branch": "{{ git_branch }}"},
+                ),
+            ],
+        )
+        req = playbook_manager.get_required_runtime_vars(with_repo_mock, "pb_bound")
+        keys = [i.key for i in req.inputs]
+        assert "branch" not in keys

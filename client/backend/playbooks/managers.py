@@ -319,8 +319,7 @@ class PlaybookManager(RunManagerMixin):
             for inp in role.inputs:
                 t = (inp.type or "string").lower()
                 is_secret = bool(inp.secret) or t == "secret"
-                no_default = inp.default is None
-                if not is_secret and not (inp.required and no_default):
+                if not inp.runtime and not is_secret:
                     continue
                 if _entry_var_supplies_input(entry_vars, inp.key):
                     continue

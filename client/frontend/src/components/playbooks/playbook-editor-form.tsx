@@ -15,7 +15,7 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { GripVertical, Info, Link2, Trash2, X } from "lucide-react";
+import { AlertTriangle, GripVertical, Info, Link2, Trash2, X } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   Accordion,
@@ -158,6 +158,19 @@ function normalizeType(t?: string): string {
   if (t === "dict") return "dict";
   if (t === "int") return "int";
   return t;
+}
+
+/** Static required input missing a value in playbook vars (not runtime/secret). */
+function isRequiredInputUnbound(
+  field: { key: string; required?: boolean; runtime?: boolean; secret?: boolean; default?: unknown },
+  roleVars: Record<string, unknown>,
+): boolean {
+  if (!field.required || field.runtime || field.secret) return false;
+  if (field.default != null) return false;
+  const v = roleVars[field.key];
+  if (v === undefined || v === null) return true;
+  if (typeof v === "string" && !v.trim()) return true;
+  return false;
 }
 
 function getAvailableVars(
@@ -566,7 +579,9 @@ function SortableRoleCard({
         {roleEntry.inputs.length > 0 ? (
           <div className="grid gap-2 md:grid-cols-2">
             {roleEntry.inputs.map((field) => {
-              const isSecret = !!field.secret;
+              const isSecret = !!field.secret || field.type === "secret";
+              const isRuntime = !!(field.runtime || isSecret);
+              const showRequiredUnboundWarning = isRequiredInputUnbound(field, role.vars);
               const rawValue = role.vars[field.key] ?? field.default ?? "";
               const matched = compatibleVars(allVars, field.type);
               const wire = (fk: string) => setVar(field.key, `{{ ${fk} }}`);
@@ -601,7 +616,7 @@ function SortableRoleCard({
                         value={rawValue}
                         onChange={(v) => setVar(field.key, v)}
                         placeholder={field.placeholder}
-                        disabled={isSecret}
+                        disabled={isRuntime}
                       />
                     );
                   }
@@ -610,7 +625,7 @@ function SortableRoleCard({
                       value={rawValue}
                       onChange={(v) => setVar(field.key, v)}
                       placeholder={field.placeholder}
-                      disabled={isSecret}
+                      disabled={isRuntime}
                     />
                   );
                 }
@@ -621,7 +636,7 @@ function SortableRoleCard({
                       <KeyValueEditor
                         value={rawValue}
                         onChange={(v) => setVar(field.key, v)}
-                        disabled={isSecret}
+                        disabled={isRuntime}
                       />
                     );
                   }
@@ -630,7 +645,7 @@ function SortableRoleCard({
                       value={rawValue}
                       onChange={(v) => setVar(field.key, v)}
                       placeholder={field.placeholder}
-                      disabled={isSecret}
+                      disabled={isRuntime}
                     />
                   );
                 }
@@ -642,7 +657,7 @@ function SortableRoleCard({
                         <Select
                           value={optionSelectControlValue(rawValue, field.options!)}
                           onValueChange={(value) => setVar(field.key, value)}
-                          disabled={isSecret}
+                          disabled={isRuntime}
                         >
                           <SelectTrigger className="w-full">
                             <SelectValue placeholder={field.placeholder} />
@@ -655,7 +670,7 @@ function SortableRoleCard({
                             ))}
                           </SelectContent>
                         </Select>
-                        {!isSecret && (
+                        {!isRuntime && (
                           <VarPickerPopover vars={matched} onSelect={wire}>
                             <Button type="button" variant="ghost" size="icon" className="h-9 w-9 shrink-0">
                               <Link2 className="size-3.5" />
@@ -678,7 +693,7 @@ function SortableRoleCard({
                         onValueChange={(value) =>
                           setVar(field.key, value === "true")
                         }
-                        disabled={isSecret}
+                        disabled={isRuntime}
                       >
                         <SelectTrigger className="w-full">
                           <SelectValue
@@ -690,7 +705,7 @@ function SortableRoleCard({
                           <SelectItem value="false">false</SelectItem>
                         </SelectContent>
                       </Select>
-                      {!isSecret && (
+                      {!isRuntime && (
                         <VarPickerPopover vars={matched} onSelect={wire}>
                           <Button type="button" variant="ghost" size="icon" className="h-9 w-9 shrink-0">
                             <Link2 className="size-3.5" />
@@ -706,7 +721,7 @@ function SortableRoleCard({
                     value={rawStr}
                     onChange={(v) => setVar(field.key, v)}
                     placeholder={field.placeholder}
-                    disabled={isSecret}
+                    disabled={isRuntime}
                     vars={matched}
                   />
                 );
@@ -715,12 +730,37 @@ function SortableRoleCard({
               const fieldNode = (
                 <div
                   key={field.key}
-                  className={`space-y-1${isSecret ? " cursor-default opacity-50" : ""}${isListType || isDictType ? " md:col-span-2" : ""}`}
+                  className={`space-y-1${isRuntime ? " cursor-default opacity-50" : ""}${showRequiredUnboundWarning ? " rounded-md ring-1 ring-amber-500/50" : ""}${isListType || isDictType ? " md:col-span-2" : ""}`}
                 >
-                  <p className="flex items-center gap-1 text-xs text-zinc-400">
+                  <p className="flex flex-wrap items-center gap-1 text-xs text-zinc-400">
                     {field.label}
                     {field.required ? (
                       <span className="text-red-400">*</span>
+                    ) : null}
+                    {isSecret ? (
+                      <Badge
+                        variant="outline"
+                        className="h-4 border-rose-500/40 px-1 text-[9px] font-normal text-rose-300/90"
+                      >
+                        Secret
+                      </Badge>
+                    ) : isRuntime ? (
+                      <Badge
+                        variant="outline"
+                        className="h-4 border-amber-500/40 px-1 text-[9px] font-normal text-amber-300/90"
+                      >
+                        Runtime
+                      </Badge>
+                    ) : null}
+                    {showRequiredUnboundWarning ? (
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <AlertTriangle className="size-3.5 shrink-0 text-amber-500" />
+                        </TooltipTrigger>
+                        <TooltipContent side="top" className="max-w-64">
+                          This required input has no default and is not bound to a value.
+                        </TooltipContent>
+                      </Tooltip>
                     ) : null}
                     {field.description ? (
                       <Tooltip>
@@ -737,14 +777,17 @@ function SortableRoleCard({
                 </div>
               );
 
-              if (!isSecret) return fieldNode;
+              if (!isRuntime) return fieldNode;
+              const runtimeTooltip = isSecret
+                ? "Sensitive value — prompted when the playbook runs"
+                : "Collected at run time — not stored in playbook vars";
               return (
                 <Tooltip key={field.key}>
                   <TooltipTrigger asChild>
                     {fieldNode}
                   </TooltipTrigger>
                   <TooltipContent side="top">
-                    This value is prompted when the playbook runs
+                    {runtimeTooltip}
                   </TooltipContent>
                 </Tooltip>
               );

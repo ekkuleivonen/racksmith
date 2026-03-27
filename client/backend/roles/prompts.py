@@ -18,14 +18,18 @@ Input fields:
   label       – short human-readable label (2-4 words)
   description – helpful sentence explaining what this input controls, any
                 constraints, and example values. Shown as a UI tooltip.
-  type        – MUST be exactly one of: "string", "bool", "secret", "list", "dict", "int"
-                (never "str", "boolean", "select")
+  type        – MUST be exactly one of: "string", "bool", "list", "dict", "int"
+                (never "str", "boolean", "select", "secret" — use secret flag instead)
   placeholder – hint text (use "" if not applicable)
-  default     – default value (string for string/secret, true/false for bool,
+  default     – default value (string for string, true/false for bool,
                 JSON array for list, JSON object for dict, number for int)
   required    – true or false
   options     – list of allowed choices (dropdown); use [] when any value is ok
-  secret      – true if prompted at runtime and never stored
+  runtime     – true if the value is collected at run time (never stored in playbook vars).
+                Use for env name, deploy tag, branch, anything that changes per run.
+                Implied when secret is true.
+  secret      – true for sensitive values (passwords, tokens, API keys). Implies runtime;
+                never put secret inputs in playbook vars.
 
 Output fields:
   key         – fact variable name (snake_case)

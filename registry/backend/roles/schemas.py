@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Literal
+from typing import Literal, Self
 from uuid import UUID
 
 from pydantic import BaseModel, Field, model_validator
@@ -21,6 +21,7 @@ class RoleInputSpec(BaseModel):
     choices: list[str] = Field(default_factory=list)
     no_log: bool = False
     secret: bool = False
+    runtime: bool = False
 
     model_config = {"extra": "ignore"}
 
@@ -34,12 +35,20 @@ class RoleInputSpec(BaseModel):
             d["label"] = d.pop("racksmith_label", "")
         if "racksmith_placeholder" in d and "placeholder" not in d:
             d["placeholder"] = d.pop("racksmith_placeholder", "")
+        if "racksmith_runtime" in d and "runtime" not in d:
+            d["runtime"] = bool(d.pop("racksmith_runtime", False))
         if "racksmith_secret" in d and "secret" not in d:
             d["secret"] = d.pop("racksmith_secret", False)
         if "racksmith_interactive" in d and "secret" not in d:
-            d["secret"] = d.pop("racksmith_interactive", False)
+            v = bool(d.pop("racksmith_interactive", False))
+            d["secret"] = v
+            if v:
+                d["runtime"] = True
         if "interactive" in d and "secret" not in d:
-            d["secret"] = d.pop("interactive", False)
+            v = bool(d.pop("interactive", False))
+            d["secret"] = v
+            if v:
+                d["runtime"] = True
         if "choices" in d and not d.get("options"):
             d.setdefault("options", d["choices"])
         for field in ("options", "choices"):
@@ -48,7 +57,18 @@ class RoleInputSpec(BaseModel):
                     ("yes" if v else "no") if isinstance(v, bool) else str(v)
                     for v in d[field]
                 ]
+        opts = list(d.get("options") or d.get("choices") or [])
+        if isinstance(d.get("default"), bool) and "yes" in opts and "no" in opts:
+            d["default"] = "yes" if d["default"] else "no"
         return d
+
+    @model_validator(mode="after")
+    def normalize_secret_type_and_runtime(self) -> Self:
+        if self.type == "secret":
+            return self.model_copy(update={"type": "string", "secret": True, "runtime": True})
+        if self.secret:
+            return self.model_copy(update={"runtime": True})
+        return self
 
 
 class RoleOutputSpec(BaseModel):

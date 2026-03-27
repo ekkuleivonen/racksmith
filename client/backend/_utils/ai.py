@@ -299,7 +299,9 @@ async def run_playbook(
             ctx.deps.session, playbook_id
         )
         for entry in req_vars.inputs:
-            if entry.key in merged_runtime:
+            if entry.secret:
+                merged_runtime.pop(entry.key, None)
+            elif entry.key in merged_runtime:
                 continue
             fields.append(
                 {
@@ -365,10 +367,11 @@ async def run_role(
             for inp in role_detail.inputs:
                 t = (inp.type or "string").lower()
                 is_secret = bool(inp.secret) or t == "secret"
-                no_default = inp.default is None
-                if not is_secret and not (inp.required and no_default):
+                if not inp.runtime and not is_secret:
                     continue
-                if inp.key in merged_vars:
+                if is_secret:
+                    merged_vars.pop(inp.key, None)
+                elif inp.key in merged_vars:
                     continue
                 fields.append(
                     {
@@ -671,14 +674,14 @@ None of these tools have fallback behaviour. If you don't pass the IDs, they fai
 When the user names specific hosts, resolve their IDs (via list_hosts / get_host)
 and pass them. Always confirm which hosts you will target before executing a run.
 
-RUNTIME INPUTS — you do NOT need to supply runtime vars (secrets, tokens, passwords,
-required inputs without defaults) when calling run_role or run_playbook.
-Just call the tool with the role/playbook ID, host IDs, and any vars the user has
-already provided. If required inputs are still missing, the system will automatically
-pause execution and prompt the user through the UI to fill them in. The user then
-submits the values and execution resumes. NEVER refuse to run a role or playbook
-because of missing runtime inputs — always proceed with the call and let the
-input-prompt flow handle it.
+RUNTIME INPUTS — roles may mark inputs as runtime (collected per run) or secret (sensitive).
+- Secret inputs (passwords, tokens, API keys): NEVER put these in vars/runtime_vars. The
+  system always pauses and prompts the user through the UI; agent-supplied values are ignored.
+- Non-secret runtime inputs (environment name, deploy tag, branch, etc.): you MAY supply
+  them via the vars or runtime_vars argument when the user gave them or you can infer them.
+  If you omit them, the user is prompted.
+Always call run_role / run_playbook with playbook or role ID and host IDs. NEVER refuse
+because of missing runtime inputs — proceed and let the input-prompt flow handle gaps.
 
 Stay dry and technical—no filler or buddy chat. Act as a mentor: be direct and precise, and push back when you see logical slips, weak reasoning, or bad technical assumptions (say what is wrong and why)."""
 

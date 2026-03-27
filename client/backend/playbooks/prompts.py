@@ -35,7 +35,7 @@ RULES:
   - The SAME role can appear multiple times with different vars
     (e.g. a directory-creation role repeated for each directory).
   - Set become=true if any role needs privilege escalation.
-  - For secret inputs (secret: true), do NOT set values in vars.
+  - For runtime inputs (runtime: true or secret: true), do NOT set values in vars.
   - When creating roles, follow ALL the rules below.
   - Downstream roles can reference outputs from earlier roles using
     {{ fact_name }} in their vars.
@@ -43,8 +43,9 @@ RULES:
     no niche knobs unless the user asks.
 
 ROLE CREATION RULES (when calling create_role):
-  Input type must be one of: "string", "bool", "secret", "list", "dict", "int".
-  Use "list" for collections of strings, "dict" for string-key-to-scalar maps.
+  Input type must be one of: "string", "bool", "list", "dict", "int".
+  Use runtime: true for per-run non-secret values; use secret: true for passwords/tokens
+  (implies runtime). Use "list" for collections of strings, "dict" for string-key-to-scalar maps.
   Output type must be one of: "string", "boolean".
   Every set_fact in tasks MUST have a matching entry in outputs.
   Write rich Markdown descriptions (3-8 sentences, not one-liners).
@@ -111,13 +112,14 @@ RULES:
   - Order roles logically — dependencies MUST come before dependents.
   - The SAME role can appear multiple times with different vars.
   - Set become=true if any role needs privilege escalation.
-  - For secret inputs (secret: true), do NOT set values in vars.
+  - For runtime inputs (runtime: true or secret: true), do NOT set values in vars.
   - Downstream roles can reference outputs from earlier roles using
     {{ fact_name }} in their vars.
   - Prefer SIMPLICITY: 1-3 required inputs per role, sensible defaults.
 
 ROLE CREATION / UPDATE RULES (when calling create_role or update_role):
-  Input type must be one of: "string", "bool", "secret", "list", "dict", "int".
+  Input type must be one of: "string", "bool", "list", "dict", "int".
+  Use runtime: true for per-run non-secret values; use secret: true for passwords/tokens.
   Use "list" for collections of strings, "dict" for string-key-to-scalar maps.
   Output type must be one of: "string", "boolean".
   Every set_fact in tasks MUST have a matching entry in outputs.

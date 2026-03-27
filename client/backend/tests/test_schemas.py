@@ -54,3 +54,16 @@ class TestRoleInputSpecTypes:
         )
         assert spec.default == "no"
         assert spec.options == ["yes", "no", "prohibit-password"]
+
+    def test_secret_implies_runtime(self) -> None:
+        spec = RoleInputSpec.model_validate(
+            {"key": "tok", "type": "string", "secret": True}
+        )
+        assert spec.runtime is True
+        assert spec.secret is True
+
+    def test_type_secret_normalizes_to_string_and_runtime(self) -> None:
+        spec = RoleInputSpec.model_validate({"key": "pw", "type": "secret"})
+        assert spec.type == "string"
+        assert spec.secret is True
+        assert spec.runtime is True

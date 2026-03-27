@@ -45,6 +45,7 @@ class RoleInput:
     no_log: bool = False
     racksmith_placeholder: str = ""
     racksmith_secret: bool = False
+    racksmith_runtime: bool = False
     racksmith_label: str = ""
 
 
@@ -83,6 +84,8 @@ def _parse_argument_specs_option(key: str, opt: dict) -> RoleInput:
 def _parse_action_input(inp: dict) -> RoleInput:
     t = inp.get("type", "string")
     options = inp.get("options", [])
+    secret = bool(inp.get("secret", False)) or t == "secret"
+    runtime = bool(inp.get("runtime", False)) or secret
     return RoleInput(
         key=inp.get("key", ""),
         description=inp.get("label", ""),
@@ -90,9 +93,10 @@ def _parse_action_input(inp: dict) -> RoleInput:
         default=inp.get("default"),
         required=inp.get("required", False),
         choices=options,
-        no_log=(t == "secret"),
+        no_log=secret,
         racksmith_placeholder=inp.get("placeholder", ""),
-        racksmith_secret=inp.get("secret", False),
+        racksmith_secret=secret,
+        racksmith_runtime=runtime,
     )
 
 
@@ -215,6 +219,7 @@ def _overlay_racksmith_meta(role: RoleData, role_meta: dict) -> None:
             if isinstance(inp_meta, dict):
                 inp.racksmith_placeholder = str(inp_meta.get("placeholder", inp.racksmith_placeholder))
                 inp.racksmith_secret = bool(inp_meta.get("secret", inp.racksmith_secret))
+                inp.racksmith_runtime = bool(inp_meta.get("runtime", inp.racksmith_runtime))
                 inp.racksmith_label = str(inp_meta.get("label", inp.racksmith_label))
 
 
@@ -336,6 +341,8 @@ def write_role(
             inp_data["placeholder"] = inp.racksmith_placeholder
         if inp.racksmith_secret:
             inp_data["secret"] = inp.racksmith_secret
+        if inp.racksmith_runtime:
+            inp_data["runtime"] = inp.racksmith_runtime
         if inp_data:
             inputs_meta[inp.key] = inp_data
     if inputs_meta:
